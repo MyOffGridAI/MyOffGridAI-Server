@@ -28,7 +28,9 @@ public class TestSecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/register",
-                                "/api/auth/refresh"
+                                "/api/auth/refresh",
+                                "/api/models",
+                                "/api/models/health"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

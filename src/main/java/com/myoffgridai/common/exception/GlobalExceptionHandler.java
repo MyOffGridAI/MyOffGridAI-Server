@@ -135,6 +135,32 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles Ollama service unavailable.
+     *
+     * @param ex the exception
+     * @return 503 Service Unavailable
+     */
+    @ExceptionHandler(OllamaUnavailableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOllamaUnavailable(OllamaUnavailableException ex) {
+        log.warn("Ollama unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Handles Ollama inference errors.
+     *
+     * @param ex the exception
+     * @return 502 Bad Gateway
+     */
+    @ExceptionHandler(OllamaInferenceException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOllamaInference(OllamaInferenceException ex) {
+        log.error("Ollama inference error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Catch-all handler for unexpected exceptions. Logs the full stack trace
      * but returns only a generic message to the client.
      *

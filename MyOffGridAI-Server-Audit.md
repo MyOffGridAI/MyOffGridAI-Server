@@ -247,5 +247,159 @@ com.myoffgridai
     │   └── FortressActiveException.java
     ├── response/
     │   └── ApiResponse.java
-    └── util/               (empty — Phase 2+)
+    └── util/
+        └── TokenCounter.java
 ```
+
+---
+
+## 8. Phase 2 — AI Core Entities
+
+### Conversation (`com.myoffgridai.ai.model.Conversation`)
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
+| user | User | ManyToOne, not null | FK to users table |
+| title | String | nullable | Auto-generated after first message |
+| isArchived | boolean | not null, default false | Archive status |
+| createdAt | Instant | not null, auto | `@CreatedDate` |
+| updatedAt | Instant | auto | `@LastModifiedDate` |
+| messageCount | int | not null, default 0 | Maintained by service |
+
+**Table:** `conversations`
+
+### Message (`com.myoffgridai.ai.model.Message`)
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
+| conversation | Conversation | ManyToOne, not null | FK to conversations table |
+| role | MessageRole | not null | `@Enumerated(STRING)` |
+| content | String (TEXT) | not null | Full message text |
+| tokenCount | Integer | nullable | Populated after inference |
+| hasRagContext | boolean | not null, default false | True when RAG context injected |
+| createdAt | Instant | not null, auto | `@CreatedDate` |
+
+**Table:** `messages`
+
+### MessageRole (`com.myoffgridai.ai.model.MessageRole`)
+| Value | Description |
+|-------|-------------|
+| USER | User-submitted message |
+| ASSISTANT | AI-generated response |
+| SYSTEM | System prompt |
+
+---
+
+## 9. Phase 2 — Repository Method Inventory
+
+### ConversationRepository (`com.myoffgridai.ai.repository.ConversationRepository`)
+Extends: `JpaRepository<Conversation, UUID>`
+
+| Method | Return Type |
+|--------|-------------|
+| `findByUserIdOrderByUpdatedAtDesc(UUID, Pageable)` | `Page<Conversation>` |
+| `findByUserIdAndIsArchivedOrderByUpdatedAtDesc(UUID, boolean, Pageable)` | `Page<Conversation>` |
+| `findByIdAndUserId(UUID, UUID)` | `Optional<Conversation>` |
+| `countByUserId(UUID)` | `long` |
+
+### MessageRepository (`com.myoffgridai.ai.repository.MessageRepository`)
+Extends: `JpaRepository<Message, UUID>`
+
+| Method | Return Type |
+|--------|-------------|
+| `findByConversationIdOrderByCreatedAtAsc(UUID)` | `List<Message>` |
+| `findByConversationIdOrderByCreatedAtAsc(UUID, Pageable)` | `Page<Message>` |
+| `findTopNByConversationIdOrderByCreatedAtDesc(UUID, Pageable)` | `List<Message>` |
+| `countByConversationId(UUID)` | `long` |
+| `deleteByConversationId(UUID)` | `void` |
+
+---
+
+## 10. Phase 2 — Service Method Inventory
+
+### OllamaService (`com.myoffgridai.ai.service.OllamaService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `isAvailable()` | `boolean` | Checks if Ollama is responding |
+| `listModels()` | `List<OllamaModelInfo>` | Lists loaded models |
+| `chat(OllamaChatRequest)` | `OllamaChatResponse` | Synchronous chat |
+| `chatStream(OllamaChatRequest)` | `Flux<OllamaChatChunk>` | Streaming chat |
+| `embed(String)` | `float[]` | Generate embedding |
+| `embedBatch(List<String>)` | `List<float[]>` | Batch embeddings |
+
+### ChatService (`com.myoffgridai.ai.service.ChatService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `createConversation(UUID, String)` | `Conversation` | Create new conversation |
+| `getConversations(UUID, boolean, Pageable)` | `Page<Conversation>` | List conversations |
+| `getConversation(UUID, UUID)` | `Conversation` | Get with ownership check |
+| `archiveConversation(UUID, UUID)` | `void` | Archive conversation |
+| `deleteConversation(UUID, UUID)` | `void` | Delete conversation + messages |
+| `sendMessage(UUID, UUID, String)` | `Message` | Sync message exchange |
+| `streamMessage(UUID, UUID, String)` | `Flux<String>` | Streaming message exchange |
+| `generateTitle(UUID, String)` | `void` | Async title generation |
+
+### SystemPromptBuilder (`com.myoffgridai.ai.service.SystemPromptBuilder`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `build(User, String)` | `String` | Assembles system prompt |
+
+### ContextWindowService (`com.myoffgridai.ai.service.ContextWindowService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `prepareMessages(UUID, String, String)` | `List<OllamaMessage>` | Builds context window |
+
+### AgentService (`com.myoffgridai.ai.service.AgentService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `executeTask(UUID, UUID, String)` | `AgentTaskResult` | Execute agent task |
+
+### ModelHealthCheckService (`com.myoffgridai.ai.service.ModelHealthCheckService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `checkOllamaOnStartup()` | `void` | Startup health check |
+
+---
+
+## 11. Phase 2 — Security Matrix (New Endpoints)
+
+| Method | Endpoint | Auth Required | Notes |
+|--------|----------|---------------|-------|
+| POST | `/api/chat/conversations` | Yes | Any authenticated |
+| GET | `/api/chat/conversations` | Yes | Own conversations only |
+| GET | `/api/chat/conversations/{id}` | Yes | Own conversations only |
+| DELETE | `/api/chat/conversations/{id}` | Yes | Own conversations only |
+| PUT | `/api/chat/conversations/{id}/archive` | Yes | Own conversations only |
+| POST | `/api/chat/conversations/{id}/messages` | Yes | Own conversations only |
+| GET | `/api/chat/conversations/{id}/messages` | Yes | Own conversations only |
+| GET | `/api/models` | No | Public |
+| GET | `/api/models/active` | Yes | Any authenticated |
+| GET | `/api/models/health` | No | Public |
+
+---
+
+## 12. Phase 2 — Constants Added to AppConstants
+
+### Ollama
+- `OLLAMA_BASE_URL` = "http://localhost:11434"
+- `OLLAMA_MODEL` = "qwen3:32b"
+- `OLLAMA_EMBED_MODEL` = "nomic-embed-text"
+- `OLLAMA_CONNECT_TIMEOUT_SECONDS` = 10
+- `OLLAMA_READ_TIMEOUT_SECONDS` = 120
+- `OLLAMA_MAX_CONTEXT_TOKENS` = 8192
+- `OLLAMA_CONTEXT_WINDOW_MESSAGES` = 20
+
+### Chat
+- `MAX_MESSAGE_LENGTH` = 32000
+- `CHAT_API_PATH` = "/api/chat"
+- `MODELS_API_PATH` = "/api/models"
+- `TITLE_GENERATION_MAX_TOKENS` = 20
+
+---
+
+## 13. Phase 2 — Custom Exceptions
+
+| Exception | HTTP Status | Description |
+|-----------|-------------|-------------|
+| `OllamaUnavailableException` | 503 | Ollama service unreachable |
+| `OllamaInferenceException` | 502 | Ollama inference error |

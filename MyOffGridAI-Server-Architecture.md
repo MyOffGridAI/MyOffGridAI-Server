@@ -242,3 +242,137 @@ ROLE_OWNER > ROLE_ADMIN > ROLE_MEMBER > ROLE_VIEWER > ROLE_CHILD
 - **API prefix:** No global prefix (endpoints start with `/api/`)
 - **OpenAPI UI:** `http://localhost:8080/swagger-ui.html`
 - **OpenAPI spec:** `http://localhost:8080/v3/api-docs`
+
+---
+
+## 9. Phase 2 — Ollama Integration Architecture
+
+### OllamaService as Sole Integration Point
+
+```
+┌────────────────────────┐
+│   ChatService          │──→ OllamaService ──→ Ollama (localhost:11434)
+│   AgentService         │──→ OllamaService ──→ Ollama
+│   ModelController      │──→ OllamaService ──→ Ollama
+│   ModelHealthCheck     │──→ OllamaService ──→ Ollama
+└────────────────────────┘
+         ▲
+         │ No direct Ollama calls from any other class
+```
+
+### HTTP Clients
+- **RestClient** (`ollamaRestClient`): Blocking calls for chat, embed, health, model listing
+- **WebClient** (`ollamaWebClient`): Reactive streaming for SSE chat responses
+
+---
+
+## 10. Phase 2 — Chat Flow
+
+### Synchronous Chat
+```
+POST /api/chat/conversations/{id}/messages (stream=false)
+    │
+    ▼
+ChatController.sendMessage()
+    │ @AuthenticationPrincipal User
+    ▼
+ChatService.sendMessage()
+    ├── Verify conversation ownership
+    ├── Persist user Message (role=USER)
+    ├── SystemPromptBuilder.build() → system prompt
+    ├── ContextWindowService.prepareMessages()
+    │   ├── Fetch recent messages (up to 20)
+    │   ├── Prepend system prompt
+    │   ├── Append new user message
+    │   └── TokenCounter.truncateToTokenLimit(8192)
+    ├── OllamaService.chat() → synchronous response
+    ├── Persist assistant Message (role=ASSISTANT)
+    ├── Increment conversation messageCount
+    ├── If first exchange → @Async generateTitle()
+    └── Return ApiResponse<MessageDto>
+```
+
+### Streaming Chat
+```
+POST /api/chat/conversations/{id}/messages (stream=true)
+    │
+    ▼
+ChatController.sendMessage()
+    │ Returns SseEmitter
+    ▼
+ChatService.streamMessage()
+    ├── Persist user Message
+    ├── Build context window
+    ├── OllamaService.chatStream() → Flux<OllamaChatChunk>
+    ├── Each chunk → SseEmitter.send(token)
+    ├── On complete:
+    │   ├── Join all tokens → full response
+    │   ├── Persist assistant Message
+    │   ├── Update messageCount
+    │   └── Send [DONE] event
+    └── SseEmitter.complete()
+```
+
+---
+
+## 11. Phase 2 — Agent Framework Foundation
+
+### Tool-Call Pattern
+```json
+{"tool": "tool_name", "params": {"key": "value"}}
+```
+
+### Phase 2 Behavior
+- AgentService sends step-by-step reasoning prompts to Ollama
+- Parses response for JSON tool-call blocks using regex
+- Detected tool calls are logged but NOT executed
+- Returns `AgentTaskResult` with `detectedToolCalls` list
+- Phase 5 will wire tool calls to the SkillService for execution
+
+---
+
+## 12. Phase 2 — Package Structure Update
+
+```
+com.myoffgridai
+├── ai/
+│   ├── controller/
+│   │   ├── ChatController.java
+│   │   └── ModelController.java
+│   ├── service/
+│   │   ├── OllamaService.java
+│   │   ├── ChatService.java
+│   │   ├── SystemPromptBuilder.java
+│   │   ├── ContextWindowService.java
+│   │   ├── AgentService.java
+│   │   └── ModelHealthCheckService.java
+│   ├── model/
+│   │   ├── Conversation.java
+│   │   ├── Message.java
+│   │   └── MessageRole.java
+│   ├── dto/
+│   │   ├── OllamaModelInfo.java
+│   │   ├── OllamaMessage.java
+│   │   ├── OllamaChatRequest.java
+│   │   ├── OllamaChatResponse.java
+│   │   ├── OllamaChatChunk.java
+│   │   ├── CreateConversationRequest.java
+│   │   ├── SendMessageRequest.java
+│   │   ├── ConversationDto.java
+│   │   ├── ConversationSummaryDto.java
+│   │   ├── MessageDto.java
+│   │   ├── ActiveModelDto.java
+│   │   ├── OllamaHealthDto.java
+│   │   └── AgentTaskResult.java
+│   └── repository/
+│       ├── ConversationRepository.java
+│       └── MessageRepository.java
+├── common/
+│   ├── exception/
+│   │   ├── OllamaUnavailableException.java
+│   │   └── OllamaInferenceException.java
+│   └── util/
+│       └── TokenCounter.java
+└── config/
+    └── OllamaConfig.java
+```

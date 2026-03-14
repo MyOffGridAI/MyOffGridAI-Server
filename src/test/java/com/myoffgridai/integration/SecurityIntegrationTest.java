@@ -1,6 +1,8 @@
 package com.myoffgridai.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myoffgridai.ai.repository.ConversationRepository;
+import com.myoffgridai.ai.repository.MessageRepository;
 import com.myoffgridai.auth.dto.LoginRequest;
 import com.myoffgridai.auth.dto.RegisterRequest;
 import com.myoffgridai.auth.model.Role;
@@ -26,8 +28,16 @@ class SecurityIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private MessageRepository messageRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
     @BeforeEach
     void clean() {
+        messageRepository.deleteAll();
+        conversationRepository.deleteAll();
         userRepository.deleteAll();
     }
 

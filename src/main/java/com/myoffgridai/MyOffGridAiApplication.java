@@ -2,6 +2,7 @@ package com.myoffgridai;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
  * Main entry point for the MyOffGridAI server application.
@@ -10,6 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * designed to run on a mini PC without internet connectivity.</p>
  */
 @SpringBootApplication
+@EnableAsync
 public class MyOffGridAiApplication {
 
     /**

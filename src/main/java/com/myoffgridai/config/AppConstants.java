@@ -154,4 +154,41 @@ public final class AppConstants {
 
     /** Minimum password length in prod profile */
     public static final int PASSWORD_MIN_LENGTH_PROD = 12;
+
+    // ── Ollama ─────────────────────────────────────────────────────────────
+
+    /** Base URL for the Ollama LLM service */
+    public static final String OLLAMA_BASE_URL = "http://localhost:11434";
+
+    /** Default Ollama chat model */
+    public static final String OLLAMA_MODEL = "qwen3:32b";
+
+    /** Default Ollama embedding model */
+    public static final String OLLAMA_EMBED_MODEL = "nomic-embed-text";
+
+    /** Ollama connection timeout in seconds */
+    public static final int OLLAMA_CONNECT_TIMEOUT_SECONDS = 10;
+
+    /** Ollama read timeout in seconds */
+    public static final int OLLAMA_READ_TIMEOUT_SECONDS = 120;
+
+    /** Maximum context window size in tokens for Ollama requests */
+    public static final int OLLAMA_MAX_CONTEXT_TOKENS = 8192;
+
+    /** Maximum number of recent messages to include in context window */
+    public static final int OLLAMA_CONTEXT_WINDOW_MESSAGES = 20;
+
+    // ── Chat ───────────────────────────────────────────────────────────────
+
+    /** Maximum length of a single user message in characters */
+    public static final int MAX_MESSAGE_LENGTH = 32000;
+
+    /** Base path for chat endpoints */
+    public static final String CHAT_API_PATH = "/api/chat";
+
+    /** Base path for model endpoints */
+    public static final String MODELS_API_PATH = "/api/models";
+
+    /** Maximum tokens for title generation responses */
+    public static final int TITLE_GENERATION_MAX_TOKENS = 20;
 }

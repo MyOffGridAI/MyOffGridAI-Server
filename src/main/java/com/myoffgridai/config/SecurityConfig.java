@@ -73,6 +73,8 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/system/status",
                                 "/api/system/initialize",
+                                "/api/models",
+                                "/api/models/health",
                                 "/setup/**",
                                 "/actuator/health",
                                 "/v3/api-docs/**",
