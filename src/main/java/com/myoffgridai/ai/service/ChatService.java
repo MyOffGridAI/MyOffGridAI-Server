@@ -14,6 +14,9 @@ import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.common.util.TokenCounter;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.memory.dto.RagContext;
+import com.myoffgridai.memory.service.MemoryExtractionService;
+import com.myoffgridai.memory.service.RagService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -31,7 +34,9 @@ import java.util.UUID;
  * Core chat service managing conversations, messages, and Ollama interactions.
  *
  * <p>Handles conversation lifecycle (create, list, archive, delete) and message
- * exchange (synchronous and streaming) with the Ollama LLM via {@link OllamaService}.</p>
+ * exchange (synchronous and streaming) with the Ollama LLM via {@link OllamaService}.
+ * Integrates RAG context from {@link RagService} and triggers asynchronous memory
+ * extraction via {@link MemoryExtractionService} after each exchange.</p>
  */
 @Service
 public class ChatService {
@@ -44,29 +49,37 @@ public class ChatService {
     private final OllamaService ollamaService;
     private final SystemPromptBuilder systemPromptBuilder;
     private final ContextWindowService contextWindowService;
+    private final RagService ragService;
+    private final MemoryExtractionService memoryExtractionService;
 
     /**
      * Constructs the chat service with required dependencies.
      *
-     * @param conversationRepository the conversation data access layer
-     * @param messageRepository      the message data access layer
-     * @param userRepository         the user data access layer
-     * @param ollamaService          the Ollama integration service
-     * @param systemPromptBuilder    the system prompt builder
-     * @param contextWindowService   the context window manager
+     * @param conversationRepository  the conversation data access layer
+     * @param messageRepository       the message data access layer
+     * @param userRepository          the user data access layer
+     * @param ollamaService           the Ollama integration service
+     * @param systemPromptBuilder     the system prompt builder
+     * @param contextWindowService    the context window manager
+     * @param ragService              the RAG pipeline service
+     * @param memoryExtractionService the memory extraction service
      */
     public ChatService(ConversationRepository conversationRepository,
                        MessageRepository messageRepository,
                        UserRepository userRepository,
                        OllamaService ollamaService,
                        SystemPromptBuilder systemPromptBuilder,
-                       ContextWindowService contextWindowService) {
+                       ContextWindowService contextWindowService,
+                       RagService ragService,
+                       MemoryExtractionService memoryExtractionService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.ollamaService = ollamaService;
         this.systemPromptBuilder = systemPromptBuilder;
         this.contextWindowService = contextWindowService;
+        this.ragService = ragService;
+        this.memoryExtractionService = memoryExtractionService;
     }
 
     /**
@@ -152,9 +165,9 @@ public class ChatService {
     /**
      * Sends a message synchronously and returns the assistant's response.
      *
-     * <p>Persists the user message, builds the context window, calls Ollama
-     * synchronously, persists the assistant response, and triggers async
-     * title generation on the first exchange.</p>
+     * <p>Persists the user message, builds RAG context, builds the context window,
+     * calls Ollama synchronously, persists the assistant response, triggers async
+     * title generation on the first exchange, and triggers async memory extraction.</p>
      *
      * @param conversationId the conversation ID
      * @param userId         the user's ID
@@ -177,8 +190,11 @@ public class ChatService {
         userMessage.setTokenCount(TokenCounter.estimateTokens(userContent));
         messageRepository.save(userMessage);
 
+        // Build RAG context
+        RagContext ragContext = buildRagContextSafely(userId, userContent);
+
         // Build context window
-        String systemPrompt = systemPromptBuilder.build(user, "MyOffGridAI");
+        String systemPrompt = systemPromptBuilder.build(user, "MyOffGridAI", ragContext);
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
@@ -193,7 +209,7 @@ public class ChatService {
         assistantMessage.setRole(MessageRole.ASSISTANT);
         assistantMessage.setContent(response.message().content());
         assistantMessage.setTokenCount(response.evalCount());
-        assistantMessage.setHasRagContext(false);
+        assistantMessage.setHasRagContext(ragContext != null && ragContext.hasContext());
         messageRepository.save(assistantMessage);
 
         // Update conversation message count
@@ -205,6 +221,10 @@ public class ChatService {
             generateTitle(conversationId, userContent);
         }
 
+        // Trigger async memory extraction
+        memoryExtractionService.extractAndStore(
+                userId, conversationId, userContent, response.message().content());
+
         log.info("Message exchange complete in conversation: {}", conversationId);
         return assistantMessage;
     }
@@ -212,8 +232,9 @@ public class ChatService {
     /**
      * Sends a message and returns a streaming response as a Flux of token strings.
      *
-     * <p>Persists the user message, builds the context window, calls Ollama
-     * in streaming mode, and persists the complete response after the stream ends.</p>
+     * <p>Persists the user message, builds RAG context, builds the context window,
+     * calls Ollama in streaming mode, and persists the complete response after the
+     * stream ends. Triggers async memory extraction after completion.</p>
      *
      * @param conversationId the conversation ID
      * @param userId         the user's ID
@@ -235,14 +256,19 @@ public class ChatService {
         userMessage.setTokenCount(TokenCounter.estimateTokens(userContent));
         messageRepository.save(userMessage);
 
+        // Build RAG context
+        RagContext ragContext = buildRagContextSafely(userId, userContent);
+
         // Build context window
-        String systemPrompt = systemPromptBuilder.build(user, "MyOffGridAI");
+        String systemPrompt = systemPromptBuilder.build(user, "MyOffGridAI", ragContext);
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
         // Call Ollama streaming
         OllamaChatRequest request = new OllamaChatRequest(
                 AppConstants.OLLAMA_MODEL, messages, true, Map.of());
+
+        final boolean hasRag = ragContext != null && ragContext.hasContext();
 
         return ollamaService.chatStream(request)
                 .map(chunk -> chunk.message() != null ? chunk.message().content() : "")
@@ -256,7 +282,7 @@ public class ChatService {
                     assistantMessage.setRole(MessageRole.ASSISTANT);
                     assistantMessage.setContent(fullResponse);
                     assistantMessage.setTokenCount(TokenCounter.estimateTokens(fullResponse));
-                    assistantMessage.setHasRagContext(false);
+                    assistantMessage.setHasRagContext(hasRag);
                     messageRepository.save(assistantMessage);
 
                     // Update conversation message count
@@ -267,6 +293,10 @@ public class ChatService {
                     if (isFirstExchange) {
                         generateTitle(conversationId, userContent);
                     }
+
+                    // Trigger async memory extraction
+                    memoryExtractionService.extractAndStore(
+                            userId, conversationId, userContent, fullResponse);
 
                     log.info("Streaming complete in conversation: {}", conversationId);
                     return Flux.fromIterable(tokens);
@@ -306,6 +336,15 @@ public class ChatService {
             });
         } catch (Exception e) {
             log.warn("Failed to generate title for conversation {}: {}", conversationId, e.getMessage());
+        }
+    }
+
+    private RagContext buildRagContextSafely(UUID userId, String userContent) {
+        try {
+            return ragService.buildRagContext(userId, userContent);
+        } catch (Exception e) {
+            log.warn("Failed to build RAG context: {}. Proceeding without context.", e.getMessage());
+            return null;
         }
     }
 }

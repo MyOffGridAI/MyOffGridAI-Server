@@ -1,7 +1,7 @@
 # MyOffGridAI-Server — Architecture Specification
 
 **Generated:** 2026-03-14
-**Phase:** 1 — Foundation
+**Phase:** 3 — Memory & RAG
 **Version:** 0.1.0-SNAPSHOT
 
 ---
@@ -18,7 +18,8 @@
 | Auth | JWT (JJWT) | 0.12.6 |
 | Password Hashing | BCrypt | via Spring Security |
 | API Documentation | SpringDoc OpenAPI | 2.8.4 |
-| Testing | JUnit 5, Mockito, Testcontainers | via Spring Boot 3.4.3 |
+| Vector Search | pgvector | 0.1.6 (Java) / PostgreSQL ext |
+| Testing | JUnit 5, Mockito 5.21.0, Testcontainers | via Spring Boot 3.4.3 |
 | Logging | SLF4J + Logback | via Spring Boot |
 
 ### Future Dependencies (scaffolded, not yet used)
@@ -375,4 +376,128 @@ com.myoffgridai
 │       └── TokenCounter.java
 └── config/
     └── OllamaConfig.java
+```
+
+---
+
+## 13. Phase 3 — Memory & RAG Architecture
+
+### Memory Pipeline
+```
+Chat Exchange (user msg + assistant response)
+    │
+    ▼
+MemoryExtractionService.extractAndStore()  (@Async)
+    ├── Build extraction prompt
+    ├── OllamaService.chat() → JSON array of facts
+    ├── Parse facts (handle markdown fences, invalid JSON)
+    └── For each fact:
+        └── MemoryService.createMemory()
+            ├── Persist Memory entity
+            └── EmbeddingService.embed() → VectorDocument
+```
+
+### RAG Pipeline
+```
+User sends message
+    │
+    ▼
+ChatService.sendMessage()
+    ├── RagService.buildRagContext(userId, userContent)
+    │   ├── EmbeddingService.embed(userContent) → query vector
+    │   ├── MemoryService.findRelevantMemories()
+    │   │   ├── VectorDocumentRepository.findMostSimilar() [cosine distance <=>]
+    │   │   ├── Filter by SIMILARITY_THRESHOLD (0.7)
+    │   │   └── Update access tracking (lastAccessedAt, accessCount)
+    │   ├── VectorDocumentRepository.findMostSimilar(KNOWLEDGE_CHUNK)
+    │   └── Assemble RagContext(memorySnippets, knowledgeSnippets, hasContext, tokenEstimate)
+    │
+    ├── SystemPromptBuilder.build(user, instanceName, ragContext)
+    │   ├── Base system prompt (identity, user context)
+    │   ├── Truncate context if > RAG_MAX_CONTEXT_TOKENS (knowledge first, then memories)
+    │   └── RagService.formatContextBlock() → [RELEVANT MEMORIES]...[END MEMORIES]
+    │
+    ├── ContextWindowService.prepareMessages()
+    ├── OllamaService.chat() → response
+    ├── Persist assistant Message (hasRagContext = true/false)
+    └── MemoryExtractionService.extractAndStore() (@Async)
+```
+
+### Nightly Summarization
+```
+@Scheduled(cron = "0 0 2 * * *")
+SummarizationService.scheduledNightlySummarization()
+    ├── Find conversations: messageCount >= 10 AND age >= 7 days
+    ├── Skip already-summarized (tag = "conversation-summary")
+    └── For each eligible:
+        ├── Fetch messages
+        ├── OllamaService.chat() → summary
+        └── MemoryService.createMemory(CRITICAL, "conversation-summary")
+```
+
+### Vector Search Architecture
+```
+┌─────────────────────────┐
+│  EmbeddingService       │  Sole entry point for embeddings
+│  (wraps OllamaService)  │  embed(), embedAndFormat(), cosineSimilarity()
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  VectorDocumentRepository│  Native SQL with pgvector
+│  findMostSimilar()      │  ORDER BY embedding <=> CAST(:embedding AS vector)
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  PostgreSQL + pgvector  │  vector(768) column type
+│  Cosine distance: <=>   │  Extension: CREATE EXTENSION IF NOT EXISTS vector
+└─────────────────────────┘
+```
+
+### Per-User Memory Isolation
+```
+MemoryService
+├── createMemory()      → sets userId on Memory + VectorDocument
+├── getMemory()         → assertOwnership(memory.userId, callerId)
+├── updateImportance()  → assertOwnership()
+├── updateTags()        → assertOwnership()
+├── deleteMemory()      → assertOwnership()
+├── findRelevantMemories()  → queries filtered by userId
+├── exportMemories()    → queries filtered by userId
+└── deleteAllMemories() → deletes by userId
+
+VectorDocumentRepository.findMostSimilar()
+    WHERE user_id = :userId   ← per-user isolation at query level
+```
+
+---
+
+## 14. Phase 3 — Dependency Graph
+
+```
+ChatService
+    ├── OllamaService
+    ├── SystemPromptBuilder
+    │   └── RagService
+    │       ├── MemoryService
+    │       │   ├── MemoryRepository
+    │       │   ├── VectorDocumentRepository
+    │       │   └── EmbeddingService
+    │       │       └── OllamaService
+    │       └── VectorDocumentRepository
+    ├── ContextWindowService
+    ├── MemoryExtractionService
+    │   ├── OllamaService
+    │   └── MemoryService
+    └── ConversationRepository / MessageRepository
+
+MemoryController → MemoryService
+
+SummarizationService
+    ├── ConversationRepository
+    ├── MessageRepository
+    ├── OllamaService
+    ├── MemoryService
+    └── MemoryRepository
 ```

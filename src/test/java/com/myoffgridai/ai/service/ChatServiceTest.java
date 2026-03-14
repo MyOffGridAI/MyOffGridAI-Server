@@ -12,6 +12,8 @@ import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.common.exception.EntityNotFoundException;
+import com.myoffgridai.memory.service.MemoryExtractionService;
+import com.myoffgridai.memory.service.RagService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +42,8 @@ class ChatServiceTest {
     @Mock private OllamaService ollamaService;
     @Mock private SystemPromptBuilder systemPromptBuilder;
     @Mock private ContextWindowService contextWindowService;
+    @Mock private RagService ragService;
+    @Mock private MemoryExtractionService memoryExtractionService;
 
     @InjectMocks
     private ChatService chatService;
@@ -114,7 +118,7 @@ class ChatServiceTest {
     void sendMessage_persistsUserAndAssistantMessages() {
         when(conversationRepository.findByIdAndUserId(conversationId, userId))
                 .thenReturn(Optional.of(testConversation));
-        when(systemPromptBuilder.build(any(), anyString())).thenReturn("system prompt");
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
         when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
                 .thenReturn(List.of(new OllamaMessage("system", "prompt"),
                         new OllamaMessage("user", "hello")));
@@ -144,7 +148,7 @@ class ChatServiceTest {
         testConversation.setMessageCount(2);
         when(conversationRepository.findByIdAndUserId(conversationId, userId))
                 .thenReturn(Optional.of(testConversation));
-        when(systemPromptBuilder.build(any(), anyString())).thenReturn("prompt");
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("prompt");
         when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
                 .thenReturn(List.of(new OllamaMessage("user", "hello")));
 
@@ -167,7 +171,7 @@ class ChatServiceTest {
     void streamMessage_emitsTokens() {
         when(conversationRepository.findByIdAndUserId(conversationId, userId))
                 .thenReturn(Optional.of(testConversation));
-        when(systemPromptBuilder.build(any(), anyString())).thenReturn("prompt");
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("prompt");
         when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
                 .thenReturn(List.of(new OllamaMessage("user", "hello")));
 

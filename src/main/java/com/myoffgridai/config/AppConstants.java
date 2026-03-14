@@ -191,4 +191,36 @@ public final class AppConstants {
 
     /** Maximum tokens for title generation responses */
     public static final int TITLE_GENERATION_MAX_TOKENS = 20;
+
+    // ── Memory & RAG ─────────────────────────────────────────────────────
+
+    /** Dimensionality of nomic-embed-text embedding vectors */
+    public static final int EMBEDDING_DIMENSIONS = 768;
+
+    /** Number of top-K results for RAG knowledge retrieval */
+    public static final int RAG_TOP_K = 5;
+
+    /** Number of top-K results for memory retrieval */
+    public static final int MEMORY_TOP_K = 5;
+
+    /** Minimum cosine similarity threshold for RAG/memory results */
+    public static final float SIMILARITY_THRESHOLD = 0.7f;
+
+    /** Maximum tokens for RAG context injected into system prompt */
+    public static final int RAG_MAX_CONTEXT_TOKENS = 2048;
+
+    /** Maximum number of facts to extract per conversation exchange */
+    public static final int MEMORY_EXTRACTION_MAX_FACTS = 3;
+
+    /** Tag used for conversation summary memories */
+    public static final String MEMORY_SUMMARIZATION_TAG = "conversation-summary";
+
+    /** Minimum number of messages before a conversation is eligible for summarization */
+    public static final int SUMMARIZATION_MIN_MESSAGES = 10;
+
+    /** Minimum age in days before a conversation is eligible for summarization */
+    public static final int SUMMARIZATION_AGE_DAYS = 7;
+
+    /** Base path for memory management endpoints */
+    public static final String MEMORY_API_PATH = "/api/memory";
 }

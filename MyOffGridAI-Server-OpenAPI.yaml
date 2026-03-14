@@ -86,6 +86,56 @@ paths:
             '*/*':
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
+  /api/memory/{id}/tags:
+    put:
+      tags:
+      - memory-controller
+      operationId: updateTags
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTagsRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseMemoryDto'
+  /api/memory/{id}/importance:
+    put:
+      tags:
+      - memory-controller
+      operationId: updateImportance
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateImportanceRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseMemoryDto'
   /api/chat/conversations/{conversationId}/archive:
     put:
       tags:
@@ -105,6 +155,24 @@ paths:
             '*/*':
               schema:
                 $ref: '#/components/schemas/ApiResponseVoid'
+  /api/memory/search:
+    post:
+      tags:
+      - memory-controller
+      operationId: searchMemories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemorySearchRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseListMemorySearchResultDto'
   /api/chat/conversations:
     get:
       tags:
@@ -346,6 +414,97 @@ paths:
             '*/*':
               schema:
                 $ref: '#/components/schemas/ApiResponseActiveModelDto'
+  /api/memory:
+    get:
+      tags:
+      - memory-controller
+      operationId: listMemories
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: importance
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+      - name: tag
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseListMemoryDto'
+  /api/memory/{id}:
+    get:
+      tags:
+      - memory-controller
+      operationId: getMemory
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseMemoryDto'
+    delete:
+      tags:
+      - memory-controller
+      operationId: deleteMemory
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+  /api/memory/export:
+    get:
+      tags:
+      - memory-controller
+      operationId: exportMemories
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ApiResponseListMemoryDto'
   /api/chat/conversations/{conversationId}:
     get:
       tags:
@@ -479,6 +638,123 @@ components:
         size:
           type: integer
           format: int32
+    UpdateTagsRequest:
+      type: object
+      properties:
+        tags:
+          type: string
+    ApiResponseMemoryDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/MemoryDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        totalElements:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    MemoryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        importance:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        tags:
+          type: string
+        sourceConversationId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastAccessedAt:
+          type: string
+          format: date-time
+        accessCount:
+          type: integer
+          format: int32
+    UpdateImportanceRequest:
+      type: object
+      properties:
+        importance:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+      required:
+      - importance
+    MemorySearchRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        topK:
+          type: integer
+          format: int32
+          maximum: 20
+          minimum: 1
+      required:
+      - query
+    ApiResponseListMemorySearchResultDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemorySearchResultDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        totalElements:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    MemorySearchResultDto:
+      type: object
+      properties:
+        memory:
+          $ref: '#/components/schemas/MemoryDto'
+        similarityScore:
+          type: number
+          format: float
     CreateConversationRequest:
       type: object
       properties:
@@ -750,6 +1026,31 @@ components:
           type: string
         data:
           $ref: '#/components/schemas/ActiveModelDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        totalElements:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    ApiResponseListMemoryDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryDto'
         timestamp:
           type: string
           format: date-time

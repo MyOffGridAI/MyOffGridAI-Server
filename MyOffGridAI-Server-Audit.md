@@ -1,7 +1,7 @@
 # MyOffGridAI-Server — Codebase Audit
 
 **Generated:** 2026-03-14
-**Phase:** 1 — Foundation
+**Phase:** 3 — Memory & RAG
 **Version:** 0.1.0-SNAPSHOT
 
 ---
@@ -403,3 +403,239 @@ Extends: `JpaRepository<Message, UUID>`
 |-----------|-------------|-------------|
 | `OllamaUnavailableException` | 503 | Ollama service unreachable |
 | `OllamaInferenceException` | 502 | Ollama inference error |
+| `EmbeddingException` | 503 | Embedding generation failure |
+
+---
+
+## 14. Phase 3 — Memory & RAG Entities
+
+### VectorDocument (`com.myoffgridai.memory.model.VectorDocument`)
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
+| userId | UUID | not null, indexed | Owner user ID |
+| content | String (TEXT) | not null | Original text content |
+| embedding | float[] | nullable | pgvector `vector(768)` via `@Type(VectorType.class)` |
+| sourceType | VectorSourceType | not null | `@Enumerated(STRING)` |
+| sourceId | UUID | nullable | FK to source entity (Memory, Conversation) |
+| metadata | String (TEXT) | nullable | JSON metadata |
+| createdAt | Instant | not null, auto | `@CreatedDate` |
+
+**Table:** `vector_document`
+**Index:** `(userId, sourceType)`
+
+### Memory (`com.myoffgridai.memory.model.Memory`)
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
+| userId | UUID | not null, indexed | Owner user ID |
+| content | String (TEXT) | not null | Memory text |
+| importance | MemoryImportance | not null, default MEDIUM | `@Enumerated(STRING)` |
+| tags | String | nullable | Comma-separated tags |
+| sourceConversationId | UUID | nullable | FK to originating conversation |
+| createdAt | Instant | not null, auto | `@CreatedDate` |
+| updatedAt | Instant | auto | `@LastModifiedDate` |
+| lastAccessedAt | Instant | nullable | Updated on RAG access |
+| accessCount | int | not null, default 0 | Incremented on RAG access |
+
+**Table:** `memories`
+
+### VectorSourceType (`com.myoffgridai.memory.model.VectorSourceType`)
+| Value | Description |
+|-------|-------------|
+| MEMORY | User memory fact |
+| CONVERSATION | Conversation summary |
+| KNOWLEDGE_CHUNK | Knowledge base chunk |
+
+### MemoryImportance (`com.myoffgridai.memory.model.MemoryImportance`)
+| Value | Description |
+|-------|-------------|
+| LOW | Low priority |
+| MEDIUM | Default priority |
+| HIGH | High priority |
+| CRITICAL | Critical (e.g., conversation summaries) |
+
+---
+
+## 15. Phase 3 — Repository Method Inventory
+
+### VectorDocumentRepository (`com.myoffgridai.memory.repository.VectorDocumentRepository`)
+Extends: `JpaRepository<VectorDocument, UUID>`
+
+| Method | Return Type | Notes |
+|--------|-------------|-------|
+| `findMostSimilar(UUID, String, String, int)` | `List<VectorDocument>` | Native SQL: cosine distance `<=>` |
+| `findByUserIdAndSourceType(UUID, VectorSourceType)` | `List<VectorDocument>` | Filter by source |
+| `deleteBySourceIdAndSourceType(UUID, VectorSourceType)` | `void` | Cascade cleanup |
+| `deleteByUserId(UUID)` | `void` | Privacy wipe |
+
+### MemoryRepository (`com.myoffgridai.memory.repository.MemoryRepository`)
+Extends: `JpaRepository<Memory, UUID>`
+
+| Method | Return Type |
+|--------|-------------|
+| `findByUserIdOrderByCreatedAtDesc(UUID, Pageable)` | `Page<Memory>` |
+| `findByUserIdAndImportance(UUID, MemoryImportance, Pageable)` | `Page<Memory>` |
+| `findByUserIdAndTagsContaining(UUID, String, Pageable)` | `Page<Memory>` |
+| `findByUserId(UUID)` | `List<Memory>` |
+| `deleteByUserId(UUID)` | `void` |
+| `countByUserId(UUID)` | `long` |
+
+---
+
+## 16. Phase 3 — Service Method Inventory
+
+### EmbeddingService (`com.myoffgridai.memory.service.EmbeddingService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `embed(String)` | `float[]` | Single text embedding via OllamaService |
+| `embedAndFormat(String)` | `String` | Embed and format as pgvector string |
+| `embedBatch(List<String>)` | `List<float[]>` | Batch embeddings |
+| `cosineSimilarity(float[], float[])` | `float` | Compute cosine similarity |
+| `formatEmbedding(float[])` | `String` | Static: format as pgvector string |
+
+### MemoryService (`com.myoffgridai.memory.service.MemoryService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `createMemory(UUID, String, MemoryImportance, String, UUID)` | `Memory` | Create memory + vector doc |
+| `findRelevantMemories(UUID, String, int)` | `List<Memory>` | Vector similarity search |
+| `searchMemoriesWithScores(UUID, String, int)` | `List<MemorySearchResultDto>` | Search with scores for API |
+| `getMemory(UUID, UUID)` | `Memory` | Get with ownership check |
+| `updateImportance(UUID, UUID, MemoryImportance)` | `Memory` | Update importance |
+| `updateTags(UUID, UUID, String)` | `Memory` | Update tags |
+| `deleteMemory(UUID, UUID)` | `void` | Delete memory + vector doc |
+| `deleteAllMemoriesForUser(UUID)` | `void` | Privacy wipe |
+| `exportMemories(UUID)` | `List<Memory>` | Data export |
+| `getMemories(UUID, MemoryImportance, String, Pageable)` | `Page<Memory>` | Paginated list with filters |
+| `toDto(Memory)` | `MemoryDto` | Convert to DTO |
+
+### RagService (`com.myoffgridai.memory.service.RagService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `buildRagContext(UUID, String)` | `RagContext` | Build RAG context from memories + knowledge |
+| `formatContextBlock(RagContext)` | `String` | Format context for system prompt |
+
+### MemoryExtractionService (`com.myoffgridai.memory.service.MemoryExtractionService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `extractAndStore(UUID, UUID, String, String)` | `void` | `@Async` extract facts from chat exchange |
+
+### SummarizationService (`com.myoffgridai.memory.service.SummarizationService`)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `summarizeConversation(UUID, UUID)` | `Memory` | Summarize conversation as CRITICAL memory |
+| `scheduledNightlySummarization()` | `void` | `@Scheduled(cron)` nightly batch summarization |
+
+### SystemPromptBuilder (Updated)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `build(User, String)` | `String` | Base system prompt (no RAG) |
+| `build(User, String, RagContext)` | `String` | System prompt with RAG context |
+
+### ChatService (Updated)
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `sendMessage(UUID, UUID, String)` | `Message` | Now includes RAG context + async memory extraction |
+| `streamMessage(UUID, UUID, String)` | `Flux<String>` | Now includes RAG context + async memory extraction |
+
+---
+
+## 17. Phase 3 — Security Matrix (New Endpoints)
+
+| Method | Endpoint | Auth Required | Notes |
+|--------|----------|---------------|-------|
+| GET | `/api/memory` | Yes | Own memories only, paginated |
+| GET | `/api/memory/{id}` | Yes | Own memory only |
+| DELETE | `/api/memory/{id}` | Yes | Own memory only |
+| PUT | `/api/memory/{id}/importance` | Yes | Own memory only |
+| PUT | `/api/memory/{id}/tags` | Yes | Own memory only |
+| POST | `/api/memory/search` | Yes | Vector similarity search |
+| GET | `/api/memory/export` | Yes | Export all own memories |
+
+---
+
+## 18. Phase 3 — Constants Added to AppConstants
+
+### Memory & RAG
+- `EMBEDDING_DIMENSIONS` = 768
+- `RAG_TOP_K` = 5
+- `MEMORY_TOP_K` = 5
+- `SIMILARITY_THRESHOLD` = 0.7f
+- `RAG_MAX_CONTEXT_TOKENS` = 2048
+- `MEMORY_EXTRACTION_MAX_FACTS` = 3
+- `MEMORY_SUMMARIZATION_TAG` = "conversation-summary"
+- `SUMMARIZATION_MIN_MESSAGES` = 10
+- `SUMMARIZATION_AGE_DAYS` = 7
+- `MEMORY_API_PATH` = "/api/memory"
+
+---
+
+## 19. Phase 3 — Package Structure (Updated)
+
+```
+com.myoffgridai
+├── MyOffGridAiApplication.java    (@EnableAsync, @EnableScheduling)
+├── config/
+│   ├── AppConstants.java
+│   ├── JpaConfig.java
+│   ├── JwtAuthFilter.java
+│   ├── OllamaConfig.java
+│   ├── SecurityConfig.java
+│   ├── VectorStoreConfig.java     (NEW — pgvector extension check)
+│   └── VectorType.java            (NEW — Hibernate UserType for vector)
+├── auth/
+│   └── ... (unchanged)
+├── ai/
+│   ├── controller/
+│   │   ├── ChatController.java
+│   │   └── ModelController.java
+│   ├── service/
+│   │   ├── ChatService.java       (UPDATED — RAG + memory extraction)
+│   │   ├── OllamaService.java
+│   │   ├── SystemPromptBuilder.java (UPDATED — RagContext overload)
+│   │   ├── ContextWindowService.java
+│   │   ├── AgentService.java
+│   │   └── ModelHealthCheckService.java
+│   ├── model/
+│   │   ├── Conversation.java
+│   │   ├── Message.java
+│   │   └── MessageRole.java
+│   ├── dto/
+│   │   └── ... (unchanged)
+│   └── repository/
+│       ├── ConversationRepository.java
+│       └── MessageRepository.java
+├── memory/                         (NEW — Phase 3)
+│   ├── controller/
+│   │   └── MemoryController.java
+│   ├── service/
+│   │   ├── EmbeddingService.java
+│   │   ├── MemoryService.java
+│   │   ├── RagService.java
+│   │   ├── MemoryExtractionService.java
+│   │   └── SummarizationService.java
+│   ├── model/
+│   │   ├── Memory.java
+│   │   ├── MemoryImportance.java
+│   │   ├── VectorDocument.java
+│   │   └── VectorSourceType.java
+│   ├── dto/
+│   │   ├── MemoryDto.java
+│   │   ├── MemorySearchRequest.java
+│   │   ├── MemorySearchResultDto.java
+│   │   ├── RagContext.java
+│   │   ├── UpdateImportanceRequest.java
+│   │   └── UpdateTagsRequest.java
+│   └── repository/
+│       ├── MemoryRepository.java
+│       └── VectorDocumentRepository.java
+└── common/
+    ├── exception/
+    │   ├── GlobalExceptionHandler.java (UPDATED — EmbeddingException handler)
+    │   ├── EmbeddingException.java     (NEW)
+    │   └── ... (unchanged)
+    ├── response/
+    │   └── ApiResponse.java
+    └── util/
+        └── TokenCounter.java
+```

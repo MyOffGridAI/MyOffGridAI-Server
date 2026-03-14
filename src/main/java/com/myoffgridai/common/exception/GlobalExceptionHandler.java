@@ -161,6 +161,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles embedding generation failures.
+     *
+     * @param ex the exception
+     * @return 503 Service Unavailable
+     */
+    @ExceptionHandler(EmbeddingException.class)
+    public ResponseEntity<ApiResponse<Object>> handleEmbeddingException(EmbeddingException ex) {
+        log.warn("Embedding error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Catch-all handler for unexpected exceptions. Logs the full stack trace
      * but returns only a generic message to the client.
      *
