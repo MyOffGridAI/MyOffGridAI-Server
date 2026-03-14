@@ -43,6 +43,8 @@ app:
     model: qwen3:32b
     embed-model: nomic-embed-text
     timeout-seconds: 120
+  fortress:
+    mock: true
 
 ---
 spring:

@@ -29,6 +29,8 @@ public class TestSecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/register",
                                 "/api/auth/refresh",
+                                "/api/system/status",
+                                "/api/system/initialize",
                                 "/api/models",
                                 "/api/models/health"
                         ).permitAll()

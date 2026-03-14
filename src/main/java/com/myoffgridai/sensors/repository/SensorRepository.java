@@ -21,5 +21,7 @@ public interface SensorRepository extends JpaRepository<Sensor, UUID> {
 
     List<Sensor> findByIsActiveTrue();
 
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 }

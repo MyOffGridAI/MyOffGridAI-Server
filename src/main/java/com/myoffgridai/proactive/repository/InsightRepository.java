@@ -25,6 +25,8 @@ public interface InsightRepository extends JpaRepository<Insight, UUID> {
 
     Optional<Insight> findByIdAndUserId(UUID id, UUID userId);
 
+    long countByUserId(UUID userId);
+
     @Modifying
     void deleteByUserId(UUID userId);
 }

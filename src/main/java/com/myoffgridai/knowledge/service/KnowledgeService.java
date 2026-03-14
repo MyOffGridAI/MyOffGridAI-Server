@@ -329,6 +329,32 @@ public class KnowledgeService {
         );
     }
 
+    /**
+     * Deletes all knowledge documents, chunks, vector embeddings, and stored files
+     * for a user. Used by privacy wipe.
+     *
+     * @param userId the user ID
+     */
+    @Transactional
+    public void deleteAllForUser(UUID userId) {
+        log.info("Deleting all knowledge data for user {}", userId);
+        vectorDocumentRepository.deleteByUserId(userId);
+        chunkRepository.deleteByUserId(userId);
+
+        List<KnowledgeDocument> documents = documentRepository
+                .findByUserIdOrderByUploadedAtDesc(userId, org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
+        for (KnowledgeDocument doc : documents) {
+            try {
+                fileStorageService.delete(doc.getStoragePath());
+            } catch (Exception e) {
+                log.warn("Failed to delete file for document {}: {}", doc.getId(), e.getMessage());
+            }
+        }
+        documentRepository.deleteByUserId(userId);
+        log.info("Deleted all knowledge data for user {}", userId);
+    }
+
     private KnowledgeDocument findDocumentForUser(UUID documentId, UUID userId) {
         return documentRepository.findByIdAndUserId(documentId, userId)
                 .orElseThrow(() -> new EntityNotFoundException(

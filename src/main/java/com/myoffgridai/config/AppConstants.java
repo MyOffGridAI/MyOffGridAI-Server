@@ -337,4 +337,27 @@ public final class AppConstants {
 
     /** Interval in milliseconds between system health checks */
     public static final int HEALTH_CHECK_INTERVAL_MS = 300000;
+
+    // ── Privacy & Fortress ──────────────────────────────────────────────────
+
+    /** Base path for fortress status endpoint */
+    public static final String FORTRESS_STATUS_PATH = "/fortress/status";
+
+    /** Base path for fortress enable endpoint */
+    public static final String FORTRESS_ENABLE_PATH = "/fortress/enable";
+
+    /** Base path for fortress disable endpoint */
+    public static final String FORTRESS_DISABLE_PATH = "/fortress/disable";
+
+    /** Audit summary window in hours */
+    public static final int AUDIT_SUMMARY_WINDOW_HOURS = 24;
+
+    /** Minimum passphrase length for data export encryption */
+    public static final int EXPORT_PASSPHRASE_MIN_LENGTH = 8;
+
+    /** Number of PBKDF2 iterations for export encryption key derivation */
+    public static final int EXPORT_PBKDF2_ITERATIONS = 65536;
+
+    /** Server version string */
+    public static final String SERVER_VERSION = "1.0.0";
 }
