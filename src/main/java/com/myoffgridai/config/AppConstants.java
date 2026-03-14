@@ -314,4 +314,27 @@ public final class AppConstants {
 
     /** Built-in skill name: resource calculator */
     public static final String SKILL_RESOURCE_CALCULATOR = "resource-calculator";
+
+    // ── Proactive Engine ──────────────────────────────────────────────────
+
+    /** Base path for insights endpoints */
+    public static final String INSIGHTS_API_PATH = "/api/insights";
+
+    /** Base path for notifications endpoints */
+    public static final String NOTIFICATIONS_API_PATH = "/api/notifications";
+
+    /** Number of days of activity to analyze for insight generation */
+    public static final int INSIGHT_ANALYSIS_WINDOW_DAYS = 7;
+
+    /** Maximum number of insights to generate per run */
+    public static final int MAX_INSIGHTS_PER_GENERATION = 3;
+
+    /** Disk space alert threshold in megabytes */
+    public static final long DISK_ALERT_THRESHOLD_MB = 500L;
+
+    /** Cooldown period in minutes between repeated health alerts */
+    public static final int HEALTH_ALERT_COOLDOWN_MINUTES = 60;
+
+    /** Interval in milliseconds between system health checks */
+    public static final int HEALTH_CHECK_INTERVAL_MS = 300000;
 }

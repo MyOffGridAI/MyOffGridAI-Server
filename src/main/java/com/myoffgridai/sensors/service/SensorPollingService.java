@@ -7,6 +7,8 @@ import com.myoffgridai.common.exception.SensorConnectionException;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.model.MemoryImportance;
 import com.myoffgridai.memory.service.MemoryService;
+import com.myoffgridai.proactive.model.NotificationType;
+import com.myoffgridai.proactive.service.NotificationService;
 import com.myoffgridai.sensors.model.DataFormat;
 import com.myoffgridai.sensors.model.Sensor;
 import com.myoffgridai.sensors.model.SensorReading;
@@ -41,6 +43,7 @@ public class SensorPollingService {
     private final SensorReadingRepository readingRepository;
     private final SseEmitterRegistry sseEmitterRegistry;
     private final MemoryService memoryService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final TaskScheduler taskScheduler;
 
@@ -51,24 +54,27 @@ public class SensorPollingService {
     /**
      * Constructs the sensor polling service.
      *
-     * @param serialPortService  the serial port wrapper service
-     * @param sensorRepository   the sensor repository
-     * @param readingRepository  the sensor reading repository
-     * @param sseEmitterRegistry the SSE emitter registry
-     * @param memoryService      the memory service for threshold alerts
-     * @param objectMapper       the JSON object mapper
+     * @param serialPortService   the serial port wrapper service
+     * @param sensorRepository    the sensor repository
+     * @param readingRepository   the sensor reading repository
+     * @param sseEmitterRegistry  the SSE emitter registry
+     * @param memoryService       the memory service for threshold alerts
+     * @param notificationService the notification service for threshold alerts
+     * @param objectMapper        the JSON object mapper
      */
     public SensorPollingService(SerialPortService serialPortService,
                                 SensorRepository sensorRepository,
                                 SensorReadingRepository readingRepository,
                                 SseEmitterRegistry sseEmitterRegistry,
                                 MemoryService memoryService,
+                                NotificationService notificationService,
                                 ObjectMapper objectMapper) {
         this.serialPortService = serialPortService;
         this.sensorRepository = sensorRepository;
         this.readingRepository = readingRepository;
         this.sseEmitterRegistry = sseEmitterRegistry;
         this.memoryService = memoryService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
 
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
@@ -235,6 +241,13 @@ public class SensorPollingService {
                     sensor.getName(), value, unit, sensor.getLowThreshold(), unit, Instant.now());
             memoryService.createMemory(sensor.getUserId(), content,
                     MemoryImportance.HIGH, "sensor-alert", null);
+            notificationService.createNotification(
+                    sensor.getUserId(),
+                    "Sensor Alert: " + sensor.getName(),
+                    String.format("Reading %.2f%s dropped below low threshold %.2f%s",
+                            value, unit, sensor.getLowThreshold(), unit),
+                    NotificationType.SENSOR_ALERT,
+                    "{\"sensorId\":\"" + sensor.getId() + "\",\"value\":" + value + ",\"threshold\":\"low\"}");
         }
 
         if (sensor.getHighThreshold() != null && value >= sensor.getHighThreshold()) {
@@ -245,6 +258,13 @@ public class SensorPollingService {
                     sensor.getName(), value, unit, sensor.getHighThreshold(), unit, Instant.now());
             memoryService.createMemory(sensor.getUserId(), content,
                     MemoryImportance.HIGH, "sensor-alert", null);
+            notificationService.createNotification(
+                    sensor.getUserId(),
+                    "Sensor Alert: " + sensor.getName(),
+                    String.format("Reading %.2f%s exceeded high threshold %.2f%s",
+                            value, unit, sensor.getHighThreshold(), unit),
+                    NotificationType.SENSOR_ALERT,
+                    "{\"sensorId\":\"" + sensor.getId() + "\",\"value\":" + value + ",\"threshold\":\"high\"}");
         }
     }
 }

@@ -3,6 +3,7 @@ package com.myoffgridai.sensors.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fazecast.jSerialComm.SerialPort;
 import com.myoffgridai.memory.service.MemoryService;
+import com.myoffgridai.proactive.service.NotificationService;
 import com.myoffgridai.sensors.model.DataFormat;
 import com.myoffgridai.sensors.model.Sensor;
 import com.myoffgridai.sensors.model.SensorType;
@@ -29,6 +30,7 @@ class SensorPollingServiceTest {
     @Mock private SensorReadingRepository readingRepository;
     @Mock private SseEmitterRegistry sseEmitterRegistry;
     @Mock private MemoryService memoryService;
+    @Mock private NotificationService notificationService;
     @Mock private SerialPort serialPort;
 
     private SensorPollingService pollingService;
@@ -42,7 +44,7 @@ class SensorPollingServiceTest {
         objectMapper = new ObjectMapper();
         pollingService = new SensorPollingService(
                 serialPortService, sensorRepository, readingRepository,
-                sseEmitterRegistry, memoryService, objectMapper);
+                sseEmitterRegistry, memoryService, notificationService, objectMapper);
 
         sensorId = UUID.randomUUID();
         userId = UUID.randomUUID();
