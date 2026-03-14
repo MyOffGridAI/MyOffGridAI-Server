@@ -258,4 +258,36 @@ public final class AppConstants {
             "image/tiff",
             "image/webp"
     );
+
+    // ── Skills & Automation ───────────────────────────────────────────────
+
+    /** Base path for skills management endpoints */
+    public static final String SKILLS_API_PATH = "/api/skills";
+
+    /** Base path for inventory convenience endpoints */
+    public static final String INVENTORY_API_PATH = "/api/skills/inventory";
+
+    /** Maximum number of agent tool-call iterations per task */
+    public static final int AGENT_MAX_ITERATIONS = 5;
+
+    /** Maximum number of chunks to include in document summarization */
+    public static final int SUMMARIZER_MAX_CHUNKS = 10;
+
+    /** Built-in skill name: weather query */
+    public static final String SKILL_WEATHER_QUERY = "weather-query";
+
+    /** Built-in skill name: inventory tracker */
+    public static final String SKILL_INVENTORY_TRACKER = "inventory-tracker";
+
+    /** Built-in skill name: recipe generator */
+    public static final String SKILL_RECIPE_GENERATOR = "recipe-generator";
+
+    /** Built-in skill name: task planner */
+    public static final String SKILL_TASK_PLANNER = "task-planner";
+
+    /** Built-in skill name: document summarizer */
+    public static final String SKILL_DOCUMENT_SUMMARIZER = "document-summarizer";
+
+    /** Built-in skill name: resource calculator */
+    public static final String SKILL_RESOURCE_CALCULATOR = "resource-calculator";
 }

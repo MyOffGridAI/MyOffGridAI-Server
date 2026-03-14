@@ -213,6 +213,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles attempts to execute a disabled skill.
+     *
+     * @param ex the exception
+     * @return 400 Bad Request
+     */
+    @ExceptionHandler(SkillDisabledException.class)
+    public ResponseEntity<ApiResponse<Object>> handleSkillDisabled(SkillDisabledException ex) {
+        log.warn("Skill disabled: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Catch-all handler for unexpected exceptions. Logs the full stack trace
      * but returns only a generic message to the client.
      *
