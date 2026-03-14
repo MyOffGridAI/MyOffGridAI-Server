@@ -1,0 +1,13 @@
+spring:
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+app:
+  jwt:
+    secret: test-secret-key-minimum-256-bits-long-for-hmac-sha-signing-tests
+    expiration-ms: 3600000
+    refresh-expiration-ms: 86400000
