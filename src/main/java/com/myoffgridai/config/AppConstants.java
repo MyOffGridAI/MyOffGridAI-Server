@@ -88,8 +88,32 @@ public final class AppConstants {
 
     // ── Sensors ─────────────────────────────────────────────────────────────
 
+    /** Base path for sensor management endpoints */
+    public static final String SENSORS_API_PATH = "/api/sensors";
+
     /** Default sensor polling interval in seconds */
-    public static final int SENSOR_POLLING_INTERVAL_SECONDS = 30;
+    public static final int DEFAULT_SENSOR_POLL_INTERVAL_SECONDS = 30;
+
+    /** Minimum sensor polling interval in seconds */
+    public static final int MIN_SENSOR_POLL_INTERVAL_SECONDS = 5;
+
+    /** Maximum sensor polling interval in seconds */
+    public static final int MAX_SENSOR_POLL_INTERVAL_SECONDS = 3600;
+
+    /** Number of consecutive parse failures before auto-stopping a sensor */
+    public static final int SENSOR_CONSECUTIVE_FAILURE_LIMIT = 5;
+
+    /** Timeout in milliseconds for sensor connection tests */
+    public static final int SENSOR_TEST_TIMEOUT_MS = 5000;
+
+    /** Maximum number of hours of reading history to return */
+    public static final int SENSOR_READING_HISTORY_MAX_HOURS = 168;
+
+    /** SSE emitter timeout in milliseconds (30 minutes) */
+    public static final long SSE_EMITTER_TIMEOUT_MS = 1_800_000L;
+
+    /** Legacy alias — use DEFAULT_SENSOR_POLL_INTERVAL_SECONDS instead */
+    public static final int SENSOR_POLLING_INTERVAL_SECONDS = DEFAULT_SENSOR_POLL_INTERVAL_SECONDS;
 
     // ── RAG (Retrieval-Augmented Generation) ────────────────────────────────
 

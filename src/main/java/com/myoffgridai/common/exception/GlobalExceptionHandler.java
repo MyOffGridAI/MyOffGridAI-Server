@@ -226,6 +226,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles sensor connection failures.
+     *
+     * @param ex the exception
+     * @return 502 Bad Gateway
+     */
+    @ExceptionHandler(SensorConnectionException.class)
+    public ResponseEntity<ApiResponse<Object>> handleSensorConnection(SensorConnectionException ex) {
+        log.warn("Sensor connection error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Catch-all handler for unexpected exceptions. Logs the full stack trace
      * but returns only a generic message to the client.
      *
