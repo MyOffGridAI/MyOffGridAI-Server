@@ -1,641 +1,959 @@
-# MyOffGridAI-Server — Codebase Audit
+# MyOffGridAI-Server -- Codebase Audit
 
 **Generated:** 2026-03-14
-**Phase:** 3 — Memory & RAG
-**Version:** 0.1.0-SNAPSHOT
+**Project:** MyOffGridAI-Server
+**Root Package:** `com.myoffgridai`
+**Java Version:** 21
+**Framework:** Spring Boot 3.4.3
+**Build Tool:** Maven (with Maven Wrapper)
+**Status:** FINAL -- All 8 phases complete
 
 ---
 
-## 1. Entity Inventory
+## Table of Contents
 
-### User (`com.myoffgridai.auth.model.User`)
-| Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
-| username | String | unique, not null | Login identifier |
-| email | String | unique, nullable | Optional contact email |
-| displayName | String | not null | Human-readable name |
-| passwordHash | String | not null | BCrypt-encoded password |
-| role | Role (enum) | not null | `@Enumerated(STRING)` |
-| isActive | boolean | not null, default true | Account status |
-| createdAt | Instant | not null, auto | `@CreatedDate` |
-| updatedAt | Instant | auto | `@LastModifiedDate` |
-| lastLoginAt | Instant | nullable | Updated on login |
-
-**Implements:** `UserDetails` (Spring Security)
-**Table:** `users`
-**Auditing:** `@EntityListeners(AuditingEntityListener.class)`, `@PrePersist`, `@PreUpdate`
-
-### Role (`com.myoffgridai.auth.model.Role`)
-| Value | Description |
-|-------|-------------|
-| ROLE_OWNER | Full system access, created at first boot |
-| ROLE_ADMIN | All features, user management |
-| ROLE_MEMBER | Full AI features, own data only |
-| ROLE_VIEWER | Read-only access |
-| ROLE_CHILD | Safe mode, filtered responses, no vault access |
+1. [Technology Stack](#1-technology-stack)
+2. [Project Structure Overview](#2-project-structure-overview)
+3. [Configuration & Infrastructure](#3-configuration--infrastructure)
+4. [Phase 1 -- Authentication & Users (`auth`)](#4-phase-1----authentication--users-auth)
+5. [Common Package (`common`)](#5-common-package-common)
+6. [Phase 2 -- AI & Chat (`ai`)](#6-phase-2----ai--chat-ai)
+7. [Phase 3 -- Memory & RAG (`memory`)](#7-phase-3----memory--rag-memory)
+8. [Phase 4 -- Knowledge Vault (`knowledge`)](#8-phase-4----knowledge-vault-knowledge)
+9. [Phase 5 -- Skills & Automation (`skills`)](#9-phase-5----skills--automation-skills)
+10. [Phase 6 -- Sensors (`sensors`)](#10-phase-6----sensors-sensors)
+11. [Phase 7 -- Proactive Engine (`proactive`)](#11-phase-7----proactive-engine-proactive)
+12. [Phase 8 -- Privacy & Fortress (`privacy`) + System (`system`)](#12-phase-8----privacy--fortress-privacy--system-system)
+13. [Test Suite](#13-test-suite)
+14. [Database Entities & Relationships](#14-database-entities--relationships)
+15. [API Endpoint Summary](#15-api-endpoint-summary)
+16. [Summary Statistics](#16-summary-statistics)
 
 ---
 
-## 2. Repository Method Inventory
+## 1. Technology Stack
 
-### UserRepository (`com.myoffgridai.auth.repository.UserRepository`)
-Extends: `JpaRepository<User, UUID>`
+| Category | Technology | Version / Notes |
+|---|---|---|
+| Language | Java | 21 (LTS) |
+| Framework | Spring Boot | 3.4.3 |
+| Build | Maven | Wrapper included |
+| Database | PostgreSQL | pgvector extension for embeddings |
+| ORM | Hibernate / Spring Data JPA | ddl-auto: update (dev), validate (prod) |
+| Migration | Flyway | Disabled in dev, enabled in prod |
+| Security | Spring Security + JJWT | 0.12.6, stateless JWT, BCrypt hashing |
+| AI/LLM | Ollama | qwen3:32b (chat), nomic-embed-text (embeddings) |
+| Vector Search | pgvector | 768-dimension float[] embeddings, cosine similarity |
+| PDF Extraction | Apache PDFBox | 3.0.4 |
+| OCR | Tess4J (Tesseract) | 5.14.0 |
+| Serial Ports | jSerialComm | 2.11.0 |
+| Streaming | SSE (Server-Sent Events) | SseEmitter + WebClient reactive |
+| HTTP Client | RestClient (sync) + WebClient (reactive) | For Ollama communication |
+| API Docs | springdoc-openapi | 2.8.4 (Swagger UI) |
+| Testing | JUnit 5 + Mockito 5.21.0 + Testcontainers | ByteBuddy 1.18.4 |
+| Annotations | Lombok | 1.18.42 (explicit processor paths) |
+| Encryption | AES-256-GCM | PBKDF2 key derivation for data export |
 
-| Method | Return Type |
-|--------|-------------|
-| `findByUsername(String)` | `Optional<User>` |
-| `findByEmail(String)` | `Optional<User>` |
-| `existsByUsername(String)` | `boolean` |
-| `existsByEmail(String)` | `boolean` |
-| `findAllByRole(Role)` | `List<User>` |
-| `countByIsActiveTrue()` | `long` |
-
----
-
-## 3. Service Method Inventory
-
-### JwtService (`com.myoffgridai.auth.service.JwtService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `generateAccessToken(UserDetails)` | `String` | Short-lived access JWT |
-| `generateRefreshToken(UserDetails)` | `String` | Long-lived refresh JWT |
-| `extractUsername(String)` | `String` | Extract subject from token |
-| `extractExpiration(String)` | `Date` | Extract expiry from token |
-| `isTokenValid(String, UserDetails)` | `boolean` | Validate token ownership + expiry |
-| `isTokenExpired(String)` | `boolean` | Check if token is expired |
-| `getAccessExpirationMs()` | `long` | Get configured access expiration |
-
-### AuthService (`com.myoffgridai.auth.service.AuthService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `register(RegisterRequest)` | `AuthResponse` | Create user, return JWT pair |
-| `login(LoginRequest)` | `AuthResponse` | Authenticate, return JWT pair |
-| `refresh(String)` | `AuthResponse` | Issue new access token |
-| `logout(String)` | `void` | Blacklist token |
-| `isTokenBlacklisted(String)` | `boolean` | Check blacklist status |
-| `changePassword(UUID, ChangePasswordRequest)` | `void` | Change user password |
-
-### UserService (`com.myoffgridai.auth.service.UserService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `listUsers(int, int)` | `Page<UserSummaryDto>` | Paginated user list |
-| `getUserById(UUID)` | `UserDetailDto` | Get user details |
-| `updateUser(UUID, String, String, Role)` | `UserDetailDto` | Update user profile |
-| `deactivateUser(UUID)` | `void` | Set isActive=false |
-| `deleteUser(UUID)` | `void` | Hard delete user |
-
----
-
-## 4. Security Matrix
-
-| Method | Endpoint | Auth Required | Required Role |
-|--------|----------|---------------|---------------|
-| POST | `/api/auth/register` | No | Public |
-| POST | `/api/auth/login` | No | Public |
-| POST | `/api/auth/refresh` | No | Public (valid refresh token) |
-| POST | `/api/auth/logout` | Yes | Any authenticated |
-| GET | `/api/users` | Yes | OWNER or ADMIN |
-| GET | `/api/users/{id}` | Yes | OWNER/ADMIN (any), MEMBER/VIEWER (own only) |
-| PUT | `/api/users/{id}` | Yes | OWNER or ADMIN |
-| PUT | `/api/users/{id}/deactivate` | Yes | OWNER only |
-| DELETE | `/api/users/{id}` | Yes | OWNER only |
-| GET | `/api/system/status` | No | Public |
-| POST | `/api/system/initialize` | No | Public |
-| GET | `/setup/**` | No | Public |
-| GET | `/actuator/health` | No | Public |
-| GET | `/v3/api-docs/**` | No | Public |
-| GET | `/swagger-ui/**` | No | Public |
-
----
-
-## 5. Constants Inventory (`AppConstants.java`)
-
-### Server
-- `SERVER_PORT` = 8080
-- `OLLAMA_PORT` = 11434
-- `POSTGRES_PORT` = 5432
-
-### JWT
-- `JWT_EXPIRATION_MS` = 86,400,000 (24h)
-- `JWT_REFRESH_EXPIRATION_MS` = 604,800,000 (7d)
-- `TOKEN_TYPE_BEARER` = "Bearer"
-- `AUTHORIZATION_HEADER` = "Authorization"
-- `BEARER_PREFIX` = "Bearer "
-
-### API Paths
-- `API_AUTH` = "/api/auth"
-- `API_USERS` = "/api/users"
-- `API_AI` = "/api/ai"
-- `API_MEMORY` = "/api/memory"
-- `API_KNOWLEDGE` = "/api/knowledge"
-- `API_SKILLS` = "/api/skills"
-- `API_SENSORS` = "/api/sensors"
-- `API_PROACTIVE` = "/api/proactive"
-- `API_PRIVACY` = "/api/privacy"
-- `API_SYSTEM` = "/api/system"
-
-### Pagination
-- `DEFAULT_PAGE_SIZE` = 20
-- `MAX_PAGE_SIZE` = 100
-
-### File Upload
-- `MAX_FILE_SIZE_BYTES` = 104,857,600 (100MB)
-
-### Sensors
-- `SENSOR_POLLING_INTERVAL_SECONDS` = 30
-
-### RAG
-- `RAG_TOP_K_DEFAULT` = 5
-- `CHUNK_SIZE_TOKENS` = 512
-- `CHUNK_OVERLAP_TOKENS` = 64
-
-### Memory Importance
-- `MEMORY_IMPORTANCE_LOW` = 1
-- `MEMORY_IMPORTANCE_MEDIUM` = 5
-- `MEMORY_IMPORTANCE_HIGH` = 10
-
-### Roles
-- `ROLE_OWNER`, `ROLE_ADMIN`, `ROLE_MEMBER`, `ROLE_VIEWER`, `ROLE_CHILD`
-
-### Device & System
-- `DEVICE_KEY_PATH` = "/etc/myoffgridai/.device.key"
-- `AP_MODE_SSID` = "MyOffGridAI-Setup"
-- `AP_MODE_IP` = "192.168.4.1"
-- `UPDATE_ZIP_FILENAME` = "myoffgridai-update.zip"
-- `FACTORY_RESET_TRIGGER_FILENAME` = "factory-reset.trigger"
-
-### Password Validation
-- `PASSWORD_MIN_LENGTH_DEV` = 4
-- `PASSWORD_MIN_LENGTH_PROD` = 12
-
----
-
-## 6. Known Constraints and Validation Rules
-
-### RegisterRequest
-- `username`: @NotBlank, @Size(min=3, max=50)
-- `email`: @Email (optional)
-- `displayName`: @NotBlank, @Size(min=1, max=100)
-- `password`: @NotBlank, runtime min length 4 (dev) / 12 (prod)
-- `role`: optional, defaults to ROLE_MEMBER
-
-### LoginRequest
-- `username`: @NotBlank
-- `password`: @NotBlank
-
-### ChangePasswordRequest
-- `currentPassword`: @NotBlank
-- `newPassword`: @NotBlank, runtime min length 4 (dev) / 12 (prod)
-
-### RefreshRequest
-- `refreshToken`: @NotBlank
-
-### UpdateUserRequest
-- `displayName`: @Size(min=1, max=100) (optional)
-- `email`: @Email (optional)
-- `role`: optional
-
----
-
-## 7. Package Structure
+### Key Dependencies (pom.xml)
 
 ```
-com.myoffgridai
-├── MyOffGridAiApplication.java
-├── config/
-│   ├── AppConstants.java
-│   ├── JpaConfig.java
-│   ├── JwtAuthFilter.java
-│   └── SecurityConfig.java
-├── auth/
+spring-boot-starter-web, spring-boot-starter-data-jpa,
+spring-boot-starter-security, spring-boot-starter-validation,
+spring-boot-starter-webflux (WebClient only),
+jjwt-api/impl/jackson (0.12.6),
+postgresql, pgvector (0.1.6),
+pdfbox (3.0.4), tess4j (5.14.0),
+jSerialComm (2.11.0),
+springdoc-openapi-starter-webmvc-ui (2.8.4),
+spring-boot-starter-test, spring-security-test,
+testcontainers (postgresql)
+```
+
+---
+
+## 2. Project Structure Overview
+
+```
+src/main/java/com/myoffgridai/
+├── MyOffGridAiApplication.java          # Entry point (@EnableAsync, @EnableScheduling)
+├── config/                              # Cross-cutting configuration (7 files)
+├── common/                              # Shared utilities (16 files)
+│   ├── exception/                       # Custom exceptions + GlobalExceptionHandler
+│   ├── response/                        # ApiResponse wrapper
+│   └── util/                            # TokenCounter
+├── auth/                                # Phase 1: Authentication & Users (14 files)
 │   ├── controller/
-│   │   ├── AuthController.java
-│   │   └── UserController.java
-│   ├── service/
-│   │   ├── JwtService.java
-│   │   ├── AuthService.java
-│   │   └── UserService.java
-│   ├── model/
-│   │   ├── Role.java
-│   │   └── User.java
 │   ├── dto/
-│   │   ├── RegisterRequest.java
-│   │   ├── LoginRequest.java
-│   │   ├── ChangePasswordRequest.java
-│   │   ├── RefreshRequest.java
-│   │   ├── AuthResponse.java
-│   │   ├── UserSummaryDto.java
-│   │   ├── UserDetailDto.java
-│   │   └── UpdateUserRequest.java
-│   └── repository/
-│       └── UserRepository.java
-├── ai/                    (empty — Phase 2+)
-├── memory/                (empty — Phase 2+)
-├── knowledge/             (empty — Phase 2+)
-├── skills/                (empty — Phase 2+)
-├── sensors/               (empty — Phase 2+)
-├── proactive/             (empty — Phase 2+)
-├── privacy/               (empty — Phase 2+)
-├── system/                (empty — Phase 2+)
-└── common/
-    ├── exception/
-    │   ├── GlobalExceptionHandler.java
-    │   ├── DuplicateResourceException.java
-    │   ├── EntityNotFoundException.java
-    │   ├── InitializationException.java
-    │   └── FortressActiveException.java
-    ├── response/
-    │   └── ApiResponse.java
-    └── util/
-        └── TokenCounter.java
-```
-
----
-
-## 8. Phase 2 — AI Core Entities
-
-### Conversation (`com.myoffgridai.ai.model.Conversation`)
-| Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
-| user | User | ManyToOne, not null | FK to users table |
-| title | String | nullable | Auto-generated after first message |
-| isArchived | boolean | not null, default false | Archive status |
-| createdAt | Instant | not null, auto | `@CreatedDate` |
-| updatedAt | Instant | auto | `@LastModifiedDate` |
-| messageCount | int | not null, default 0 | Maintained by service |
-
-**Table:** `conversations`
-
-### Message (`com.myoffgridai.ai.model.Message`)
-| Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
-| conversation | Conversation | ManyToOne, not null | FK to conversations table |
-| role | MessageRole | not null | `@Enumerated(STRING)` |
-| content | String (TEXT) | not null | Full message text |
-| tokenCount | Integer | nullable | Populated after inference |
-| hasRagContext | boolean | not null, default false | True when RAG context injected |
-| createdAt | Instant | not null, auto | `@CreatedDate` |
-
-**Table:** `messages`
-
-### MessageRole (`com.myoffgridai.ai.model.MessageRole`)
-| Value | Description |
-|-------|-------------|
-| USER | User-submitted message |
-| ASSISTANT | AI-generated response |
-| SYSTEM | System prompt |
-
----
-
-## 9. Phase 2 — Repository Method Inventory
-
-### ConversationRepository (`com.myoffgridai.ai.repository.ConversationRepository`)
-Extends: `JpaRepository<Conversation, UUID>`
-
-| Method | Return Type |
-|--------|-------------|
-| `findByUserIdOrderByUpdatedAtDesc(UUID, Pageable)` | `Page<Conversation>` |
-| `findByUserIdAndIsArchivedOrderByUpdatedAtDesc(UUID, boolean, Pageable)` | `Page<Conversation>` |
-| `findByIdAndUserId(UUID, UUID)` | `Optional<Conversation>` |
-| `countByUserId(UUID)` | `long` |
-
-### MessageRepository (`com.myoffgridai.ai.repository.MessageRepository`)
-Extends: `JpaRepository<Message, UUID>`
-
-| Method | Return Type |
-|--------|-------------|
-| `findByConversationIdOrderByCreatedAtAsc(UUID)` | `List<Message>` |
-| `findByConversationIdOrderByCreatedAtAsc(UUID, Pageable)` | `Page<Message>` |
-| `findTopNByConversationIdOrderByCreatedAtDesc(UUID, Pageable)` | `List<Message>` |
-| `countByConversationId(UUID)` | `long` |
-| `deleteByConversationId(UUID)` | `void` |
-
----
-
-## 10. Phase 2 — Service Method Inventory
-
-### OllamaService (`com.myoffgridai.ai.service.OllamaService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `isAvailable()` | `boolean` | Checks if Ollama is responding |
-| `listModels()` | `List<OllamaModelInfo>` | Lists loaded models |
-| `chat(OllamaChatRequest)` | `OllamaChatResponse` | Synchronous chat |
-| `chatStream(OllamaChatRequest)` | `Flux<OllamaChatChunk>` | Streaming chat |
-| `embed(String)` | `float[]` | Generate embedding |
-| `embedBatch(List<String>)` | `List<float[]>` | Batch embeddings |
-
-### ChatService (`com.myoffgridai.ai.service.ChatService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `createConversation(UUID, String)` | `Conversation` | Create new conversation |
-| `getConversations(UUID, boolean, Pageable)` | `Page<Conversation>` | List conversations |
-| `getConversation(UUID, UUID)` | `Conversation` | Get with ownership check |
-| `archiveConversation(UUID, UUID)` | `void` | Archive conversation |
-| `deleteConversation(UUID, UUID)` | `void` | Delete conversation + messages |
-| `sendMessage(UUID, UUID, String)` | `Message` | Sync message exchange |
-| `streamMessage(UUID, UUID, String)` | `Flux<String>` | Streaming message exchange |
-| `generateTitle(UUID, String)` | `void` | Async title generation |
-
-### SystemPromptBuilder (`com.myoffgridai.ai.service.SystemPromptBuilder`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `build(User, String)` | `String` | Assembles system prompt |
-
-### ContextWindowService (`com.myoffgridai.ai.service.ContextWindowService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `prepareMessages(UUID, String, String)` | `List<OllamaMessage>` | Builds context window |
-
-### AgentService (`com.myoffgridai.ai.service.AgentService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `executeTask(UUID, UUID, String)` | `AgentTaskResult` | Execute agent task |
-
-### ModelHealthCheckService (`com.myoffgridai.ai.service.ModelHealthCheckService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `checkOllamaOnStartup()` | `void` | Startup health check |
-
----
-
-## 11. Phase 2 — Security Matrix (New Endpoints)
-
-| Method | Endpoint | Auth Required | Notes |
-|--------|----------|---------------|-------|
-| POST | `/api/chat/conversations` | Yes | Any authenticated |
-| GET | `/api/chat/conversations` | Yes | Own conversations only |
-| GET | `/api/chat/conversations/{id}` | Yes | Own conversations only |
-| DELETE | `/api/chat/conversations/{id}` | Yes | Own conversations only |
-| PUT | `/api/chat/conversations/{id}/archive` | Yes | Own conversations only |
-| POST | `/api/chat/conversations/{id}/messages` | Yes | Own conversations only |
-| GET | `/api/chat/conversations/{id}/messages` | Yes | Own conversations only |
-| GET | `/api/models` | No | Public |
-| GET | `/api/models/active` | Yes | Any authenticated |
-| GET | `/api/models/health` | No | Public |
-
----
-
-## 12. Phase 2 — Constants Added to AppConstants
-
-### Ollama
-- `OLLAMA_BASE_URL` = "http://localhost:11434"
-- `OLLAMA_MODEL` = "qwen3:32b"
-- `OLLAMA_EMBED_MODEL` = "nomic-embed-text"
-- `OLLAMA_CONNECT_TIMEOUT_SECONDS` = 10
-- `OLLAMA_READ_TIMEOUT_SECONDS` = 120
-- `OLLAMA_MAX_CONTEXT_TOKENS` = 8192
-- `OLLAMA_CONTEXT_WINDOW_MESSAGES` = 20
-
-### Chat
-- `MAX_MESSAGE_LENGTH` = 32000
-- `CHAT_API_PATH` = "/api/chat"
-- `MODELS_API_PATH` = "/api/models"
-- `TITLE_GENERATION_MAX_TOKENS` = 20
-
----
-
-## 13. Phase 2 — Custom Exceptions
-
-| Exception | HTTP Status | Description |
-|-----------|-------------|-------------|
-| `OllamaUnavailableException` | 503 | Ollama service unreachable |
-| `OllamaInferenceException` | 502 | Ollama inference error |
-| `EmbeddingException` | 503 | Embedding generation failure |
-
----
-
-## 14. Phase 3 — Memory & RAG Entities
-
-### VectorDocument (`com.myoffgridai.memory.model.VectorDocument`)
-| Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
-| userId | UUID | not null, indexed | Owner user ID |
-| content | String (TEXT) | not null | Original text content |
-| embedding | float[] | nullable | pgvector `vector(768)` via `@Type(VectorType.class)` |
-| sourceType | VectorSourceType | not null | `@Enumerated(STRING)` |
-| sourceId | UUID | nullable | FK to source entity (Memory, Conversation) |
-| metadata | String (TEXT) | nullable | JSON metadata |
-| createdAt | Instant | not null, auto | `@CreatedDate` |
-
-**Table:** `vector_document`
-**Index:** `(userId, sourceType)`
-
-### Memory (`com.myoffgridai.memory.model.Memory`)
-| Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| id | UUID | PK, generated | `@GeneratedValue(strategy = UUID)` |
-| userId | UUID | not null, indexed | Owner user ID |
-| content | String (TEXT) | not null | Memory text |
-| importance | MemoryImportance | not null, default MEDIUM | `@Enumerated(STRING)` |
-| tags | String | nullable | Comma-separated tags |
-| sourceConversationId | UUID | nullable | FK to originating conversation |
-| createdAt | Instant | not null, auto | `@CreatedDate` |
-| updatedAt | Instant | auto | `@LastModifiedDate` |
-| lastAccessedAt | Instant | nullable | Updated on RAG access |
-| accessCount | int | not null, default 0 | Incremented on RAG access |
-
-**Table:** `memories`
-
-### VectorSourceType (`com.myoffgridai.memory.model.VectorSourceType`)
-| Value | Description |
-|-------|-------------|
-| MEMORY | User memory fact |
-| CONVERSATION | Conversation summary |
-| KNOWLEDGE_CHUNK | Knowledge base chunk |
-
-### MemoryImportance (`com.myoffgridai.memory.model.MemoryImportance`)
-| Value | Description |
-|-------|-------------|
-| LOW | Low priority |
-| MEDIUM | Default priority |
-| HIGH | High priority |
-| CRITICAL | Critical (e.g., conversation summaries) |
-
----
-
-## 15. Phase 3 — Repository Method Inventory
-
-### VectorDocumentRepository (`com.myoffgridai.memory.repository.VectorDocumentRepository`)
-Extends: `JpaRepository<VectorDocument, UUID>`
-
-| Method | Return Type | Notes |
-|--------|-------------|-------|
-| `findMostSimilar(UUID, String, String, int)` | `List<VectorDocument>` | Native SQL: cosine distance `<=>` |
-| `findByUserIdAndSourceType(UUID, VectorSourceType)` | `List<VectorDocument>` | Filter by source |
-| `deleteBySourceIdAndSourceType(UUID, VectorSourceType)` | `void` | Cascade cleanup |
-| `deleteByUserId(UUID)` | `void` | Privacy wipe |
-
-### MemoryRepository (`com.myoffgridai.memory.repository.MemoryRepository`)
-Extends: `JpaRepository<Memory, UUID>`
-
-| Method | Return Type |
-|--------|-------------|
-| `findByUserIdOrderByCreatedAtDesc(UUID, Pageable)` | `Page<Memory>` |
-| `findByUserIdAndImportance(UUID, MemoryImportance, Pageable)` | `Page<Memory>` |
-| `findByUserIdAndTagsContaining(UUID, String, Pageable)` | `Page<Memory>` |
-| `findByUserId(UUID)` | `List<Memory>` |
-| `deleteByUserId(UUID)` | `void` |
-| `countByUserId(UUID)` | `long` |
-
----
-
-## 16. Phase 3 — Service Method Inventory
-
-### EmbeddingService (`com.myoffgridai.memory.service.EmbeddingService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `embed(String)` | `float[]` | Single text embedding via OllamaService |
-| `embedAndFormat(String)` | `String` | Embed and format as pgvector string |
-| `embedBatch(List<String>)` | `List<float[]>` | Batch embeddings |
-| `cosineSimilarity(float[], float[])` | `float` | Compute cosine similarity |
-| `formatEmbedding(float[])` | `String` | Static: format as pgvector string |
-
-### MemoryService (`com.myoffgridai.memory.service.MemoryService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `createMemory(UUID, String, MemoryImportance, String, UUID)` | `Memory` | Create memory + vector doc |
-| `findRelevantMemories(UUID, String, int)` | `List<Memory>` | Vector similarity search |
-| `searchMemoriesWithScores(UUID, String, int)` | `List<MemorySearchResultDto>` | Search with scores for API |
-| `getMemory(UUID, UUID)` | `Memory` | Get with ownership check |
-| `updateImportance(UUID, UUID, MemoryImportance)` | `Memory` | Update importance |
-| `updateTags(UUID, UUID, String)` | `Memory` | Update tags |
-| `deleteMemory(UUID, UUID)` | `void` | Delete memory + vector doc |
-| `deleteAllMemoriesForUser(UUID)` | `void` | Privacy wipe |
-| `exportMemories(UUID)` | `List<Memory>` | Data export |
-| `getMemories(UUID, MemoryImportance, String, Pageable)` | `Page<Memory>` | Paginated list with filters |
-| `toDto(Memory)` | `MemoryDto` | Convert to DTO |
-
-### RagService (`com.myoffgridai.memory.service.RagService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `buildRagContext(UUID, String)` | `RagContext` | Build RAG context from memories + knowledge |
-| `formatContextBlock(RagContext)` | `String` | Format context for system prompt |
-
-### MemoryExtractionService (`com.myoffgridai.memory.service.MemoryExtractionService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `extractAndStore(UUID, UUID, String, String)` | `void` | `@Async` extract facts from chat exchange |
-
-### SummarizationService (`com.myoffgridai.memory.service.SummarizationService`)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `summarizeConversation(UUID, UUID)` | `Memory` | Summarize conversation as CRITICAL memory |
-| `scheduledNightlySummarization()` | `void` | `@Scheduled(cron)` nightly batch summarization |
-
-### SystemPromptBuilder (Updated)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `build(User, String)` | `String` | Base system prompt (no RAG) |
-| `build(User, String, RagContext)` | `String` | System prompt with RAG context |
-
-### ChatService (Updated)
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `sendMessage(UUID, UUID, String)` | `Message` | Now includes RAG context + async memory extraction |
-| `streamMessage(UUID, UUID, String)` | `Flux<String>` | Now includes RAG context + async memory extraction |
-
----
-
-## 17. Phase 3 — Security Matrix (New Endpoints)
-
-| Method | Endpoint | Auth Required | Notes |
-|--------|----------|---------------|-------|
-| GET | `/api/memory` | Yes | Own memories only, paginated |
-| GET | `/api/memory/{id}` | Yes | Own memory only |
-| DELETE | `/api/memory/{id}` | Yes | Own memory only |
-| PUT | `/api/memory/{id}/importance` | Yes | Own memory only |
-| PUT | `/api/memory/{id}/tags` | Yes | Own memory only |
-| POST | `/api/memory/search` | Yes | Vector similarity search |
-| GET | `/api/memory/export` | Yes | Export all own memories |
-
----
-
-## 18. Phase 3 — Constants Added to AppConstants
-
-### Memory & RAG
-- `EMBEDDING_DIMENSIONS` = 768
-- `RAG_TOP_K` = 5
-- `MEMORY_TOP_K` = 5
-- `SIMILARITY_THRESHOLD` = 0.7f
-- `RAG_MAX_CONTEXT_TOKENS` = 2048
-- `MEMORY_EXTRACTION_MAX_FACTS` = 3
-- `MEMORY_SUMMARIZATION_TAG` = "conversation-summary"
-- `SUMMARIZATION_MIN_MESSAGES` = 10
-- `SUMMARIZATION_AGE_DAYS` = 7
-- `MEMORY_API_PATH` = "/api/memory"
-
----
-
-## 19. Phase 3 — Package Structure (Updated)
-
-```
-com.myoffgridai
-├── MyOffGridAiApplication.java    (@EnableAsync, @EnableScheduling)
-├── config/
-│   ├── AppConstants.java
-│   ├── JpaConfig.java
-│   ├── JwtAuthFilter.java
-│   ├── OllamaConfig.java
-│   ├── SecurityConfig.java
-│   ├── VectorStoreConfig.java     (NEW — pgvector extension check)
-│   └── VectorType.java            (NEW — Hibernate UserType for vector)
-├── auth/
-│   └── ... (unchanged)
-├── ai/
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── ai/                                  # Phase 2: AI & Chat (21 files)
 │   ├── controller/
-│   │   ├── ChatController.java
-│   │   └── ModelController.java
-│   ├── service/
-│   │   ├── ChatService.java       (UPDATED — RAG + memory extraction)
-│   │   ├── OllamaService.java
-│   │   ├── SystemPromptBuilder.java (UPDATED — RagContext overload)
-│   │   ├── ContextWindowService.java
-│   │   ├── AgentService.java
-│   │   └── ModelHealthCheckService.java
-│   ├── model/
-│   │   ├── Conversation.java
-│   │   ├── Message.java
-│   │   └── MessageRole.java
 │   ├── dto/
-│   │   └── ... (unchanged)
-│   └── repository/
-│       ├── ConversationRepository.java
-│       └── MessageRepository.java
-├── memory/                         (NEW — Phase 3)
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── memory/                              # Phase 3: Memory & RAG (17 files)
 │   ├── controller/
-│   │   └── MemoryController.java
-│   ├── service/
-│   │   ├── EmbeddingService.java
-│   │   ├── MemoryService.java
-│   │   ├── RagService.java
-│   │   ├── MemoryExtractionService.java
-│   │   └── SummarizationService.java
-│   ├── model/
-│   │   ├── Memory.java
-│   │   ├── MemoryImportance.java
-│   │   ├── VectorDocument.java
-│   │   └── VectorSourceType.java
 │   ├── dto/
-│   │   ├── MemoryDto.java
-│   │   ├── MemorySearchRequest.java
-│   │   ├── MemorySearchResultDto.java
-│   │   ├── RagContext.java
-│   │   ├── UpdateImportanceRequest.java
-│   │   └── UpdateTagsRequest.java
-│   └── repository/
-│       ├── MemoryRepository.java
-│       └── VectorDocumentRepository.java
-└── common/
-    ├── exception/
-    │   ├── GlobalExceptionHandler.java (UPDATED — EmbeddingException handler)
-    │   ├── EmbeddingException.java     (NEW)
-    │   └── ... (unchanged)
-    ├── response/
-    │   └── ApiResponse.java
-    └── util/
-        └── TokenCounter.java
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── knowledge/                           # Phase 4: Knowledge Vault (16 files)
+│   ├── controller/
+│   ├── dto/
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── skills/                              # Phase 5: Skills & Automation (27 files)
+│   ├── builtin/
+│   ├── controller/
+│   ├── dto/
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── sensors/                             # Phase 6: Sensors (18 files)
+│   ├── controller/
+│   ├── dto/
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── proactive/                           # Phase 7: Proactive Engine (16 files)
+│   ├── controller/
+│   ├── dto/
+│   ├── model/
+│   ├── repository/
+│   └── service/
+├── privacy/                             # Phase 8a: Privacy & Fortress (17 files)
+│   ├── aspect/
+│   ├── controller/
+│   ├── dto/
+│   ├── model/
+│   ├── repository/
+│   └── service/
+└── system/                              # Phase 8b: System Management (6 files)
+    ├── controller/
+    ├── dto/
+    ├── model/
+    ├── repository/
+    └── service/
 ```
+
+**File Counts:** 190 main source files, 81 test files (271 total Java files)
+
+---
+
+## 3. Configuration & Infrastructure
+
+### 3.1 Application Entry Point
+
+| File | Path | Description |
+|---|---|---|
+| `MyOffGridAiApplication` | `src/main/java/com/myoffgridai/MyOffGridAiApplication.java` | Spring Boot main class. Annotated with `@EnableAsync` and `@EnableScheduling` to support async document ingestion, memory extraction, and scheduled jobs (nightly summarization, health checks, insight generation). |
+
+### 3.2 Configuration Package (`config`) -- 7 files
+
+| File | Type | Description | Key Public Methods / Notes |
+|---|---|---|---|
+| `AppConstants` | `final class` | Centralized application constants for all 8 phases. No magic numbers or hardcoded strings elsewhere. | 90+ constants organized by domain: Server ports, JWT, API paths, pagination, file upload, sensors, RAG, memory, knowledge, skills, proactive, privacy, passwords, Ollama settings, chat limits, roles. |
+| `SecurityConfig` | `@Configuration` | Stateless JWT security filter chain. CORS allows all origins. | Public endpoints: `/api/auth/login`, `/register`, `/refresh`, `/api/system/status`, `/initialize`, `/api/models/**`, `/actuator/health`, `/swagger-ui/**`. All other endpoints require authentication. |
+| `JwtAuthFilter` | `OncePerRequestFilter` | Extracts Bearer token from Authorization header, checks blacklist, validates via JwtService, sets SecurityContext. | `doFilterInternal()` -- skips if no token or blacklisted, extracts username from JWT, loads UserDetails, sets authentication. |
+| `JpaConfig` | `@Configuration` | Separated `@EnableJpaAuditing` to avoid `@WebMvcTest` test conflicts. | No public methods -- annotation-only config. |
+| `OllamaConfig` | `@Configuration` | Creates two HTTP client beans for Ollama. | `ollamaRestClient()` -- blocking RestClient with configurable timeout. `ollamaWebClient()` -- reactive WebClient for SSE streaming with 10MB buffer. |
+| `VectorStoreConfig` | `@Component` | Startup check verifying the pgvector extension is installed in PostgreSQL. | `checkVectorExtension()` -- `@PostConstruct`, logs warning if pgvector not available. |
+| `VectorType` | `UserType` (Hibernate) | Custom Hibernate type mapping `float[]` to PostgreSQL `vector(768)` columns. | `nullSafeGet()`, `nullSafeSet()` -- handles serialization between Java `float[]` and pgvector column type. |
+
+### 3.3 Application Configuration (`application.yml`)
+
+| Profile | Key Settings |
+|---|---|
+| **default** | Port 8080, multipart max 100MB, Flyway disabled |
+| **dev** | PostgreSQL `localhost:5432/myoffgridai`, user/pass `myoffgridai/myoffgridai`, Hibernate ddl-auto: update, Ollama `qwen3:32b` + `nomic-embed-text`, fortress mock mode |
+| **prod** | Hibernate ddl-auto: validate, Flyway enabled |
+
+---
+
+## 4. Phase 1 -- Authentication & Users (`auth`)
+
+**Package:** `com.myoffgridai.auth` -- 14 files
+
+### 4.1 Controllers
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `AuthController` | `@RestController` | `/api/auth` | `POST /register`, `POST /login`, `POST /refresh`, `POST /logout` | Authentication lifecycle. Registration creates users with BCrypt-hashed passwords. Login returns JWT access + refresh tokens. Logout blacklists current token. |
+| `UserController` | `@RestController` | `/api/users` | `GET /` (paginated, OWNER/ADMIN), `GET /{id}`, `PUT /{id}` (OWNER/ADMIN), `PUT /{id}/deactivate` (OWNER), `DELETE /{id}` (OWNER) | User management. Owner-only operations: deactivate, delete. Admin+ can update profiles. All users can view by ID. |
+
+### 4.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `AuthService` | `@Service` | Core authentication logic. In-memory token blacklist (Set). Profile-based password policy (dev: 4 chars, prod: 12 chars). | `register(RegisterRequest)`, `login(LoginRequest)`, `refresh(RefreshRequest)`, `logout(String)`, `changePassword(UUID, ChangePasswordRequest)` |
+| `JwtService` | `@Service` | HMAC-SHA256 JWT signing via JJWT. Configurable expiration from `application.yml`. | `generateAccessToken(UserDetails)`, `generateRefreshToken(UserDetails)`, `extractUsername(String)`, `isTokenValid(String, UserDetails)` |
+| `UserService` | `@Service` | User CRUD with pagination. | `getUser(UUID)`, `listUsers(Pageable)`, `updateUser(UUID, UpdateUserRequest)`, `deactivateUser(UUID)`, `deleteUser(UUID)` |
+
+### 4.3 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `User` | `@Entity` | `users` | Implements `UserDetails`. Fields: `id` (UUID), `username`, `email`, `displayName`, `passwordHash`, `role` (enum), `isActive`, `createdAt`, `updatedAt`, `lastLoginAt`. |
+| `Role` | `enum` | -- | `ROLE_OWNER`, `ROLE_ADMIN`, `ROLE_MEMBER`, `ROLE_VIEWER`, `ROLE_CHILD` |
+
+### 4.4 Repository
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `UserRepository` | `JpaRepository<User, UUID>` | `findByUsername`, `findByEmail`, `existsByUsername`, `existsByEmail`, `findAllByRole`, `countByIsActiveTrue`, `findByIsActiveTrue` |
+
+### 4.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `AuthResponse` | JWT response: `accessToken`, `refreshToken`, `tokenType`, `expiresIn`, `userId`, `username`, `role` |
+| `LoginRequest` | `username`, `password` |
+| `RegisterRequest` | `username`, `email`, `displayName`, `password`, `role` |
+| `RefreshRequest` | `refreshToken` |
+| `ChangePasswordRequest` | `currentPassword`, `newPassword` (validated) |
+| `UpdateUserRequest` | `displayName`, `email` |
+| `UserDetailDto` | Full user details for admin views |
+| `UserSummaryDto` | Lightweight user summary |
+
+---
+
+## 5. Common Package (`common`)
+
+**Package:** `com.myoffgridai.common` -- 16 files
+
+### 5.1 Response Wrapper
+
+| File | Type | Description |
+|---|---|---|
+| `ApiResponse<T>` | Generic record | Standard response wrapper: `success`, `message`, `data`, `timestamp`, `requestId`, `pagination`. Static factories: `success()`, `error()`, `paginated()`. |
+
+### 5.2 Utility
+
+| File | Type | Description |
+|---|---|---|
+| `TokenCounter` | Utility class | Token estimation (~4 chars/token). Context window truncation preserving system message and latest user message. `estimateTokens(String)`, `estimateTokens(List<OllamaMessage>)`, `truncateToFit(List<OllamaMessage>, int)`. |
+
+### 5.3 Exception Classes (14 files)
+
+| File | HTTP Status | Description |
+|---|---|---|
+| `GlobalExceptionHandler` | `@RestControllerAdvice` | Central exception handler mapping 17 exception types to HTTP responses. Handles validation (400), auth (401/403), not-found (404), conflict (409), infrastructure (500/502/503). |
+| `EntityNotFoundException` | 404 | Resource not found |
+| `DuplicateResourceException` | 409 | Username/email already exists |
+| `OllamaUnavailableException` | 503 | Ollama LLM service unreachable |
+| `OllamaInferenceException` | 502 | Ollama returned an error during inference |
+| `EmbeddingException` | 503 | Embedding generation failed |
+| `StorageException` | 500 | File system storage error |
+| `UnsupportedFileTypeException` | 400 | Uploaded file MIME type not supported |
+| `OcrException` | 500 | OCR processing failed |
+| `FortressActiveException` | 403 | Operation blocked by fortress mode |
+| `FortressOperationException` | 500 | iptables command failed |
+| `SkillDisabledException` | 400 | Attempted to execute a disabled skill |
+| `SensorConnectionException` | 502 | Serial port connection failed |
+| `InitializationException` | 500 | System initialization error |
+
+---
+
+## 6. Phase 2 -- AI & Chat (`ai`)
+
+**Package:** `com.myoffgridai.ai` -- 21 files
+
+### 6.1 Controllers
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `ChatController` | `@RestController` | `/api/chat` | `POST /conversations`, `GET /conversations` (paginated), `GET /conversations/{id}`, `DELETE /conversations/{id}`, `PUT /conversations/{id}/archive`, `POST /conversations/{id}/messages` (sync + SSE streaming), `GET /conversations/{id}/messages` (paginated) | Core chat orchestration. Sync and streaming message endpoints. Streaming uses `SseEmitter` with `text/event-stream`. |
+| `ModelController` | `@RestController` | `/api/models` | `GET /` (public, list available models), `GET /active` (authenticated, active model), `GET /health` (public, Ollama health check) | Model discovery and health check. |
+
+### 6.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `ChatService` | `@Service` | Core chat orchestration. Creates conversations, handles sync/streaming message exchange with RAG context injection, triggers async title generation and memory extraction. | `createConversation(UUID, CreateConversationRequest)`, `sendMessage(UUID, UUID, SendMessageRequest)`, `sendMessageStream(UUID, UUID, SendMessageRequest)` returns `SseEmitter`, `listConversations(UUID, Pageable)`, `getConversation(UUID, UUID)`, `deleteConversation(UUID, UUID)`, `archiveConversation(UUID, UUID)`, `getMessages(UUID, UUID, Pageable)` |
+| `OllamaService` | `@Service` | Sole integration point with the Ollama LLM service. Handles sync chat, streaming chat (Flux), embedding generation, model listing, and health checks. | `isAvailable()`, `listModels()`, `chat(OllamaChatRequest)`, `chatStream(OllamaChatRequest)` returns `Flux<OllamaChatChunk>`, `embed(String)`, `embedBatch(List<String>)` |
+| `AgentService` | `@Service` | Tool-call agent loop. Sends prompts, parses `[TOOL_CALL]` JSON patterns from responses, dispatches to `SkillExecutorService`, loops up to `AGENT_MAX_ITERATIONS` (5). | `executeAgentTask(UUID, String, List<OllamaMessage>)` returns `AgentTaskResult` |
+| `ContextWindowService` | `@Service` | Assembles ordered message list from conversation history, prepends system prompt, truncates to token limit. | `buildContextWindow(UUID, String)` returns `List<OllamaMessage>` |
+| `SystemPromptBuilder` | `@Service` | Builds dynamic system prompt with user context, RAG memory/knowledge injection, token-limited truncation. | `buildSystemPrompt(UUID, String)` |
+| `ModelHealthCheckService` | `@Component` | Startup Ollama availability check. Logs warning if Ollama is unreachable. | `checkOllamaHealth()` -- `@PostConstruct` |
+
+### 6.3 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `Conversation` | `@Entity` | `conversations` | `@ManyToOne` to `User`. Fields: `id` (UUID), `user`, `title`, `isArchived`, `messageCount`, `createdAt`, `updatedAt`. |
+| `Message` | `@Entity` | `messages` | `@ManyToOne` to `Conversation`. Fields: `id` (UUID), `conversation`, `role` (enum), `content` (TEXT), `tokenCount`, `hasRagContext`, `createdAt`. |
+| `MessageRole` | `enum` | -- | `USER`, `ASSISTANT`, `SYSTEM` |
+
+### 6.4 Repositories
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `ConversationRepository` | `JpaRepository<Conversation, UUID>` | `findByUserIdOrderByUpdatedAtDesc(UUID, Pageable)`, `countByUserId`, `findByUserId`, `deleteByUserId` |
+| `MessageRepository` | `JpaRepository<Message, UUID>` | `findByConversationIdOrderByCreatedAtAsc`, `countByConversationId`, `deleteByConversationId`, `countByUserId` (JPQL), `deleteByUserId` (JPQL) |
+
+### 6.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `ConversationDto` | Full conversation with `id`, `title`, `isArchived`, `messageCount`, timestamps |
+| `ConversationSummaryDto` | Lightweight conversation list item |
+| `MessageDto` | Message with `id`, `role`, `content`, `tokenCount`, `hasRagContext`, `createdAt` |
+| `SendMessageRequest` | `content` (validated, max 32000 chars), `stream` (boolean) |
+| `CreateConversationRequest` | `title` (optional) |
+| `OllamaChatRequest` | `model`, `messages`, `stream`, `options` (nullable) |
+| `OllamaChatResponse` | `model`, `message`, `done`, `totalDuration`, `evalCount` |
+| `OllamaChatChunk` | SSE streaming chunk: `model`, `message`, `done` |
+| `OllamaMessage` | `role`, `content` |
+| `OllamaModelInfo` | `name`, `size`, `modifiedAt`, `digest` |
+| `ActiveModelDto` | Currently configured model name and status |
+| `AgentTaskResult` | `success`, `result`, `iterations`, `toolCalls` |
+| `OllamaHealthDto` | `available`, `model`, `baseUrl` |
+
+---
+
+## 7. Phase 3 -- Memory & RAG (`memory`)
+
+**Package:** `com.myoffgridai.memory` -- 17 files
+
+### 7.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `MemoryController` | `@RestController` | `/api/memory` | `GET /` (paginated, filters by importance/tag), `GET /{id}`, `DELETE /{id}`, `PUT /{id}/importance`, `PUT /{id}/tags`, `POST /search` (semantic), `GET /export` | Full memory CRUD with semantic search. Export returns all memories as JSON. |
+
+### 7.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `MemoryService` | `@Service` | Memory CRUD with vector embeddings. Creates paired VectorDocument entries for each memory. Similarity search via pgvector. Tracks access (lastAccessedAt, accessCount). | `createMemory(UUID, String, MemoryImportance, List<String>, UUID)`, `getMemory(UUID, UUID)`, `deleteMemory(UUID, UUID)`, `updateImportance(UUID, UUID, MemoryImportance)`, `updateTags(UUID, UUID, List<String>)`, `searchMemories(UUID, String, int)`, `listMemories(UUID, MemoryImportance, String, Pageable)`, `exportMemories(UUID)`, `deleteAllMemoriesForUser(UUID)` |
+| `EmbeddingService` | `@Service` | Sole embedding entry point. Delegates to `OllamaService`. Provides cosine similarity and pgvector string formatting. | `embed(String)`, `embedBatch(List<String>)`, `cosineSimilarity(float[], float[])`, `toVectorString(float[])` |
+| `RagService` | `@Service` | RAG pipeline coordinator. Assembles context from memories + knowledge chunks with token estimation. | `buildRagContext(UUID, String)` returns `RagContext` |
+| `MemoryExtractionService` | `@Service` | `@Async` extraction of facts from chat exchanges via Ollama. Parses JSON array of facts, stores as memories with appropriate importance. | `extractMemories(UUID, String, String, UUID)` -- async |
+| `SummarizationService` | `@Service` | Conversation summarization to CRITICAL memories. Nightly `@Scheduled` job (`0 0 2 * * *`) for auto-summarization of stale conversations. | `summarizeConversation(UUID)`, `runNightlySummarization()` -- scheduled at 2am |
+
+### 7.3 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `Memory` | `@Entity` | `memories` | Fields: `id` (UUID), `userId`, `content` (TEXT), `importance` (enum), `tags` (List<String>), `sourceConversationId`, `createdAt`, `updatedAt`, `lastAccessedAt`, `accessCount`. |
+| `VectorDocument` | `@Entity` | `vector_document` | Fields: `id` (UUID), `userId`, `content` (TEXT), `embedding` (vector(768) via VectorType), `sourceType` (enum), `sourceId`, `metadata`, `createdAt`. |
+| `MemoryImportance` | `enum` | -- | `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
+| `VectorSourceType` | `enum` | -- | `MEMORY`, `CONVERSATION`, `KNOWLEDGE_CHUNK` |
+
+### 7.4 Repositories
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `MemoryRepository` | `JpaRepository<Memory, UUID>` | `findByUserIdOrderByCreatedAtDesc(Pageable)`, `findByUserIdAndImportance(Pageable)`, `findByIdAndUserId`, `findByUserId`, `countByUserId`, `deleteByUserId` |
+| `VectorDocumentRepository` | `JpaRepository<VectorDocument, UUID>` | `findSimilar(UUID, String, float, int)` -- native SQL with pgvector `<=>` cosine distance, `findSimilarBySourceType(...)`, `deleteBySourceIdAndSourceType`, `deleteByUserId` |
+
+### 7.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `MemoryDto` | Memory with all fields including importance, tags, access tracking |
+| `RagContext` | Assembled RAG context: `memoryContext`, `knowledgeContext`, `totalTokens` |
+| `MemorySearchRequest` | `query`, `topK` (default 5) |
+| `MemorySearchResultDto` | `memoryId`, `content`, `importance`, `similarity` |
+| `UpdateImportanceRequest` | `importance` (enum) |
+| `UpdateTagsRequest` | `tags` (List<String>) |
+
+---
+
+## 8. Phase 4 -- Knowledge Vault (`knowledge`)
+
+**Package:** `com.myoffgridai.knowledge` -- 16 files
+
+### 8.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `KnowledgeController` | `@RestController` | `/api/knowledge` | `POST /` (multipart upload), `GET /` (paginated), `GET /{id}`, `PUT /{id}/display-name`, `DELETE /{id}`, `POST /{id}/retry`, `POST /search` (semantic), `GET /{id}/chunks` | Document lifecycle management with semantic search. Upload triggers async ingestion pipeline. |
+
+### 8.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `KnowledgeService` | `@Service` | Orchestrates document lifecycle: upload, async ingestion (extract -> chunk -> embed -> store vectors), retry for failed docs, bulk deletion for privacy wipe. | `upload(UUID, MultipartFile)`, `processDocumentAsync(UUID)` (`@Async`), `listDocuments(UUID, Pageable)`, `getDocument(UUID, UUID)`, `updateDisplayName(UUID, UUID, String)`, `deleteDocument(UUID, UUID)`, `retryProcessing(UUID, UUID)`, `getChunks(UUID, UUID)`, `deleteAllForUser(UUID)` |
+| `IngestionService` | `@Service` | Text extraction. PDF via Apache PDFBox (page-by-page), plain text via InputStream. | `extractPdf(InputStream)` returns `ExtractionResult`, `extractText(InputStream)` returns `ExtractionResult` |
+| `ChunkingService` | `@Service` | Sentence-boundary splitting with configurable size (1500 chars) and overlap (150 chars). Min chunk 50 chars, max 500 chunks per document. | `chunkText(String)` returns `List<String>` |
+| `SemanticSearchService` | `@Service` | Vector similarity search across knowledge chunks with source document attribution. | `search(UUID, String, int)` returns `List<SemanticSearchResult>` |
+| `FileStorageService` | `@Service` | Local filesystem storage under `/var/myoffgridai/knowledge/{userId}/`. | `store(UUID, MultipartFile, String)`, `getInputStream(String)`, `delete(String)` |
+| `OcrService` | `@Service` | Tesseract OCR for image files (PNG, JPEG, TIFF, WebP). | `extractFromImage(InputStream)` returns `ExtractionResult` |
+| `StorageHealthService` | `@Component` | Startup check for storage directory existence and writeability. | `checkStorageHealth()` -- `@PostConstruct` |
+
+### 8.3 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `KnowledgeDocument` | `@Entity` | `knowledge_documents` | Fields: `id` (UUID), `userId`, `filename`, `displayName`, `mimeType`, `storagePath`, `fileSizeBytes`, `status` (enum), `errorMessage`, `chunkCount`, `uploadedAt`, `processedAt`. |
+| `KnowledgeChunk` | `@Entity` | `knowledge_chunks` | `@ManyToOne` to `KnowledgeDocument`. Fields: `id` (UUID), `document`, `userId`, `chunkIndex`, `content` (TEXT), `pageNumber`. |
+| `DocumentStatus` | `enum` | -- | `PENDING`, `PROCESSING`, `READY`, `FAILED` |
+
+### 8.4 Repositories
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `KnowledgeDocumentRepository` | `JpaRepository<KnowledgeDocument, UUID>` | `findByUserIdOrderByUploadedAtDesc(UUID, Pageable)`, `findByIdAndUserId`, `countByUserId`, `deleteByUserId` |
+| `KnowledgeChunkRepository` | `JpaRepository<KnowledgeChunk, UUID>` | `findByDocumentIdOrderByChunkIndexAsc`, `deleteByDocumentId`, `deleteByUserId` |
+
+### 8.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `KnowledgeDocumentDto` | Document with `id`, `filename`, `displayName`, `mimeType`, `fileSizeBytes`, `status`, `errorMessage`, `chunkCount`, timestamps |
+| `KnowledgeSearchRequest` | `query`, `topK` (default 5) |
+| `KnowledgeSearchResultDto` | `chunkId`, `documentId`, `filename`, `content`, `similarity`, `pageNumber` |
+| `ExtractionResult` | `fullText`, `pages` (List<PageContent>) |
+| `PageContent` | `pageNumber`, `content` |
+| `SemanticSearchResult` | `vectorDocumentId`, `content`, `similarity`, `sourceId`, `metadata` |
+| `UpdateDisplayNameRequest` | `displayName` (validated) |
+
+### 8.6 Supported MIME Types
+
+`application/pdf`, `text/plain`, `text/markdown`, `text/x-markdown`, `image/png`, `image/jpeg`, `image/tiff`, `image/webp`
+
+---
+
+## 9. Phase 5 -- Skills & Automation (`skills`)
+
+**Package:** `com.myoffgridai.skills` -- 27 files
+
+### 9.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `SkillController` | `@RestController` | `/api/skills` | `GET /` (list enabled), `GET /{id}`, `PATCH /{id}/toggle` (OWNER/ADMIN), `POST /execute`, `GET /executions` (history). Inventory sub-routes: `GET /inventory`, `POST /inventory`, `PUT /inventory/{id}`, `DELETE /inventory/{id}` | Skill management + inventory CRUD. Toggle enables/disables skills. Execute dispatches to built-in skill implementations. |
+
+### 9.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `SkillExecutorService` | `@Service` | Central dispatcher. Resolves `BuiltInSkill` implementation by name, executes, records execution history in `SkillExecution`. | `executeSkill(UUID, SkillExecuteRequest)` returns `SkillExecutionDto` |
+| `BuiltInSkill` | `interface` | Contract for built-in skill implementations. | `getSkillName()`, `execute(UUID, Map<String, Object>)` returns `String` |
+| `SkillSeederService` | `@Component` | Seeds 6 built-in skills on startup if not already present. | `seedSkills()` -- `@PostConstruct` |
+
+### 9.3 Built-In Skills (6 files)
+
+| File | Skill Name | Category | Dependencies | Description |
+|---|---|---|---|---|
+| `WeatherQuerySkill` | `weather-query` | WEATHER | `SensorRepository`, `SensorReadingRepository` | Reads latest sensor data to report current conditions. Pure data retrieval, no LLM call. |
+| `InventoryTrackerSkill` | `inventory-tracker` | HOMESTEAD | `InventoryItemRepository` | CRUD operations on inventory items. Parses action from parameters (list, add, remove, update). |
+| `RecipeGeneratorSkill` | `recipe-generator` | HOMESTEAD | `OllamaService`, `InventoryItemRepository` | Uses Ollama to generate recipes based on available inventory items. |
+| `TaskPlannerSkill` | `task-planner` | PLANNING | `OllamaService`, `PlannedTaskRepository` | Uses Ollama to break goals into actionable tasks. Persists `PlannedTask` entities. |
+| `DocumentSummarizerSkill` | `document-summarizer` | KNOWLEDGE | `OllamaService`, `KnowledgeChunkRepository` | Uses Ollama + knowledge chunks to summarize uploaded documents. |
+| `ResourceCalculatorSkill` | `resource-calculator` | RESOURCE | None | Pure math calculations for resource planning (water, solar, battery, food). |
+
+### 9.4 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `Skill` | `@Entity` | `skills` | Fields: `id` (UUID), `name` (unique), `displayName`, `description`, `category` (enum), `isEnabled`, `isBuiltIn`, `createdAt`. |
+| `SkillExecution` | `@Entity` | `skill_executions` | `@ManyToOne` to `Skill`. Fields: `id` (UUID), `skill`, `userId`, `parameters` (TEXT/JSON), `result` (TEXT), `status` (enum), `durationMs`, `createdAt`. |
+| `InventoryItem` | `@Entity` | `inventory_items` | Fields: `id` (UUID), `userId`, `name`, `description`, `category` (enum), `quantity`, `unit`, `lowStockThreshold`, `location`, `expiresAt`, `createdAt`, `updatedAt`. |
+| `PlannedTask` | `@Entity` | `planned_tasks` | Fields: `id` (UUID), `userId`, `title`, `description`, `status` (enum), `dueDate`, `createdAt`, `updatedAt`. |
+
+### 9.5 Enums
+
+| File | Values |
+|---|---|
+| `SkillCategory` | `HOMESTEAD`, `RESOURCE`, `PLANNING`, `KNOWLEDGE`, `WEATHER`, `CUSTOM` |
+| `InventoryCategory` | `FOOD`, `TOOLS`, `MEDICAL`, `SUPPLIES`, `SEEDS`, `EQUIPMENT`, `OTHER` |
+| `ExecutionStatus` | `RUNNING`, `COMPLETED`, `FAILED` |
+| `TaskStatus` | `ACTIVE`, `COMPLETED`, `CANCELLED` |
+
+### 9.6 Repositories
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `SkillRepository` | `JpaRepository<Skill, UUID>` | `findByName`, `findByIsEnabledTrue` |
+| `SkillExecutionRepository` | `JpaRepository<SkillExecution, UUID>` | `findByUserIdOrderByCreatedAtDesc(UUID, Pageable)`, `findBySkillIdAndUserId` |
+| `InventoryItemRepository` | `JpaRepository<InventoryItem, UUID>` | `findByUserIdOrderByNameAsc`, `findByIdAndUserId`, `findByUserIdAndCategory`, `deleteByUserId` |
+| `PlannedTaskRepository` | `JpaRepository<PlannedTask, UUID>` | `findByUserIdAndStatusOrderByCreatedAtDesc(UUID, TaskStatus, Pageable)`, `findByIdAndUserId`, `deleteByUserId` |
+
+### 9.7 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `SkillDto` | Skill with `id`, `name`, `displayName`, `description`, `category`, `isEnabled`, `isBuiltIn` |
+| `SkillExecuteRequest` | `skillName`, `parameters` (Map<String, Object>) |
+| `SkillExecutionDto` | Execution with `id`, `skillName`, `status`, `result`, `durationMs`, `createdAt` |
+| `InventoryItemDto` | Full inventory item with all fields |
+| `CreateInventoryItemRequest` | `name`, `description`, `category`, `quantity`, `unit`, `lowStockThreshold`, `location`, `expiresAt` |
+| `UpdateInventoryItemRequest` | Same fields as create (for PUT updates) |
+
+---
+
+## 10. Phase 6 -- Sensors (`sensors`)
+
+**Package:** `com.myoffgridai.sensors` -- 18 files
+
+### 10.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `SensorController` | `@RestController` | `/api/sensors` | `GET /` (list all), `GET /{sensorId}`, `POST /` (register), `DELETE /{sensorId}`, `POST /{sensorId}/start`, `POST /{sensorId}/stop`, `GET /{sensorId}/latest`, `GET /{sensorId}/history` (paginated, hours param), `PUT /{sensorId}/thresholds`, `POST /test`, `GET /ports`, `GET /{sensorId}/stream` (SSE) | Full sensor lifecycle: CRUD, start/stop polling, reading history, threshold management, connection testing, live SSE streaming. |
+
+### 10.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `SensorService` | `@Service` | High-level sensor management. Coordinates repos, polling service, serial port service. Validates ownership on all operations. | `registerSensor(UUID, CreateSensorRequest)`, `getSensor(UUID, UUID)`, `listSensors(UUID)`, `deleteSensor(UUID, UUID)`, `startSensor(UUID, UUID)`, `stopSensor(UUID, UUID)`, `getLatestReading(UUID, UUID)`, `getReadingHistory(UUID, UUID, int, int, int)`, `updateThresholds(UUID, UUID, UpdateThresholdsRequest)`, `testSensor(String, int)`, `listAvailablePorts()`, `deleteAllForUser(UUID)` |
+| `SensorPollingService` | `@Service` | Manages active polling loops per sensor with configurable intervals. Uses `ScheduledExecutorService`. Parses serial data (CSV/JSON), checks thresholds, creates memory entries for anomalies, broadcasts via SSE. | `startPolling(Sensor)`, `stopPolling(UUID)`, `isPolling(UUID)` |
+| `SensorStartupService` | `@Component` | Resumes active sensors on application startup. | `resumeActiveSensors()` -- `@PostConstruct` |
+| `SerialPortService` | `@Service` | Physical serial port management via jSerialComm. Opens/closes ports, reads data lines, lists available ports. | `openPort(String, int)`, `closePort(String)`, `readLine(String)`, `listPorts()`, `testPort(String, int)` |
+| `SseEmitterRegistry` | `@Component` | Manages SSE connections for live sensor reading broadcast. Keyed by sensorId. Handles completion/timeout/error cleanup. | `register(UUID, SseEmitter)`, `broadcast(UUID, SensorReading)` |
+
+### 10.3 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `Sensor` | `@Entity` | `sensors` | Fields: `id` (UUID), `userId`, `name`, `type` (enum), `portPath`, `baudRate` (default 9600), `dataFormat` (enum), `isActive`, `pollIntervalSeconds`, `minThreshold`, `maxThreshold`, `consecutiveFailures`, `lastReadingAt`, `createdAt`, `updatedAt`. |
+| `SensorReading` | `@Entity` | `sensor_readings` | `@ManyToOne` to `Sensor`. Fields: `id` (UUID), `sensor`, `value` (Double), `rawData`, `recordedAt`. |
+| `SensorType` | `enum` | -- | `TEMPERATURE`, `HUMIDITY`, `SOIL_MOISTURE`, `POWER`, `VOLTAGE`, `CUSTOM` |
+| `DataFormat` | `enum` | -- | `CSV_LINE`, `JSON_LINE` |
+
+### 10.4 Repositories
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `SensorRepository` | `JpaRepository<Sensor, UUID>` | `findByUserIdOrderByNameAsc`, `findByIdAndUserId`, `findByIsActiveTrue`, `countByUserId` |
+| `SensorReadingRepository` | `JpaRepository<SensorReading, UUID>` | `findBySensorIdAndRecordedAtAfterOrderByRecordedAtDesc(UUID, Instant, Pageable)`, `findTopBySensorIdOrderByRecordedAtDesc`, `findAverageValueSince(UUID, Instant)` (native query), `deleteBySensorId` |
+
+### 10.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `CreateSensorRequest` | `name`, `type`, `portPath`, `baudRate`, `dataFormat`, `pollIntervalSeconds` (validated min/max) |
+| `SensorDto` | Full sensor with all fields including thresholds and status |
+| `SensorReadingDto` | `id`, `sensorId`, `value`, `rawData`, `recordedAt` |
+| `SensorTestResult` | `success`, `portPath`, `baudRate`, `sampleData`, `errorMessage` |
+| `TestSensorRequest` | `portPath` (required), `baudRate` (optional, default 9600) |
+| `UpdateThresholdsRequest` | `minThreshold`, `maxThreshold` |
+
+---
+
+## 11. Phase 7 -- Proactive Engine (`proactive`)
+
+**Package:** `com.myoffgridai.proactive` -- 16 files
+
+### 11.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `ProactiveController` | `@RestController` | `/api/insights` + `/api/notifications` | **Insights:** `GET /api/insights` (paginated, optional category filter), `POST /api/insights/generate`, `PUT /api/insights/{insightId}/read`, `PUT /api/insights/{insightId}/dismiss`, `GET /api/insights/unread-count`. **Notifications:** `GET /api/notifications` (paginated, unreadOnly filter), `PUT /api/notifications/{id}/read`, `PUT /api/notifications/read-all`, `GET /api/notifications/unread-count`, `DELETE /api/notifications/{id}`, `GET /api/notifications/stream` (SSE) | Dual-resource controller. Insight management (LLM-generated recommendations) + notification management with real-time SSE push. |
+
+### 11.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `InsightService` | `@Service` | Insight CRUD. Queries active (non-dismissed) insights with pagination and category filtering. | `getInsights(UUID, Pageable)`, `getInsightsByCategory(UUID, InsightCategory, Pageable)`, `getUnreadInsights(UUID)`, `markRead(UUID, UUID)`, `dismiss(UUID, UUID)`, `getUnreadCount(UUID)`, `deleteAllForUser(UUID)` |
+| `InsightGeneratorService` | `@Service` | Generates proactive insights by analyzing user activity via `PatternAnalysisService` and prompting Ollama for actionable recommendations. Parses JSON array responses. Max 3 insights per generation. | `generateInsightForUser(UUID)` returns `List<Insight>` |
+| `NightlyInsightJob` | `@Component` | Nightly scheduled job (`0 0 3 * * *`) generating insights for all active users. Each user processed independently -- one failure does not stop others. | `generateNightlyInsights()` -- `@Scheduled` at 3am |
+| `NotificationService` | `@Service` | Central notification hub. All services call this to create, persist, and broadcast notifications via SSE. | `createNotification(UUID, String, String, NotificationType, String)`, `getUnreadNotifications(UUID)`, `getNotifications(UUID, Pageable)`, `markRead(UUID, UUID)`, `markAllRead(UUID)`, `getUnreadCount(UUID)`, `deleteNotification(UUID, UUID)`, `deleteAllForUser(UUID)` |
+| `NotificationSseRegistry` | `@Component` | Manages SSE connections for real-time notification push. Keyed by userId (multiple clients per user supported). Broadcasts notification data and unread counts. | `register(UUID, SseEmitter)`, `broadcast(UUID, Notification)`, `broadcastUnreadCount(UUID, long)` |
+| `PatternAnalysisService` | `@Service` | Analyzes a user's recent activity to build a `PatternSummary`. Aggregates data from conversations, memories, sensors, inventory, and tasks. | `buildPatternSummary(UUID)` returns `PatternSummary` |
+| `SystemHealthMonitor` | `@Component` | Periodic health checks (configurable interval, default 5 minutes). Monitors disk space, Ollama availability, JVM heap usage. Rate-limits alerts (60-minute cooldown). Notifies OWNER/ADMIN users. | `checkSystemHealth()` -- `@Scheduled(fixedDelay)`. Internal: `checkDiskSpace()`, `checkOllamaAvailability()`, `checkHeapUsage()` |
+
+### 11.3 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `Insight` | `@Entity` | `insights` | Fields: `id` (UUID), `userId`, `content` (TEXT), `category` (enum), `isRead`, `isDismissed`, `generatedAt`, `readAt`. Index on `user_id`. |
+| `Notification` | `@Entity` | `notifications` | Fields: `id` (UUID), `userId`, `title`, `body` (TEXT), `type` (enum), `isRead`, `createdAt`, `readAt`, `metadata` (TEXT/JSON). Index on `user_id`. |
+| `InsightCategory` | `enum` | -- | `HOMESTEAD`, `HEALTH`, `RESOURCE`, `GENERAL` |
+| `NotificationType` | `enum` | -- | `SENSOR_ALERT`, `SYSTEM_HEALTH`, `INSIGHT_READY`, `MODEL_UPDATE`, `GENERAL` |
+
+### 11.4 Repositories
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `InsightRepository` | `JpaRepository<Insight, UUID>` | `findByUserIdAndIsDismissedFalseOrderByGeneratedAtDesc(Pageable)`, `findByUserIdAndCategoryAndIsDismissedFalse(Pageable)`, `findByUserIdAndIsReadFalseAndIsDismissedFalse`, `countByUserIdAndIsReadFalseAndIsDismissedFalse`, `findByIdAndUserId`, `countByUserId`, `deleteByUserId` |
+| `NotificationRepository` | `JpaRepository<Notification, UUID>` | `findByUserIdAndIsReadFalseOrderByCreatedAtDesc`, `findByUserIdOrderByCreatedAtDesc(Pageable)`, `countByUserIdAndIsReadFalse`, `findByIdAndUserId`, `markAllReadForUser(JPQL UPDATE)`, `deleteByUserId` |
+
+### 11.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `InsightDto` | Insight with `id`, `content`, `category`, `isRead`, `isDismissed`, `generatedAt`, `readAt`. Static factory `from(Insight)`. |
+| `NotificationDto` | Notification with `id`, `title`, `body`, `type`, `isRead`, `createdAt`, `readAt`, `metadata`. Static factory `from(Notification)`. |
+| `PatternSummary` | Activity summary: `recentConversationCount`, `recentConversationTitles`, `highImportanceMemories`, `sensorAverages`, `lowStockItems`, `activeTasks`, `analysisWindowDays`. Method `hasData()` checks for meaningful content. |
+
+---
+
+## 12. Phase 8 -- Privacy & Fortress (`privacy`) + System (`system`)
+
+### 12.1 Privacy Package
+
+**Package:** `com.myoffgridai.privacy` -- 17 files
+
+#### 12.1.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `PrivacyController` | `@RestController` | `/api/privacy` | **Fortress:** `GET /fortress/status`, `POST /fortress/enable` (OWNER/ADMIN), `POST /fortress/disable` (OWNER/ADMIN). **Sovereignty:** `GET /sovereignty-report`. **Audit:** `GET /audit-logs` (paginated, outcome filter; OWNER/ADMIN see all, others see own). **Export:** `POST /export` (AES-256-GCM encrypted ZIP). **Wipe:** `DELETE /wipe` (OWNER/ADMIN, target user param), `DELETE /wipe/self` (any authenticated user). | Comprehensive privacy management. Fortress controls OS-level network lockdown. Export encrypts all user data. Wipe cascade-deletes all user-owned records. |
+
+#### 12.1.2 Services
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `FortressService` | `@Service` | Controls Privacy Fortress -- OS-level network lockdown via iptables. In mock mode (`app.fortress.mock=true`), no iptables commands are executed. Persists state via `SystemConfigService`. | `enable(UUID)`, `disable(UUID)`, `getFortressStatus()` returns `FortressStatus`, `isFortressActive()` |
+| `AuditService` | `@Service` | Audit log persistence and queries. All audit logging flows through this service. | `logAction(AuditLog)`, `getAuditLogs(Pageable)`, `getAuditLogsForUser(UUID, Pageable)`, `getAuditLogsByOutcome(AuditOutcome, Pageable)`, `getAuditLogsBetween(Instant, Instant, Pageable)`, `countByOutcomeBetween(AuditOutcome, Instant, Instant)`, `deleteByUserId(UUID)` |
+| `DataExportService` | `@Service` | Exports all user data as AES-256-GCM encrypted ZIP. Includes conversations, messages (grouped by conversation), memories, and export metadata. PBKDF2 key derivation (65536 iterations). Output: `[salt 16B][IV 12B][ciphertext]`. | `exportUserData(UUID, String)` returns `byte[]` |
+| `DataWipeService` | `@Service` | Complete data wipe in FK-respecting order (10 steps): messages, conversations, memories+vectors, knowledge docs/chunks/vectors/files, sensors+readings, insights, notifications, inventory items, planned tasks, audit logs. Atomic transaction. | `wipeUser(UUID)` returns `WipeResult` |
+| `SovereigntyReportService` | `@Service` | Assembles Sovereignty Report: fortress status, outbound traffic verification, data inventory (record counts), audit summary (24h window), encryption status, telemetry status (always DISABLED). | `generateReport(UUID)` returns `SovereigntyReport` |
+
+#### 12.1.3 AOP Aspect
+
+| File | Type | Description |
+|---|---|---|
+| `AuditAspect` | `@Aspect @Component` | Package: `com.myoffgridai.privacy.aspect`. Intercepts all public methods in `*.controller.*` classes via `@Around` pointcut: `execution(public * com.myoffgridai.*.controller..*(..))`. Captures HTTP method, path, user, response status, duration, outcome. Never logs request body, passwords, tokens, or sensitive headers. |
+
+#### 12.1.4 Models
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `AuditLog` | `@Entity` | `audit_logs` | Fields: `id` (UUID), `userId`, `username`, `action`, `resourceType`, `resourceId`, `httpMethod`, `requestPath`, `ipAddress`, `userAgent`, `responseStatus`, `outcome` (enum), `durationMs`, `timestamp`. Indexes on `(user_id, timestamp DESC)` and `(timestamp DESC)`. |
+| `AuditOutcome` | `enum` | -- | `SUCCESS`, `FAILURE`, `DENIED` |
+
+#### 12.1.5 Repository
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `AuditLogRepository` | `JpaRepository<AuditLog, UUID>` | `findAllByOrderByTimestampDesc(Pageable)`, `findByUserIdOrderByTimestampDesc(Pageable)`, `findByOutcomeOrderByTimestampDesc(Pageable)`, `findByTimestampBetweenOrderByTimestampDesc(Pageable)`, `countByOutcomeAndTimestampBetween`, `deleteByTimestampBefore`, `deleteByUserId` |
+
+#### 12.1.6 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `AuditLogDto` | Audit log entry with all fields. Static factory `from(AuditLog)`. |
+| `AuditSummary` | `successCount`, `failureCount`, `deniedCount`, `windowStart`, `windowEnd` |
+| `DataInventory` | Record counts: `conversationCount`, `messageCount`, `memoryCount`, `knowledgeDocumentCount`, `sensorCount`, `insightCount` |
+| `ExportRequest` | `passphrase` (validated: `@NotBlank`, `@Size(min=8)`) |
+| `FortressStatus` | `enabled`, `enabledAt`, `enabledByUsername`, `verified` |
+| `SovereigntyReport` | `generatedAt`, `fortressStatus`, `outboundTrafficVerification`, `dataInventory`, `auditSummary`, `encryptionStatus`, `telemetryStatus`, `lastVerifiedAt` |
+| `WipeResult` | `targetUserId`, `stepsCompleted`, `completedAt`, `success` |
+
+### 12.2 System Package
+
+**Package:** `com.myoffgridai.system` -- 6 files
+
+#### 12.2.1 Controller
+
+| File | Type | Base Path | Endpoints | Description |
+|---|---|---|---|---|
+| `SystemController` | `@RestController` | `/api/system` | `GET /status` (public), `POST /initialize` (public, one-time) | First-boot setup. Status endpoint returns initialization state, fortress mode, server version. Initialize creates the OWNER account and marks system as initialized. Returns 409 on subsequent calls. |
+
+#### 12.2.2 Service
+
+| File | Type | Description | Key Public Methods |
+|---|---|---|---|
+| `SystemConfigService` | `@Service` | Manages single-row system configuration. Creates default config if none exists. | `getConfig()`, `save(SystemConfig)`, `isInitialized()`, `setInitialized(String)`, `setFortressEnabled(boolean, UUID)`, `isWifiConfigured()` |
+
+#### 12.2.3 Model
+
+| File | Type | Table | Description |
+|---|---|---|---|
+| `SystemConfig` | `@Entity` | `system_config` | Single-row table. Fields: `id` (UUID), `initialized` (boolean), `instanceName`, `fortressEnabled` (boolean), `fortressEnabledAt`, `fortressEnabledByUserId`, `wifiConfigured`, `createdAt`, `updatedAt`. |
+
+#### 12.2.4 Repository
+
+| File | Type | Key Query Methods |
+|---|---|---|
+| `SystemConfigRepository` | `JpaRepository<SystemConfig, UUID>` | `findFirst()` -- JPQL `SELECT s FROM SystemConfig s` returning `Optional<SystemConfig>` |
+
+#### 12.2.5 DTOs (all Java records)
+
+| File | Purpose |
+|---|---|
+| `SystemStatusDto` | `initialized`, `instanceName`, `fortressEnabled`, `wifiConfigured`, `serverVersion`, `timestamp` |
+| `InitializeRequest` | `instanceName` (required, 1-100 chars), `username` (required, 3-50 chars), `displayName` (required), `email` (optional), `password` (required) |
+
+---
+
+## 13. Test Suite
+
+**Total Test Files:** 81
+**Total @Test Methods:** 613
+
+### 13.1 Test Files by Domain
+
+| Domain | Test Files | @Test Count |
+|---|---|---|
+| `auth` (controller + service) | 5 | 67 |
+| `ai` (controller + service) | 8 | 59 |
+| `common` (exception + response + util) | 3 | 22 |
+| `config` (TestSecurityConfig) | 1 | 1 |
+| `knowledge` (controller + service) | 7 | 53 |
+| `memory` (controller + service) | 6 | 49 |
+| `sensors` (controller + service) | 5 | 49 |
+| `skills` (builtin + controller + service) | 9 | 81 |
+| `proactive` (controller + service) | 8 | 62 |
+| `privacy` (aspect + controller + service) | 7 | 43 |
+| `system` (controller + service) | 2 | 13 |
+| `integration` | 20 | 114 |
+| **TOTAL** | **81** | **613** |
+
+### 13.2 Unit Test Files
+
+| File | Domain | Description |
+|---|---|---|
+| `AuthControllerTest` | auth | Controller @WebMvcTest |
+| `UserControllerTest` | auth | Controller @WebMvcTest |
+| `AuthServiceTest` | auth | Service unit test |
+| `JwtServiceTest` | auth | Service unit test |
+| `UserServiceTest` | auth | Service unit test |
+| `ChatControllerTest` | ai | Controller @WebMvcTest |
+| `ModelControllerTest` | ai | Controller @WebMvcTest |
+| `AgentServiceTest` | ai | Service unit test |
+| `ChatServiceTest` | ai | Service unit test |
+| `ContextWindowServiceTest` | ai | Service unit test |
+| `ModelHealthCheckServiceTest` | ai | Service unit test |
+| `OllamaServiceTest` | ai | Service unit test |
+| `SystemPromptBuilderTest` | ai | Service unit test |
+| `GlobalExceptionHandlerTest` | common | Exception handler tests |
+| `ApiResponseTest` | common | Response wrapper tests |
+| `TokenCounterTest` | common | Utility tests |
+| `TestSecurityConfig` | config | Test security configuration |
+| `KnowledgeControllerTest` | knowledge | Controller @WebMvcTest |
+| `ChunkingServiceTest` | knowledge | Service unit test |
+| `FileStorageServiceTest` | knowledge | Service unit test |
+| `IngestionServiceTest` | knowledge | Service unit test |
+| `KnowledgeServiceTest` | knowledge | Service unit test |
+| `OcrServiceTest` | knowledge | Service unit test |
+| `SemanticSearchServiceTest` | knowledge | Service unit test |
+| `MemoryControllerTest` | memory | Controller @WebMvcTest |
+| `EmbeddingServiceTest` | memory | Service unit test |
+| `MemoryExtractionServiceTest` | memory | Service unit test |
+| `MemoryServiceTest` | memory | Service unit test |
+| `RagServiceTest` | memory | Service unit test |
+| `SummarizationServiceTest` | memory | Service unit test |
+| `SensorControllerTest` | sensors | Controller @WebMvcTest |
+| `SensorPollingServiceTest` | sensors | Service unit test |
+| `SensorServiceTest` | sensors | Service unit test |
+| `SensorStartupServiceTest` | sensors | Service unit test |
+| `SseEmitterRegistryTest` | sensors | SSE registry tests |
+| `SkillControllerTest` | skills | Controller @WebMvcTest |
+| `SkillExecutorServiceTest` | skills | Service unit test |
+| `SkillSeederServiceTest` | skills | Service unit test |
+| `WeatherQuerySkillTest` | skills | Built-in skill test |
+| `InventoryTrackerSkillTest` | skills | Built-in skill test |
+| `RecipeGeneratorSkillTest` | skills | Built-in skill test |
+| `ResourceCalculatorSkillTest` | skills | Built-in skill test |
+| `TaskPlannerSkillTest` | skills | Built-in skill test |
+| `DocumentSummarizerSkillTest` | skills | Built-in skill test |
+| `ProactiveControllerTest` | proactive | Controller @WebMvcTest |
+| `InsightServiceTest` | proactive | Service unit test |
+| `InsightGeneratorServiceTest` | proactive | Service unit test |
+| `NightlyInsightJobTest` | proactive | Scheduled job test |
+| `NotificationServiceTest` | proactive | Service unit test |
+| `NotificationSseRegistryTest` | proactive | SSE registry tests |
+| `PatternAnalysisServiceTest` | proactive | Service unit test |
+| `SystemHealthMonitorTest` | proactive | Health monitor tests |
+| `PrivacyControllerTest` | privacy | Controller @WebMvcTest |
+| `AuditAspectTest` | privacy | AOP aspect test |
+| `AuditServiceTest` | privacy | Service unit test |
+| `DataExportServiceTest` | privacy | Service unit test |
+| `DataWipeServiceTest` | privacy | Service unit test |
+| `FortressServiceTest` | privacy | Service unit test |
+| `SovereigntyReportServiceTest` | privacy | Service unit test |
+| `SystemControllerTest` | system | Controller @WebMvcTest |
+| `SystemConfigServiceTest` | system | Service unit test |
+
+### 13.3 Integration Test Files
+
+| File | Domain Coverage | Description |
+|---|---|---|
+| `BaseIntegrationTest` | All | Abstract base class with Testcontainers PostgreSQL setup |
+| `AuthIntegrationTest` | Phase 1 | Registration, login, refresh, logout flows |
+| `UserIntegrationTest` | Phase 1 | User CRUD, role-based access |
+| `SecurityIntegrationTest` | Phase 1 | JWT validation, public vs protected endpoints |
+| `ChatIntegrationTest` | Phase 2 | Conversation creation, messaging |
+| `ModelControllerIntegrationTest` | Phase 2 | Model listing, health check |
+| `MemoryIntegrationTest` | Phase 3 | Memory CRUD, search |
+| `MemoryRagIntegrationTest` | Phase 3 | RAG pipeline with memories |
+| `RagPipelineIntegrationTest` | Phase 3+4 | End-to-end RAG with knowledge |
+| `RagWithKnowledgeIntegrationTest` | Phase 3+4 | RAG context with knowledge documents |
+| `KnowledgeIntegrationTest` | Phase 4 | Document upload, processing |
+| `SkillsIntegrationTest` | Phase 5 | Skill execution, toggle |
+| `InventoryIntegrationTest` | Phase 5 | Inventory CRUD |
+| `SensorIntegrationTest` | Phase 6 | Sensor registration, readings |
+| `InsightIntegrationTest` | Phase 7 | Insight generation, read/dismiss |
+| `NotificationIntegrationTest` | Phase 7 | Notification CRUD, mark-read |
+| `AuditIntegrationTest` | Phase 8 | Audit log capture and query |
+| `FortressIntegrationTest` | Phase 8 | Fortress enable/disable/status |
+| `DataWipeIntegrationTest` | Phase 8 | Complete data wipe verification |
+| `SystemInitializationIntegrationTest` | Phase 8 | First-boot initialization flow |
+
+---
+
+## 14. Database Entities & Relationships
+
+### 14.1 Entity Summary (17 tables)
+
+| Entity | Table | Owner FK | Other FKs |
+|---|---|---|---|
+| `User` | `users` | -- | -- |
+| `Conversation` | `conversations` | `@ManyToOne User` | -- |
+| `Message` | `messages` | -- | `@ManyToOne Conversation` |
+| `Memory` | `memories` | `userId` (UUID) | `sourceConversationId` (UUID, nullable) |
+| `VectorDocument` | `vector_document` | `userId` (UUID) | `sourceId` (UUID), `sourceType` (enum) |
+| `KnowledgeDocument` | `knowledge_documents` | `userId` (UUID) | -- |
+| `KnowledgeChunk` | `knowledge_chunks` | `userId` (UUID) | `@ManyToOne KnowledgeDocument` |
+| `Skill` | `skills` | -- | -- |
+| `SkillExecution` | `skill_executions` | `userId` (UUID) | `@ManyToOne Skill` |
+| `InventoryItem` | `inventory_items` | `userId` (UUID) | -- |
+| `PlannedTask` | `planned_tasks` | `userId` (UUID) | -- |
+| `Sensor` | `sensors` | `userId` (UUID) | -- |
+| `SensorReading` | `sensor_readings` | -- | `@ManyToOne Sensor` |
+| `Insight` | `insights` | `userId` (UUID) | -- |
+| `Notification` | `notifications` | `userId` (UUID) | -- |
+| `AuditLog` | `audit_logs` | `userId` (UUID, nullable) | -- |
+| `SystemConfig` | `system_config` | -- | `fortressEnabledByUserId` (UUID, nullable) |
+
+### 14.2 Entity Relationship Diagram (Text)
+
+```
+User (users)
+ |--< Conversation (conversations)          @ManyToOne
+ |     |--< Message (messages)              @ManyToOne
+ |--< Memory (memories)                     userId FK
+ |--< VectorDocument (vector_document)      userId FK
+ |--< KnowledgeDocument (knowledge_documents) userId FK
+ |     |--< KnowledgeChunk (knowledge_chunks) @ManyToOne
+ |--< InventoryItem (inventory_items)       userId FK
+ |--< PlannedTask (planned_tasks)           userId FK
+ |--< Sensor (sensors)                      userId FK
+ |     |--< SensorReading (sensor_readings) @ManyToOne
+ |--< Insight (insights)                    userId FK
+ |--< Notification (notifications)          userId FK
+ |--< AuditLog (audit_logs)                 userId FK (nullable)
+ |--< SkillExecution (skill_executions)     userId FK
+       |-- Skill (skills)                   @ManyToOne
+
+SystemConfig (system_config)                 Singleton row
+```
+
+### 14.3 Vector Search
+
+- **Table:** `vector_document`
+- **Column:** `embedding` -- `vector(768)` via pgvector extension
+- **Operator:** `<=>` (cosine distance) in native SQL queries
+- **Sources:** `MEMORY`, `CONVERSATION`, `KNOWLEDGE_CHUNK` (VectorSourceType enum)
+- **Threshold:** 0.7 minimum cosine similarity
+
+---
+
+## 15. API Endpoint Summary
+
+### 15.1 Endpoint Count by Domain
+
+| Domain | Controller | Base Path | Endpoint Count |
+|---|---|---|---|
+| Auth | `AuthController` | `/api/auth` | 4 |
+| Users | `UserController` | `/api/users` | 5 |
+| Chat | `ChatController` | `/api/chat` | 7 |
+| Models | `ModelController` | `/api/models` | 3 |
+| Memory | `MemoryController` | `/api/memory` | 7 |
+| Knowledge | `KnowledgeController` | `/api/knowledge` | 8 |
+| Skills | `SkillController` | `/api/skills` | 9 |
+| Sensors | `SensorController` | `/api/sensors` | 12 |
+| Insights | `ProactiveController` | `/api/insights` | 5 |
+| Notifications | `ProactiveController` | `/api/notifications` | 6 |
+| Privacy | `PrivacyController` | `/api/privacy` | 7 |
+| System | `SystemController` | `/api/system` | 2 |
+| **TOTAL** | **11 controllers** | | **75 endpoints** |
+
+### 15.2 Public Endpoints (No Authentication Required)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/login` | User login |
+| `POST` | `/api/auth/register` | User registration |
+| `POST` | `/api/auth/refresh` | Token refresh |
+| `GET` | `/api/system/status` | System status |
+| `POST` | `/api/system/initialize` | First-boot setup |
+| `GET` | `/api/models` | List available models |
+| `GET` | `/api/models/health` | Ollama health check |
+| `GET` | `/actuator/health` | Spring Actuator health |
+| `GET` | `/swagger-ui/**` | Swagger UI |
+| `GET` | `/v3/api-docs/**` | OpenAPI spec |
+
+### 15.3 Role-Restricted Endpoints
+
+| Method | Path | Required Role |
+|---|---|---|
+| `GET` | `/api/users` | OWNER, ADMIN |
+| `PUT` | `/api/users/{id}` | OWNER, ADMIN |
+| `PUT` | `/api/users/{id}/deactivate` | OWNER |
+| `DELETE` | `/api/users/{id}` | OWNER |
+| `PATCH` | `/api/skills/{id}/toggle` | OWNER, ADMIN |
+| `POST` | `/api/privacy/fortress/enable` | OWNER, ADMIN |
+| `POST` | `/api/privacy/fortress/disable` | OWNER, ADMIN |
+| `DELETE` | `/api/privacy/wipe` | OWNER, ADMIN |
+
+---
+
+## 16. Summary Statistics
+
+| Metric | Count |
+|---|---|
+| **Main Source Files** | 190 |
+| **Test Files** | 81 |
+| **Total Java Files** | 271 |
+| **@Test Methods** | 613 |
+| **Controllers** | 11 |
+| **Services** | 30 |
+| **Entities (JPA)** | 17 |
+| **Database Tables** | 17 |
+| **Repositories** | 14 |
+| **DTOs (records)** | 50+ |
+| **Enums** | 13 |
+| **Custom Exceptions** | 13 |
+| **API Endpoints** | 75 |
+| **Built-in Skills** | 6 |
+| **Scheduled Jobs** | 3 (summarization 2am, insights 3am, health checks every 5min) |
+| **SSE Streams** | 3 (chat tokens, sensor readings, notifications) |
+| **Integration Tests** | 20 (Testcontainers PostgreSQL) |
+
+### File Counts by Domain
+
+| Domain | Files |
+|---|---|
+| config | 7 |
+| common | 16 |
+| auth (Phase 1) | 14 |
+| ai (Phase 2) | 21 |
+| memory (Phase 3) | 17 |
+| knowledge (Phase 4) | 16 |
+| skills (Phase 5) | 27 |
+| sensors (Phase 6) | 18 |
+| proactive (Phase 7) | 16 |
+| privacy (Phase 8a) | 17 |
+| system (Phase 8b) | 6 |
+| Entry point | 1 |
+| application.yml | 1 |
+| **Main total** | **190** (+ 1 yml) |
+
+### Async Operations
+
+| Operation | Triggered By | Service |
+|---|---|---|
+| Memory extraction | Chat message exchange | `MemoryExtractionService.extractMemories()` |
+| Title generation | First user message | `ChatService` (inline @Async via OllamaService) |
+| Document ingestion | Knowledge upload | `KnowledgeService.processDocumentAsync()` |
+
+### Scheduled Tasks
+
+| Schedule | Service | Description |
+|---|---|---|
+| `0 0 2 * * *` (2am daily) | `SummarizationService` | Summarize stale conversations to CRITICAL memories |
+| `0 0 3 * * *` (3am daily) | `NightlyInsightJob` | Generate proactive insights for all active users |
+| Configurable interval (default 5min) | `SystemHealthMonitor` | Check disk, Ollama, heap; alert admins |
+
+---
+
+*This audit was generated by reading every source file on disk. It is the definitive source of truth for the MyOffGridAI-Server codebase as of 2026-03-14.*
