@@ -1,0 +1,3516 @@
+openapi: 3.0.3
+info:
+  title: MyOffGridAI Server API
+  version: 1.0.0
+  description: >
+    Comprehensive REST API for the MyOffGridAI Server — a privacy-first, offline-capable
+    personal AI assistant built for off-grid living. This specification covers all 8 phases
+    of the backend: Phase 1 (Auth & Users), Phase 2 (AI Conversations), Phase 3 (Memory),
+    Phase 4 (Knowledge Vault), Phase 5 (Skills & Automation), Phase 6 (Sensor Integration),
+    Phase 7 (Proactive Engine), and Phase 8 (Privacy & Fortress). All endpoints return
+    responses wrapped in a standard ApiResponse envelope. Authentication uses JWT Bearer tokens.
+  contact:
+    name: MyOffGridAI
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: Authentication operations — register, login, refresh, logout
+  - name: Users
+    description: User management — CRUD, deactivation, role management
+  - name: Chat
+    description: AI conversation and message management with streaming support
+  - name: Models
+    description: Ollama model listing, health, and active model configuration
+  - name: Memory
+    description: User memory management — CRUD, search, tagging, export
+  - name: Knowledge
+    description: Knowledge Vault — document upload, search, and management
+  - name: Skills
+    description: Skill management, execution, and execution history
+  - name: Inventory
+    description: Inventory item management for off-grid supplies
+  - name: Sensors
+    description: Sensor registration, readings, thresholds, and live streaming
+  - name: Insights
+    description: Proactive AI-generated insights
+  - name: Notifications
+    description: Notification management and real-time streaming
+  - name: System
+    description: System status and first-boot initialization
+  - name: Privacy
+    description: Fortress mode, audit logs, sovereignty reports, data export, and wipe
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 1 — Auth
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user account
+      description: >
+        Public endpoint — allowed when no OWNER exists or caller is OWNER/ADMIN.
+        Registration logic is enforced in the service layer.
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '409':
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with username and password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token using a refresh token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AuthResponse'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate the current access token
+      operationId: logout
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Bearer token to invalidate
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 1 — Users
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List all users with pagination
+      description: Restricted to OWNER and ADMIN roles.
+      operationId: listUsers
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of user summaries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_UserSummaryDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '403':
+          description: Forbidden — requires OWNER or ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user details by ID
+      description: >
+        OWNER and ADMIN can view any user. MEMBER and VIEWER can only view their own profile.
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_UserDetailDto'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    put:
+      tags: [Users]
+      summary: Update user profile
+      description: Restricted to OWNER and ADMIN roles. Updates displayName, email, and role.
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_UserDetailDto'
+        '403':
+          description: Forbidden — requires OWNER or ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    delete:
+      tags: [Users]
+      summary: Permanently delete a user and all associated data
+      description: Restricted to OWNER role only.
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '403':
+          description: Forbidden — requires OWNER role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/users/{id}/deactivate:
+    put:
+      tags: [Users]
+      summary: Deactivate a user account
+      description: Restricted to OWNER role only.
+      operationId: deactivateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '403':
+          description: Forbidden — requires OWNER role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 2 — Chat (AI Conversations)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/chat/conversations:
+    post:
+      tags: [Chat]
+      summary: Create a new conversation
+      operationId: createConversation
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ConversationDto'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    get:
+      tags: [Chat]
+      summary: List conversations for the authenticated user
+      operationId: listConversations
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: archived
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Paginated list of conversation summaries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ConversationSummaryDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/chat/conversations/{conversationId}:
+    get:
+      tags: [Chat]
+      summary: Get a conversation with its messages
+      operationId: getConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ConversationDto'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    delete:
+      tags: [Chat]
+      summary: Delete a conversation and all its messages
+      operationId: deleteConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/chat/conversations/{conversationId}/archive:
+    put:
+      tags: [Chat]
+      summary: Archive a conversation
+      operationId: archiveConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conversation archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/chat/conversations/{conversationId}/messages:
+    post:
+      tags: [Chat]
+      summary: Send a message in a conversation
+      description: >
+        Supports synchronous (stream=false) and streaming (stream=true) modes.
+        Streaming returns SSE events with token chunks, terminating with a [DONE] event.
+      operationId: sendMessage
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: >
+            If stream=false, returns ApiResponse<MessageDto>.
+            If stream=true, returns text/event-stream with SSE token chunks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MessageDto'
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream of token chunks, terminated with [DONE]
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    get:
+      tags: [Chat]
+      summary: List messages in a conversation
+      operationId: listMessages
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MessageDtoList'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 2 — Models
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/models:
+    get:
+      tags: [Models]
+      summary: List all available Ollama models
+      description: Public endpoint — no authentication required.
+      operationId: listModels
+      security: []
+      responses:
+        '200':
+          description: List of available models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_OllamaModelInfoList'
+
+  /api/models/active:
+    get:
+      tags: [Models]
+      summary: Get the currently configured active model
+      description: Requires authentication.
+      operationId: getActiveModel
+      responses:
+        '200':
+          description: Active model configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ActiveModelDto'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/models/health:
+    get:
+      tags: [Models]
+      summary: Get Ollama health status
+      description: Public endpoint — no authentication required.
+      operationId: getModelHealth
+      security: []
+      responses:
+        '200':
+          description: Ollama health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_OllamaHealthDto'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 3 — Memory
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/memory:
+    get:
+      tags: [Memory]
+      summary: List memories with optional filters
+      operationId: listMemories
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: importance
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MemoryImportance'
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of memories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MemoryDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/memory/{id}:
+    get:
+      tags: [Memory]
+      summary: Get a specific memory by ID
+      operationId: getMemory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MemoryDto'
+        '404':
+          description: Memory not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    delete:
+      tags: [Memory]
+      summary: Delete a memory and its associated vector document
+      operationId: deleteMemory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Memory not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/memory/{id}/importance:
+    put:
+      tags: [Memory]
+      summary: Update the importance level of a memory
+      operationId: updateMemoryImportance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateImportanceRequest'
+      responses:
+        '200':
+          description: Memory importance updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MemoryDto'
+        '404':
+          description: Memory not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/memory/{id}/tags:
+    put:
+      tags: [Memory]
+      summary: Update the tags of a memory
+      operationId: updateMemoryTags
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTagsRequest'
+      responses:
+        '200':
+          description: Memory tags updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MemoryDto'
+        '404':
+          description: Memory not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/memory/search:
+    post:
+      tags: [Memory]
+      summary: Search memories using vector similarity
+      operationId: searchMemories
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemorySearchRequest'
+      responses:
+        '200':
+          description: List of matching memories with similarity scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MemorySearchResultDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/memory/export:
+    get:
+      tags: [Memory]
+      summary: Export all memories for the authenticated user
+      operationId: exportMemories
+      responses:
+        '200':
+          description: All memories as JSON (no pagination)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_MemoryDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 4 — Knowledge Vault
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/knowledge:
+    post:
+      tags: [Knowledge]
+      summary: Upload a document for ingestion into the knowledge base
+      operationId: uploadDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: >
+                    The file to upload. Supported MIME types: application/pdf,
+                    text/plain, text/markdown, text/x-markdown, image/png,
+                    image/jpeg, image/tiff, image/webp
+      responses:
+        '201':
+          description: Document uploaded, processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_KnowledgeDocumentDto'
+        '400':
+          description: Unsupported file type or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    get:
+      tags: [Knowledge]
+      summary: List knowledge documents with pagination
+      operationId: listDocuments
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of document DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_KnowledgeDocumentDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/knowledge/{documentId}:
+    get:
+      tags: [Knowledge]
+      summary: Get a single knowledge document by ID
+      operationId: getDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_KnowledgeDocumentDto'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    delete:
+      tags: [Knowledge]
+      summary: Delete a knowledge document and all associated chunks/embeddings
+      operationId: deleteDocument
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/knowledge/{documentId}/display-name:
+    put:
+      tags: [Knowledge]
+      summary: Update the display name of a knowledge document
+      operationId: updateDocumentDisplayName
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDisplayNameRequest'
+      responses:
+        '200':
+          description: Display name updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_KnowledgeDocumentDto'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/knowledge/{documentId}/retry:
+    post:
+      tags: [Knowledge]
+      summary: Retry processing of a failed document
+      operationId: retryProcessing
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Document re-queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_KnowledgeDocumentDto'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/knowledge/search:
+    post:
+      tags: [Knowledge]
+      summary: Perform a semantic search across the knowledge base
+      operationId: searchKnowledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeSearchRequest'
+      responses:
+        '200':
+          description: List of search results with similarity scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_KnowledgeSearchResultDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 5 — Skills & Automation
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/skills:
+    get:
+      tags: [Skills]
+      summary: List all enabled skills
+      operationId: listSkills
+      responses:
+        '200':
+          description: List of enabled skill DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SkillDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/skills/{skillId}:
+    get:
+      tags: [Skills]
+      summary: Get a single skill by ID
+      operationId: getSkill
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Skill details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SkillDto'
+        '404':
+          description: Skill not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/skills/{skillId}/toggle:
+    patch:
+      tags: [Skills]
+      summary: Toggle a skill's enabled/disabled state
+      description: Requires OWNER or ADMIN role.
+      operationId: toggleSkill
+      parameters:
+        - name: skillId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Skill toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SkillDto'
+        '403':
+          description: Forbidden — requires OWNER or ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+        '404':
+          description: Skill not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/skills/execute:
+    post:
+      tags: [Skills]
+      summary: Execute a skill with parameters
+      operationId: executeSkill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillExecuteRequest'
+      responses:
+        '200':
+          description: Skill execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SkillExecutionDto'
+        '404':
+          description: Skill not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/skills/executions:
+    get:
+      tags: [Skills]
+      summary: List execution history for the authenticated user
+      operationId: listExecutions
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of execution DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SkillExecutionDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/skills/inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory items with optional category filter
+      operationId: listInventory
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InventoryCategory'
+      responses:
+        '200':
+          description: List of inventory item DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InventoryItemDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    post:
+      tags: [Inventory]
+      summary: Create a new inventory item
+      operationId: createInventoryItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInventoryItemRequest'
+      responses:
+        '200':
+          description: Item added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InventoryItemDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/skills/inventory/{itemId}:
+    put:
+      tags: [Inventory]
+      summary: Update an existing inventory item
+      operationId: updateInventoryItem
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInventoryItemRequest'
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InventoryItemDto'
+        '404':
+          description: Inventory item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    delete:
+      tags: [Inventory]
+      summary: Delete an inventory item
+      operationId: deleteInventoryItem
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Item deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Inventory item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 6 — Sensors
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/sensors:
+    get:
+      tags: [Sensors]
+      summary: List all sensors for the authenticated user
+      operationId: listSensors
+      responses:
+        '200':
+          description: List of sensor DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    post:
+      tags: [Sensors]
+      summary: Register a new sensor
+      operationId: registerSensor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSensorRequest'
+      responses:
+        '200':
+          description: Sensor registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorDto'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/{sensorId}:
+    get:
+      tags: [Sensors]
+      summary: Get a single sensor by ID
+      operationId: getSensor
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sensor details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorDto'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+    delete:
+      tags: [Sensors]
+      summary: Delete a sensor and all its readings
+      operationId: deleteSensor
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sensor deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/{sensorId}/start:
+    post:
+      tags: [Sensors]
+      summary: Start polling for a sensor
+      operationId: startSensor
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sensor started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorDto'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/{sensorId}/stop:
+    post:
+      tags: [Sensors]
+      summary: Stop polling for a sensor
+      operationId: stopSensor
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sensor stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorDto'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/{sensorId}/latest:
+    get:
+      tags: [Sensors]
+      summary: Get the latest reading for a sensor
+      operationId: getLatestReading
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Latest reading DTO (data may be null if no readings exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorReadingDto'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/{sensorId}/history:
+    get:
+      tags: [Sensors]
+      summary: Get paginated reading history for a sensor
+      operationId: getReadingHistory
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: hours
+          in: query
+          description: Number of hours of history (max 168)
+          schema:
+            type: integer
+            default: 24
+            maximum: 168
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of reading DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorReadingDtoList'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/{sensorId}/thresholds:
+    put:
+      tags: [Sensors]
+      summary: Update threshold values for a sensor
+      operationId: updateThresholds
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateThresholdsRequest'
+      responses:
+        '200':
+          description: Thresholds updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorDto'
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/sensors/test:
+    post:
+      tags: [Sensors]
+      summary: Test a serial port connection
+      operationId: testConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestSensorRequest'
+      responses:
+        '200':
+          description: Test result with sample data if available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SensorTestResult'
+
+  /api/sensors/ports:
+    get:
+      tags: [Sensors]
+      summary: List all available serial ports on the device
+      operationId: listAvailablePorts
+      responses:
+        '200':
+          description: List of port path strings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_StringList'
+
+  /api/sensors/{sensorId}/stream:
+    get:
+      tags: [Sensors]
+      summary: Open an SSE stream for live sensor readings
+      operationId: streamSensor
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SSE stream of SensorReadingDto events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream broadcasting SensorReadingDto in real-time
+        '404':
+          description: Sensor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 7 — Proactive Engine (Insights)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/insights:
+    get:
+      tags: [Insights]
+      summary: Get active insights with optional category filter
+      operationId: getInsights
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InsightCategory'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of insight DTOs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InsightDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/insights/generate:
+    post:
+      tags: [Insights]
+      summary: Trigger on-demand insight generation
+      operationId: generateInsights
+      responses:
+        '200':
+          description: Generated insights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InsightDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/insights/{insightId}/read:
+    put:
+      tags: [Insights]
+      summary: Mark an insight as read
+      operationId: markInsightRead
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Insight marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InsightDto'
+        '404':
+          description: Insight not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/insights/{insightId}/dismiss:
+    put:
+      tags: [Insights]
+      summary: Dismiss an insight
+      operationId: dismissInsight
+      parameters:
+        - name: insightId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Insight dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_InsightDto'
+        '404':
+          description: Insight not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/insights/unread-count:
+    get:
+      tags: [Insights]
+      summary: Get the count of unread insights
+      operationId: getInsightUnreadCount
+      responses:
+        '200':
+          description: Unread insight count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_UnreadCount'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 7 — Proactive Engine (Notifications)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: Get notifications with optional unread filter and pagination
+      operationId: getNotifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of notification DTOs (paginated when unreadOnly=false)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_NotificationDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/notifications/{notificationId}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_NotificationDto'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      operationId: markAllNotificationsRead
+      responses:
+        '200':
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get the count of unread notifications
+      operationId: getNotificationUnreadCount
+      responses:
+        '200':
+          description: Unread notification count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_UnreadCount'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/notifications/{notificationId}:
+    delete:
+      tags: [Notifications]
+      summary: Delete a notification
+      operationId: deleteNotification
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Void'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/notifications/stream:
+    get:
+      tags: [Notifications]
+      summary: Open an SSE stream for real-time notifications
+      operationId: streamNotifications
+      responses:
+        '200':
+          description: SSE stream of NotificationDto events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream broadcasting NotificationDto in real-time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 8 — System
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/system/status:
+    get:
+      tags: [System]
+      summary: Get current system status
+      description: Public endpoint — no authentication required.
+      operationId: getSystemStatus
+      security: []
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SystemStatusDto'
+
+  /api/system/initialize:
+    post:
+      tags: [System]
+      summary: Initialize the system on first boot
+      description: >
+        Creates the OWNER account and marks the system as initialized.
+        Public endpoint — no auth required. Can only be called once; subsequent
+        calls return 409 Conflict.
+      operationId: initializeSystem
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitializeRequest'
+      responses:
+        '200':
+          description: System initialized successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AuthResponse'
+        '409':
+          description: System is already initialized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 8 — Privacy & Fortress
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  /api/privacy/fortress/status:
+    get:
+      tags: [Privacy]
+      summary: Get the current fortress mode status
+      operationId: getFortressStatus
+      responses:
+        '200':
+          description: Fortress status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_FortressStatus'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/fortress/enable:
+    post:
+      tags: [Privacy]
+      summary: Enable fortress mode (blocks all outbound internet traffic)
+      description: Restricted to OWNER or ADMIN roles.
+      operationId: enableFortress
+      responses:
+        '200':
+          description: Fortress mode enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_StatusMap'
+        '403':
+          description: Forbidden — requires OWNER or ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/fortress/disable:
+    post:
+      tags: [Privacy]
+      summary: Disable fortress mode (restores normal network connectivity)
+      description: Restricted to OWNER or ADMIN roles.
+      operationId: disableFortress
+      responses:
+        '200':
+          description: Fortress mode disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_StatusMap'
+        '403':
+          description: Forbidden — requires OWNER or ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/sovereignty-report:
+    get:
+      tags: [Privacy]
+      summary: Generate a sovereignty report
+      operationId: getSovereigntyReport
+      responses:
+        '200':
+          description: Sovereignty report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SovereigntyReport'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/audit-logs:
+    get:
+      tags: [Privacy]
+      summary: Get audit logs with optional filters
+      description: >
+        OWNER/ADMIN can view all logs; regular users see only their own.
+      operationId: getAuditLogs
+      parameters:
+        - name: outcome
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AuditOutcome'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AuditLogDtoList'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/export:
+    post:
+      tags: [Privacy]
+      summary: Export all user data as an AES-256-GCM encrypted ZIP archive
+      operationId: exportData
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      responses:
+        '200':
+          description: Encrypted ZIP file download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 'attachment; filename="myoffgridai-export-{userId}.enc"'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/wipe:
+    delete:
+      tags: [Privacy]
+      summary: Wipe all data for a target user
+      description: >
+        OWNER/ADMIN can wipe any user's data. The targetId parameter
+        defaults to the authenticated user's own ID.
+      operationId: wipeData
+      parameters:
+        - name: targetId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Target user ID to wipe (defaults to self)
+      responses:
+        '200':
+          description: Data wipe completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_WipeResult'
+        '403':
+          description: Forbidden — requires OWNER or ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+  /api/privacy/wipe/self:
+    delete:
+      tags: [Privacy]
+      summary: Wipe the authenticated user's own data
+      description: Available to all authenticated users.
+      operationId: wipeSelfData
+      responses:
+        '200':
+          description: User data wiped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_WipeResult'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Error'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Components
+# ═══════════════════════════════════════════════════════════════════════════════
+
+components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token authentication. Access tokens expire after 24 hours.
+
+  schemas:
+
+    # ── ApiResponse Envelope ──────────────────────────────────────────────────
+
+    ApiResponse:
+      type: object
+      description: >
+        Standard API response wrapper. All endpoints return this envelope.
+        Fields totalElements, page, and size are only present on paginated responses.
+      properties:
+        success:
+          type: boolean
+          description: Whether the request was successful
+        message:
+          type: string
+          nullable: true
+          description: Human-readable message (present on success with message, or on error)
+        data:
+          description: The response payload (type varies by endpoint)
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 response timestamp
+        requestId:
+          type: string
+          description: Unique request ID for tracing
+        totalElements:
+          type: integer
+          format: int64
+          nullable: true
+          description: Total number of elements across all pages (paginated responses only)
+        page:
+          type: integer
+          nullable: true
+          description: Current page number, zero-based (paginated responses only)
+        size:
+          type: integer
+          nullable: true
+          description: Page size (paginated responses only)
+      required:
+        - success
+        - timestamp
+        - requestId
+
+    ApiResponse_Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error description"
+        data:
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+
+    ApiResponse_Void:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+
+    # ── Auth Schemas ──────────────────────────────────────────────────────────
+
+    RegisterRequest:
+      type: object
+      required: [username, displayName, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        password:
+          type: string
+          minLength: 4
+          description: Minimum 4 characters in development, 12 in production
+        role:
+          $ref: '#/components/schemas/Role'
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          description: Access token expiration in milliseconds
+          example: 86400000
+        user:
+          $ref: '#/components/schemas/UserSummaryDto'
+
+    UserSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        isActive:
+          type: boolean
+
+    UserDetailDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Role:
+      type: string
+      enum:
+        - ROLE_OWNER
+        - ROLE_ADMIN
+        - ROLE_MEMBER
+        - ROLE_VIEWER
+        - ROLE_CHILD
+      description: >
+        Security roles: ROLE_OWNER (full system access, created at first boot),
+        ROLE_ADMIN (all features + user management), ROLE_MEMBER (full AI features, own data),
+        ROLE_VIEWER (read-only), ROLE_CHILD (safe mode, filtered responses, no vault access)
+
+    # ── Chat / AI Schemas ─────────────────────────────────────────────────────
+
+    CreateConversationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+          description: Optional title for the conversation
+
+    SendMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          maxLength: 32000
+        stream:
+          type: boolean
+          default: false
+          description: If true, returns SSE stream; if false, returns JSON response
+
+    ConversationDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        isArchived:
+          type: boolean
+        messageCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ConversationSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        isArchived:
+          type: boolean
+        messageCount:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+        lastMessagePreview:
+          type: string
+          nullable: true
+
+    MessageDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/MessageRole'
+        content:
+          type: string
+        tokenCount:
+          type: integer
+          nullable: true
+        hasRagContext:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    MessageRole:
+      type: string
+      enum: [USER, ASSISTANT, SYSTEM]
+
+    # ── Model Schemas ─────────────────────────────────────────────────────────
+
+    OllamaModelInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+          format: int64
+          description: Model size in bytes
+        modifiedAt:
+          type: string
+          format: date-time
+
+    ActiveModelDto:
+      type: object
+      properties:
+        modelName:
+          type: string
+          example: "qwen3:32b"
+        embedModelName:
+          type: string
+          example: "nomic-embed-text"
+
+    OllamaHealthDto:
+      type: object
+      properties:
+        available:
+          type: boolean
+        activeModel:
+          type: string
+        embedModelName:
+          type: string
+        responseTimeMs:
+          type: integer
+          format: int64
+
+    # ── Memory Schemas ────────────────────────────────────────────────────────
+
+    MemoryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        importance:
+          $ref: '#/components/schemas/MemoryImportance'
+        tags:
+          type: string
+          nullable: true
+        sourceConversationId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastAccessedAt:
+          type: string
+          format: date-time
+          nullable: true
+        accessCount:
+          type: integer
+
+    MemoryImportance:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    UpdateImportanceRequest:
+      type: object
+      required: [importance]
+      properties:
+        importance:
+          $ref: '#/components/schemas/MemoryImportance'
+
+    UpdateTagsRequest:
+      type: object
+      properties:
+        tags:
+          type: string
+          nullable: true
+
+    MemorySearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        topK:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+
+    MemorySearchResultDto:
+      type: object
+      properties:
+        memory:
+          $ref: '#/components/schemas/MemoryDto'
+        similarityScore:
+          type: number
+          format: float
+          description: Cosine similarity score (0.0 to 1.0)
+
+    # ── Knowledge Schemas ─────────────────────────────────────────────────────
+
+    KnowledgeDocumentDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+        fileSizeBytes:
+          type: integer
+          format: int64
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        errorMessage:
+          type: string
+          nullable: true
+        chunkCount:
+          type: integer
+        uploadedAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    DocumentStatus:
+      type: string
+      enum: [PENDING, PROCESSING, READY, FAILED]
+
+    UpdateDisplayNameRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          maxLength: 255
+
+    KnowledgeSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          maxLength: 2000
+        topK:
+          type: integer
+          nullable: true
+          description: Number of top results to return (defaults to 5 if null)
+
+    KnowledgeSearchResultDto:
+      type: object
+      properties:
+        chunkId:
+          type: string
+          format: uuid
+        documentId:
+          type: string
+          format: uuid
+        documentName:
+          type: string
+        content:
+          type: string
+        pageNumber:
+          type: integer
+          nullable: true
+        chunkIndex:
+          type: integer
+        similarityScore:
+          type: number
+          format: float
+
+    # ── Skills Schemas ────────────────────────────────────────────────────────
+
+    SkillDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        author:
+          type: string
+        category:
+          $ref: '#/components/schemas/SkillCategory'
+        isEnabled:
+          type: boolean
+        isBuiltIn:
+          type: boolean
+        parametersSchema:
+          type: string
+          nullable: true
+          description: JSON schema defining expected parameters
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SkillCategory:
+      type: string
+      enum: [HOMESTEAD, RESOURCE, PLANNING, KNOWLEDGE, WEATHER, CUSTOM]
+
+    SkillExecuteRequest:
+      type: object
+      required: [skillId]
+      properties:
+        skillId:
+          type: string
+          format: uuid
+        params:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    SkillExecutionDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        skillId:
+          type: string
+          format: uuid
+        skillName:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        inputParams:
+          type: string
+          nullable: true
+          description: JSON string of input parameters
+        outputResult:
+          type: string
+          nullable: true
+          description: JSON string of output result
+        errorMessage:
+          type: string
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        durationMs:
+          type: integer
+          format: int64
+          nullable: true
+
+    ExecutionStatus:
+      type: string
+      enum: [RUNNING, COMPLETED, FAILED]
+
+    # ── Inventory Schemas ─────────────────────────────────────────────────────
+
+    InventoryItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/InventoryCategory'
+        quantity:
+          type: number
+          format: double
+        unit:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        lowStockThreshold:
+          type: number
+          format: double
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    InventoryCategory:
+      type: string
+      enum: [FOOD, TOOLS, MEDICAL, SUPPLIES, SEEDS, EQUIPMENT, OTHER]
+
+    CreateInventoryItemRequest:
+      type: object
+      required: [name, category, quantity]
+      properties:
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/InventoryCategory'
+        quantity:
+          type: number
+          format: double
+          minimum: 0
+        unit:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        lowStockThreshold:
+          type: number
+          format: double
+          nullable: true
+
+    UpdateInventoryItemRequest:
+      type: object
+      properties:
+        quantity:
+          type: number
+          format: double
+          minimum: 0
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        lowStockThreshold:
+          type: number
+          format: double
+          nullable: true
+
+    # ── Sensor Schemas ────────────────────────────────────────────────────────
+
+    SensorDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/SensorType'
+        portPath:
+          type: string
+        baudRate:
+          type: integer
+        dataFormat:
+          $ref: '#/components/schemas/DataFormat'
+        valueField:
+          type: string
+          nullable: true
+        unit:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        pollIntervalSeconds:
+          type: integer
+        lowThreshold:
+          type: number
+          format: double
+          nullable: true
+        highThreshold:
+          type: number
+          format: double
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SensorType:
+      type: string
+      enum: [TEMPERATURE, HUMIDITY, SOIL_MOISTURE, POWER, VOLTAGE, CUSTOM]
+
+    DataFormat:
+      type: string
+      enum: [CSV_LINE, JSON_LINE]
+
+    SensorReadingDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sensorId:
+          type: string
+          format: uuid
+        value:
+          type: number
+          format: double
+        rawData:
+          type: string
+          nullable: true
+        recordedAt:
+          type: string
+          format: date-time
+
+    CreateSensorRequest:
+      type: object
+      required: [name, type, portPath]
+      properties:
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/SensorType'
+        portPath:
+          type: string
+          description: Serial port path (e.g. "/dev/ttyUSB0")
+        baudRate:
+          type: integer
+          nullable: true
+          description: Defaults to 9600
+        dataFormat:
+          $ref: '#/components/schemas/DataFormat'
+        valueField:
+          type: string
+          nullable: true
+          description: JSON field name for value extraction (JSON_LINE format only)
+        unit:
+          type: string
+          nullable: true
+        pollIntervalSeconds:
+          type: integer
+          minimum: 5
+          maximum: 3600
+          nullable: true
+        lowThreshold:
+          type: number
+          format: double
+          nullable: true
+        highThreshold:
+          type: number
+          format: double
+          nullable: true
+
+    UpdateThresholdsRequest:
+      type: object
+      properties:
+        lowThreshold:
+          type: number
+          format: double
+          nullable: true
+          description: Null to clear threshold
+        highThreshold:
+          type: number
+          format: double
+          nullable: true
+          description: Null to clear threshold
+
+    TestSensorRequest:
+      type: object
+      required: [portPath]
+      properties:
+        portPath:
+          type: string
+        baudRate:
+          type: integer
+          nullable: true
+          description: Defaults to 9600
+
+    SensorTestResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        portPath:
+          type: string
+        baudRate:
+          type: integer
+        sampleData:
+          type: string
+          nullable: true
+        message:
+          type: string
+
+    # ── Insight Schemas ───────────────────────────────────────────────────────
+
+    InsightDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        category:
+          $ref: '#/components/schemas/InsightCategory'
+        isRead:
+          type: boolean
+        isDismissed:
+          type: boolean
+        generatedAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    InsightCategory:
+      type: string
+      enum: [HOMESTEAD, HEALTH, RESOURCE, GENERAL]
+
+    # ── Notification Schemas ──────────────────────────────────────────────────
+
+    NotificationDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: string
+          nullable: true
+
+    NotificationType:
+      type: string
+      enum: [SENSOR_ALERT, SYSTEM_HEALTH, INSIGHT_READY, MODEL_UPDATE, GENERAL]
+
+    # ── System Schemas ────────────────────────────────────────────────────────
+
+    SystemStatusDto:
+      type: object
+      properties:
+        initialized:
+          type: boolean
+        instanceName:
+          type: string
+          nullable: true
+        fortressEnabled:
+          type: boolean
+        wifiConfigured:
+          type: boolean
+        serverVersion:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+
+    InitializeRequest:
+      type: object
+      required: [instanceName, username, displayName, password]
+      properties:
+        instanceName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        password:
+          type: string
+
+    # ── Privacy Schemas ───────────────────────────────────────────────────────
+
+    FortressStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        enabledAt:
+          type: string
+          format: date-time
+          nullable: true
+        enabledByUsername:
+          type: string
+          nullable: true
+        verified:
+          type: boolean
+
+    SovereigntyReport:
+      type: object
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        fortressStatus:
+          $ref: '#/components/schemas/FortressStatus'
+        outboundTrafficVerification:
+          type: string
+        dataInventory:
+          $ref: '#/components/schemas/DataInventory'
+        auditSummary:
+          $ref: '#/components/schemas/AuditSummary'
+        encryptionStatus:
+          type: string
+        telemetryStatus:
+          type: string
+        lastVerifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    DataInventory:
+      type: object
+      properties:
+        conversationCount:
+          type: integer
+          format: int64
+        messageCount:
+          type: integer
+          format: int64
+        memoryCount:
+          type: integer
+          format: int64
+        knowledgeDocumentCount:
+          type: integer
+          format: int64
+        sensorCount:
+          type: integer
+          format: int64
+        insightCount:
+          type: integer
+          format: int64
+
+    AuditSummary:
+      type: object
+      properties:
+        successCount:
+          type: integer
+          format: int64
+        failureCount:
+          type: integer
+          format: int64
+        deniedCount:
+          type: integer
+          format: int64
+        windowStart:
+          type: string
+          format: date-time
+        windowEnd:
+          type: string
+          format: date-time
+
+    AuditLogDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        username:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          nullable: true
+        httpMethod:
+          type: string
+        requestPath:
+          type: string
+        outcome:
+          $ref: '#/components/schemas/AuditOutcome'
+        responseStatus:
+          type: integer
+        durationMs:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+
+    AuditOutcome:
+      type: string
+      enum: [SUCCESS, FAILURE, DENIED]
+
+    ExportRequest:
+      type: object
+      required: [passphrase]
+      properties:
+        passphrase:
+          type: string
+          minLength: 8
+          description: Passphrase for AES-256-GCM encryption of the export archive
+
+    WipeResult:
+      type: object
+      properties:
+        targetUserId:
+          type: string
+          format: uuid
+        stepsCompleted:
+          type: integer
+        completedAt:
+          type: string
+          format: date-time
+        success:
+          type: boolean
+
+    # ── Typed ApiResponse Wrappers ────────────────────────────────────────────
+    # These provide concrete response shapes for documentation clarity.
+
+    ApiResponse_AuthResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AuthResponse'
+
+    ApiResponse_UserSummaryDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserSummaryDto'
+
+    ApiResponse_UserDetailDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/UserDetailDto'
+
+    ApiResponse_ConversationDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConversationDto'
+
+    ApiResponse_ConversationSummaryDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConversationSummaryDto'
+
+    ApiResponse_MessageDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MessageDto'
+
+    ApiResponse_MessageDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/MessageDto'
+
+    ApiResponse_OllamaModelInfoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/OllamaModelInfo'
+
+    ApiResponse_ActiveModelDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ActiveModelDto'
+
+    ApiResponse_OllamaHealthDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OllamaHealthDto'
+
+    ApiResponse_MemoryDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MemoryDto'
+
+    ApiResponse_MemoryDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/MemoryDto'
+
+    ApiResponse_MemorySearchResultDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/MemorySearchResultDto'
+
+    ApiResponse_KnowledgeDocumentDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/KnowledgeDocumentDto'
+
+    ApiResponse_KnowledgeDocumentDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeDocumentDto'
+
+    ApiResponse_KnowledgeSearchResultDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/KnowledgeSearchResultDto'
+
+    ApiResponse_SkillDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SkillDto'
+
+    ApiResponse_SkillDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SkillDto'
+
+    ApiResponse_SkillExecutionDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SkillExecutionDto'
+
+    ApiResponse_SkillExecutionDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SkillExecutionDto'
+
+    ApiResponse_InventoryItemDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/InventoryItemDto'
+
+    ApiResponse_InventoryItemDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/InventoryItemDto'
+
+    ApiResponse_SensorDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SensorDto'
+
+    ApiResponse_SensorDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SensorDto'
+
+    ApiResponse_SensorReadingDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SensorReadingDto'
+
+    ApiResponse_SensorReadingDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SensorReadingDto'
+
+    ApiResponse_SensorTestResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SensorTestResult'
+
+    ApiResponse_StringList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: string
+
+    ApiResponse_InsightDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/InsightDto'
+
+    ApiResponse_InsightDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/InsightDto'
+
+    ApiResponse_NotificationDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/NotificationDto'
+
+    ApiResponse_NotificationDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationDto'
+
+    ApiResponse_UnreadCount:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                unreadCount:
+                  type: integer
+                  format: int64
+
+    ApiResponse_SystemStatusDto:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SystemStatusDto'
+
+    ApiResponse_FortressStatus:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/FortressStatus'
+
+    ApiResponse_StatusMap:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [enabled, disabled]
+
+    ApiResponse_SovereigntyReport:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SovereigntyReport'
+
+    ApiResponse_AuditLogDtoList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLogDto'
+
+    ApiResponse_WipeResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WipeResult'
