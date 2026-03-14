@@ -1,0 +1,180 @@
+package com.myoffgridai.system.service;
+
+import com.myoffgridai.system.model.SystemConfig;
+import com.myoffgridai.system.repository.SystemConfigRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * Unit tests for {@link SystemConfigService}.
+ */
+@ExtendWith(MockitoExtension.class)
+class SystemConfigServiceTest {
+
+    @Mock
+    private SystemConfigRepository systemConfigRepository;
+
+    private SystemConfigService systemConfigService;
+
+    @BeforeEach
+    void setUp() {
+        systemConfigService = new SystemConfigService(systemConfigRepository);
+    }
+
+    @Test
+    void getConfig_returnsExisting() {
+        SystemConfig existingConfig = new SystemConfig();
+        existingConfig.setInitialized(true);
+        existingConfig.setInstanceName("TestNode");
+
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(existingConfig));
+
+        SystemConfig result = systemConfigService.getConfig();
+
+        assertEquals(existingConfig, result);
+        assertTrue(result.isInitialized());
+        assertEquals("TestNode", result.getInstanceName());
+        verify(systemConfigRepository).findFirst();
+        verify(systemConfigRepository, never()).save(any());
+    }
+
+    @Test
+    void getConfig_createsDefaultWhenEmpty() {
+        SystemConfig defaultConfig = new SystemConfig();
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.empty());
+        when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(defaultConfig);
+
+        SystemConfig result = systemConfigService.getConfig();
+
+        assertNotNull(result);
+        assertFalse(result.isInitialized());
+        verify(systemConfigRepository).findFirst();
+        verify(systemConfigRepository).save(any(SystemConfig.class));
+    }
+
+    @Test
+    void save_delegatesToRepository() {
+        SystemConfig config = new SystemConfig();
+        config.setInstanceName("SavedNode");
+        SystemConfig savedConfig = new SystemConfig();
+        savedConfig.setInstanceName("SavedNode");
+
+        when(systemConfigRepository.save(config)).thenReturn(savedConfig);
+
+        SystemConfig result = systemConfigService.save(config);
+
+        assertEquals("SavedNode", result.getInstanceName());
+        verify(systemConfigRepository).save(config);
+    }
+
+    @Test
+    void isInitialized_returnsTrue() {
+        SystemConfig config = new SystemConfig();
+        config.setInitialized(true);
+
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        assertTrue(systemConfigService.isInitialized());
+    }
+
+    @Test
+    void isInitialized_returnsFalse() {
+        SystemConfig config = new SystemConfig();
+        config.setInitialized(false);
+
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        assertFalse(systemConfigService.isInitialized());
+    }
+
+    @Test
+    void setInitialized_updatesConfigAndName() {
+        SystemConfig config = new SystemConfig();
+        config.setInitialized(false);
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        SystemConfig savedConfig = new SystemConfig();
+        savedConfig.setInitialized(true);
+        savedConfig.setInstanceName("MyNode");
+        when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(savedConfig);
+
+        SystemConfig result = systemConfigService.setInitialized("MyNode");
+
+        assertTrue(result.isInitialized());
+        assertEquals("MyNode", result.getInstanceName());
+
+        ArgumentCaptor<SystemConfig> captor = ArgumentCaptor.forClass(SystemConfig.class);
+        verify(systemConfigRepository).save(captor.capture());
+        SystemConfig captured = captor.getValue();
+        assertTrue(captured.isInitialized());
+        assertEquals("MyNode", captured.getInstanceName());
+    }
+
+    @Test
+    void setFortressEnabled_enablesFortress() {
+        UUID userId = UUID.randomUUID();
+        SystemConfig config = new SystemConfig();
+        config.setFortressEnabled(false);
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        SystemConfig savedConfig = new SystemConfig();
+        savedConfig.setFortressEnabled(true);
+        when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(savedConfig);
+
+        SystemConfig result = systemConfigService.setFortressEnabled(true, userId);
+
+        assertTrue(result.isFortressEnabled());
+
+        ArgumentCaptor<SystemConfig> captor = ArgumentCaptor.forClass(SystemConfig.class);
+        verify(systemConfigRepository).save(captor.capture());
+        SystemConfig captured = captor.getValue();
+        assertTrue(captured.isFortressEnabled());
+        assertNotNull(captured.getFortressEnabledAt());
+        assertEquals(userId, captured.getFortressEnabledByUserId());
+    }
+
+    @Test
+    void setFortressEnabled_disablesFortress() {
+        UUID userId = UUID.randomUUID();
+        SystemConfig config = new SystemConfig();
+        config.setFortressEnabled(true);
+        config.setFortressEnabledByUserId(userId);
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        SystemConfig savedConfig = new SystemConfig();
+        savedConfig.setFortressEnabled(false);
+        when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(savedConfig);
+
+        SystemConfig result = systemConfigService.setFortressEnabled(false, userId);
+
+        assertFalse(result.isFortressEnabled());
+
+        ArgumentCaptor<SystemConfig> captor = ArgumentCaptor.forClass(SystemConfig.class);
+        verify(systemConfigRepository).save(captor.capture());
+        SystemConfig captured = captor.getValue();
+        assertFalse(captured.isFortressEnabled());
+        assertNull(captured.getFortressEnabledAt());
+        assertNull(captured.getFortressEnabledByUserId());
+    }
+
+    @Test
+    void isWifiConfigured_returnsValue() {
+        SystemConfig config = new SystemConfig();
+        config.setWifiConfigured(true);
+
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        assertTrue(systemConfigService.isWifiConfigured());
+    }
+}
