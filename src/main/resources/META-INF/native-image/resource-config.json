@@ -1,0 +1,11 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qstatic/setup/\\E.*"},
+      {"pattern": "\\Qstatic/flutter/\\E.*"},
+      {"pattern": "\\Qapplication.yml\\E"},
+      {"pattern": "\\Qapplication-prod.yml\\E"},
+      {"pattern": "\\Qdb/migration/\\E.*"}
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+[
+  ["org.springframework.security.core.userdetails.UserDetails"],
+  ["org.springframework.data.repository.Repository"],
+  ["com.myoffgridai.skills.service.BuiltInSkill"]
+]
