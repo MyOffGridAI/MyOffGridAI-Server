@@ -6,7 +6,7 @@
 **Java Version:** 21
 **Framework:** Spring Boot 3.4.3
 **Build Tool:** Maven (with Maven Wrapper)
-**Status:** FINAL -- All 8 phases complete
+**Status:** FINAL -- All 9 phases complete (Phase 11: Captive Portal)
 
 ---
 
@@ -24,10 +24,11 @@
 10. [Phase 6 -- Sensors (`sensors`)](#10-phase-6----sensors-sensors)
 11. [Phase 7 -- Proactive Engine (`proactive`)](#11-phase-7----proactive-engine-proactive)
 12. [Phase 8 -- Privacy & Fortress (`privacy`) + System (`system`)](#12-phase-8----privacy--fortress-privacy--system-system)
-13. [Test Suite](#13-test-suite)
-14. [Database Entities & Relationships](#14-database-entities--relationships)
-15. [API Endpoint Summary](#15-api-endpoint-summary)
-16. [Summary Statistics](#16-summary-statistics)
+13. [Phase 11 -- Captive Portal & Setup Wizard (`system`)](#13-phase-11----captive-portal--setup-wizard-system)
+14. [Test Suite](#14-test-suite)
+15. [Database Entities & Relationships](#15-database-entities--relationships)
+16. [API Endpoint Summary](#16-api-endpoint-summary)
+17. [Summary Statistics](#17-summary-statistics)
 
 ---
 
@@ -76,7 +77,7 @@ testcontainers (postgresql)
 ```
 src/main/java/com/myoffgridai/
 ├── MyOffGridAiApplication.java          # Entry point (@EnableAsync, @EnableScheduling)
-├── config/                              # Cross-cutting configuration (7 files)
+├── config/                              # Cross-cutting configuration (8 files)
 ├── common/                              # Shared utilities (16 files)
 │   ├── exception/                       # Custom exceptions + GlobalExceptionHandler
 │   ├── response/                        # ApiResponse wrapper
@@ -131,7 +132,7 @@ src/main/java/com/myoffgridai/
 │   ├── model/
 │   ├── repository/
 │   └── service/
-└── system/                              # Phase 8b: System Management (6 files)
+└── system/                              # Phase 8b + Phase 11: System Management & Captive Portal (16 files)
     ├── controller/
     ├── dto/
     ├── model/
@@ -139,7 +140,7 @@ src/main/java/com/myoffgridai/
     └── service/
 ```
 
-**File Counts:** 190 main source files, 81 test files (271 total Java files)
+**File Counts:** 202 main source files, 89 test files (291 total Java files)
 
 ---
 
@@ -151,13 +152,14 @@ src/main/java/com/myoffgridai/
 |---|---|---|
 | `MyOffGridAiApplication` | `src/main/java/com/myoffgridai/MyOffGridAiApplication.java` | Spring Boot main class. Annotated with `@EnableAsync` and `@EnableScheduling` to support async document ingestion, memory extraction, and scheduled jobs (nightly summarization, health checks, insight generation). |
 
-### 3.2 Configuration Package (`config`) -- 7 files
+### 3.2 Configuration Package (`config`) -- 8 files
 
 | File | Type | Description | Key Public Methods / Notes |
 |---|---|---|---|
 | `AppConstants` | `final class` | Centralized application constants for all 8 phases. No magic numbers or hardcoded strings elsewhere. | 90+ constants organized by domain: Server ports, JWT, API paths, pagination, file upload, sensors, RAG, memory, knowledge, skills, proactive, privacy, passwords, Ollama settings, chat limits, roles. |
-| `SecurityConfig` | `@Configuration` | Stateless JWT security filter chain. CORS allows all origins. | Public endpoints: `/api/auth/login`, `/register`, `/refresh`, `/api/system/status`, `/initialize`, `/api/models/**`, `/actuator/health`, `/swagger-ui/**`. All other endpoints require authentication. |
+| `SecurityConfig` | `@Configuration` | Stateless JWT security filter chain. CORS allows all origins. | Public endpoints: `/api/auth/login`, `/register`, `/refresh`, `/api/system/status`, `/initialize`, `/api/system/finalize-setup`, `/api/setup/**`, `/api/models/**`, `/actuator/health`, `/swagger-ui/**`. All other endpoints require authentication. |
 | `JwtAuthFilter` | `OncePerRequestFilter` | Extracts Bearer token from Authorization header, checks blacklist, validates via JwtService, sets SecurityContext. | `doFilterInternal()` -- skips if no token or blacklisted, extracts username from JWT, loads UserDetails, sets authentication. |
+| `CaptivePortalRedirectFilter` | `OncePerRequestFilter @Component` | Redirects non-API, non-static requests to `/setup` when AP mode is active and system is uninitialized. Skips API paths, static resources, and setup paths. | `doFilterInternal()` -- checks `ApModeService.isApModeActive()`, redirects browser requests to `/setup`. |
 | `JpaConfig` | `@Configuration` | Separated `@EnableJpaAuditing` to avoid `@WebMvcTest` test conflicts. | No public methods -- annotation-only config. |
 | `OllamaConfig` | `@Configuration` | Creates two HTTP client beans for Ollama. | `ollamaRestClient()` -- blocking RestClient with configurable timeout. `ollamaWebClient()` -- reactive WebClient for SSE streaming with 10MB buffer. |
 | `VectorStoreConfig` | `@Component` | Startup check verifying the pgvector extension is installed in PostgreSQL. | `checkVectorExtension()` -- `@PostConstruct`, logs warning if pgvector not available. |
@@ -639,25 +641,31 @@ src/main/java/com/myoffgridai/
 
 ### 12.2 System Package
 
-**Package:** `com.myoffgridai.system` -- 6 files
+**Package:** `com.myoffgridai.system` -- 16 files
 
-#### 12.2.1 Controller
+#### 12.2.1 Controllers
 
 | File | Type | Base Path | Endpoints | Description |
 |---|---|---|---|---|
-| `SystemController` | `@RestController` | `/api/system` | `GET /status` (public), `POST /initialize` (public, one-time) | First-boot setup. Status endpoint returns initialization state, fortress mode, server version. Initialize creates the OWNER account and marks system as initialized. Returns 409 on subsequent calls. |
+| `SystemController` | `@RestController` | `/api/system` | `GET /status` (public), `POST /initialize` (public, one-time), `POST /finalize-setup` (public), `POST /factory-reset` (OWNER only) | First-boot setup, network finalization, and factory reset. Status endpoint returns initialization state, fortress mode, server version. Initialize creates the OWNER account and marks system as initialized. Returns 409 on subsequent calls. Finalize-setup transitions from AP mode to normal networking. Factory-reset wipes all data and restores first-boot state. |
+| `CaptivePortalController` | `@Controller` | `/setup`, `/api/setup` | `GET /setup` (HTML forward/redirect), `GET /api/setup/wifi/scan`, `POST /api/setup/wifi/connect`, `GET /api/setup/wifi/status` | Captive portal setup wizard. Forwards to setup HTML pages when uninitialized, redirects to `/` when initialized. WiFi JSON API for scanning, connecting, and status checks. |
 
-#### 12.2.2 Service
+#### 12.2.2 Services
 
 | File | Type | Description | Key Public Methods |
 |---|---|---|---|
 | `SystemConfigService` | `@Service` | Manages single-row system configuration. Creates default config if none exists. | `getConfig()`, `save(SystemConfig)`, `isInitialized()`, `setInitialized(String)`, `setFortressEnabled(boolean, UUID)`, `isWifiConfigured()` |
+| `ApModeService` | `@Service` | Controls hostapd/dnsmasq AP mode and WiFi via nmcli. In mock mode (`app.ap.mock=true`), no system commands are executed. ProcessBuilder pattern matches FortressService. | `startApMode()`, `stopApMode()`, `isApModeActive()`, `scanWifiNetworks()`, `connectToWifi(String, String)`, `getConnectionStatus()` |
+| `ApModeStartupService` | `@Component` | Checks if system is initialized on boot. If not, starts AP mode for captive portal setup. Listens for `ApplicationReadyEvent`. | `onApplicationReady(ApplicationReadyEvent)` |
+| `NetworkTransitionService` | `@Service` | Handles transition from AP mode to normal WiFi networking. Stops AP mode, starts avahi-daemon for mDNS, marks wifi as configured. | `finalizeSetup()` -- `@Async` |
+| `FactoryResetService` | `@Service` | Performs full factory reset: wipes all users and system config, starts AP mode. Supports USB-triggered resets (deletes trigger file after reset). | `performReset()` -- `@Async`, `performUsbReset(Path)` -- `@Async` |
+| `UsbResetWatcherService` | `@Component` | Polls USB mount path every 30 seconds for factory reset trigger files (`myoffgridai-reset.txt`) and update ZIPs. | `checkForTriggerFiles()` -- `@Scheduled(fixedDelay=30000)` |
 
 #### 12.2.3 Model
 
 | File | Type | Table | Description |
 |---|---|---|---|
-| `SystemConfig` | `@Entity` | `system_config` | Single-row table. Fields: `id` (UUID), `initialized` (boolean), `instanceName`, `fortressEnabled` (boolean), `fortressEnabledAt`, `fortressEnabledByUserId`, `wifiConfigured`, `createdAt`, `updatedAt`. |
+| `SystemConfig` | `@Entity` | `system_config` | Single-row table. Fields: `id` (UUID), `initialized` (boolean), `instanceName`, `fortressEnabled` (boolean), `fortressEnabledAt`, `fortressEnabledByUserId`, `wifiConfigured`, `apModeEnabled` (boolean), `createdAt`, `updatedAt`. |
 
 #### 12.2.4 Repository
 
@@ -671,15 +679,53 @@ src/main/java/com/myoffgridai/
 |---|---|
 | `SystemStatusDto` | `initialized`, `instanceName`, `fortressEnabled`, `wifiConfigured`, `serverVersion`, `timestamp` |
 | `InitializeRequest` | `instanceName` (required, 1-100 chars), `username` (required, 3-50 chars), `displayName` (required), `email` (optional), `password` (required) |
+| `FactoryResetRequest` | `confirmPhrase` (required, must match "RESET MY DEVICE") |
+| `WifiNetwork` | `ssid`, `signalStrength` (int), `security` (String) |
+| `WifiConnectRequest` | `ssid` (required), `password` (optional) |
+| `WifiConnectionStatus` | `connected` (boolean), `hasInternet` (boolean) |
 
 ---
 
-## 13. Test Suite
+## 13. Phase 11 -- Captive Portal & Setup Wizard (`system`)
 
-**Total Test Files:** 81
-**Total @Test Methods:** 613
+Phase 11 extends the `system` package with captive portal, setup wizard, AP mode management, factory reset, and USB reset watcher functionality. Added 10 main source files and 6 test files to the system package, plus 1 config file and 1 exception class.
 
-### 13.1 Test Files by Domain
+### 13.1 New Files Added in Phase 11
+
+| File | Type | Package | Description |
+|---|---|---|---|
+| `CaptivePortalController` | `@Controller` | system.controller | Setup wizard HTML routes + WiFi JSON API |
+| `ApModeService` | `@Service` | system.service | hostapd/dnsmasq/nmcli wrapper with mock mode |
+| `ApModeStartupService` | `@Component` | system.service | AP mode on boot if system uninitialized |
+| `NetworkTransitionService` | `@Service` | system.service | AP mode → normal WiFi transition |
+| `FactoryResetService` | `@Service` | system.service | Full factory reset with data wipe |
+| `UsbResetWatcherService` | `@Component` | system.service | Polls USB for reset trigger files |
+| `FactoryResetRequest` | record | system.dto | Confirmation phrase DTO |
+| `WifiNetwork` | record | system.dto | WiFi scan result DTO |
+| `WifiConnectRequest` | record | system.dto | WiFi connection request DTO |
+| `WifiConnectionStatus` | record | system.dto | WiFi status response DTO |
+| `CaptivePortalRedirectFilter` | `OncePerRequestFilter` | config | Redirects to /setup in AP mode |
+| `ApModeException` | `RuntimeException` | common.exception | AP mode operation failures |
+
+### 13.2 Static Web Assets (Setup Wizard)
+
+| File | Path | Description |
+|---|---|---|
+| `index.html` | `static/setup/` | Step 1: Welcome page |
+| `wifi.html` | `static/setup/` | Step 2: WiFi network scanner/connector |
+| `account.html` | `static/setup/` | Step 3: Owner account creation form |
+| `confirm.html` | `static/setup/` | Step 4: Confirmation + finalize-setup call |
+| `setup.css` | `static/setup/` | Mobile-first CSS, MyOffGridAI branding |
+| `setup.js` | `static/setup/` | Shared JS utilities for API calls |
+
+---
+
+## 14. Test Suite
+
+**Total Test Files:** 89
+**Total @Test Methods:** 649
+
+### 14.1 Test Files by Domain
 
 | Domain | Test Files | @Test Count |
 |---|---|---|
@@ -693,11 +739,11 @@ src/main/java/com/myoffgridai/
 | `skills` (builtin + controller + service) | 9 | 81 |
 | `proactive` (controller + service) | 8 | 62 |
 | `privacy` (aspect + controller + service) | 7 | 43 |
-| `system` (controller + service) | 2 | 13 |
-| `integration` | 20 | 114 |
-| **TOTAL** | **81** | **613** |
+| `system` (controller + service) | 8 | 49 |
+| `integration` | 22 | 114 |
+| **TOTAL** | **89** | **649** |
 
-### 13.2 Unit Test Files
+### 14.2 Unit Test Files
 
 | File | Domain | Description |
 |---|---|---|
@@ -761,9 +807,15 @@ src/main/java/com/myoffgridai/
 | `FortressServiceTest` | privacy | Service unit test |
 | `SovereigntyReportServiceTest` | privacy | Service unit test |
 | `SystemControllerTest` | system | Controller @WebMvcTest |
+| `CaptivePortalControllerTest` | system | Controller @WebMvcTest |
 | `SystemConfigServiceTest` | system | Service unit test |
+| `ApModeServiceTest` | system | Service unit test (7 tests) |
+| `ApModeStartupServiceTest` | system | Service unit test (3 tests) |
+| `NetworkTransitionServiceTest` | system | Service unit test (3 tests) |
+| `FactoryResetServiceTest` | system | Service unit test (5 tests) |
+| `UsbResetWatcherServiceTest` | system | Service unit test (3 tests) |
 
-### 13.3 Integration Test Files
+### 14.3 Integration Test Files
 
 | File | Domain Coverage | Description |
 |---|---|---|
@@ -787,12 +839,14 @@ src/main/java/com/myoffgridai/
 | `FortressIntegrationTest` | Phase 8 | Fortress enable/disable/status |
 | `DataWipeIntegrationTest` | Phase 8 | Complete data wipe verification |
 | `SystemInitializationIntegrationTest` | Phase 8 | First-boot initialization flow |
+| `CaptivePortalIntegrationTest` | Phase 11 | Captive portal setup wizard flow |
+| `FactoryResetIntegrationTest` | Phase 11 | Factory reset full flow |
 
 ---
 
-## 14. Database Entities & Relationships
+## 15. Database Entities & Relationships
 
-### 14.1 Entity Summary (17 tables)
+### 15.1 Entity Summary (17 tables)
 
 | Entity | Table | Owner FK | Other FKs |
 |---|---|---|---|
@@ -814,7 +868,7 @@ src/main/java/com/myoffgridai/
 | `AuditLog` | `audit_logs` | `userId` (UUID, nullable) | -- |
 | `SystemConfig` | `system_config` | -- | `fortressEnabledByUserId` (UUID, nullable) |
 
-### 14.2 Entity Relationship Diagram (Text)
+### 15.2 Entity Relationship Diagram (Text)
 
 ```
 User (users)
@@ -837,7 +891,7 @@ User (users)
 SystemConfig (system_config)                 Singleton row
 ```
 
-### 14.3 Vector Search
+### 15.3 Vector Search
 
 - **Table:** `vector_document`
 - **Column:** `embedding` -- `vector(768)` via pgvector extension
@@ -847,9 +901,9 @@ SystemConfig (system_config)                 Singleton row
 
 ---
 
-## 15. API Endpoint Summary
+## 16. API Endpoint Summary
 
-### 15.1 Endpoint Count by Domain
+### 16.1 Endpoint Count by Domain
 
 | Domain | Controller | Base Path | Endpoint Count |
 |---|---|---|---|
@@ -864,10 +918,11 @@ SystemConfig (system_config)                 Singleton row
 | Insights | `ProactiveController` | `/api/insights` | 5 |
 | Notifications | `ProactiveController` | `/api/notifications` | 6 |
 | Privacy | `PrivacyController` | `/api/privacy` | 7 |
-| System | `SystemController` | `/api/system` | 2 |
-| **TOTAL** | **11 controllers** | | **75 endpoints** |
+| System | `SystemController` | `/api/system` | 4 |
+| Setup | `CaptivePortalController` | `/api/setup`, `/setup` | 4 |
+| **TOTAL** | **12 controllers** | | **81 endpoints** |
 
-### 15.2 Public Endpoints (No Authentication Required)
+### 16.2 Public Endpoints (No Authentication Required)
 
 | Method | Path | Description |
 |---|---|---|
@@ -876,13 +931,18 @@ SystemConfig (system_config)                 Singleton row
 | `POST` | `/api/auth/refresh` | Token refresh |
 | `GET` | `/api/system/status` | System status |
 | `POST` | `/api/system/initialize` | First-boot setup |
+| `POST` | `/api/system/finalize-setup` | Finalize setup (AP → WiFi transition) |
+| `GET` | `/api/setup/wifi/scan` | Scan available WiFi networks |
+| `POST` | `/api/setup/wifi/connect` | Connect to WiFi network |
+| `GET` | `/api/setup/wifi/status` | WiFi connection status |
+| `GET` | `/setup` | Setup wizard HTML page |
 | `GET` | `/api/models` | List available models |
 | `GET` | `/api/models/health` | Ollama health check |
 | `GET` | `/actuator/health` | Spring Actuator health |
 | `GET` | `/swagger-ui/**` | Swagger UI |
 | `GET` | `/v3/api-docs/**` | OpenAPI spec |
 
-### 15.3 Role-Restricted Endpoints
+### 16.3 Role-Restricted Endpoints
 
 | Method | Path | Required Role |
 |---|---|---|
@@ -894,37 +954,38 @@ SystemConfig (system_config)                 Singleton row
 | `POST` | `/api/privacy/fortress/enable` | OWNER, ADMIN |
 | `POST` | `/api/privacy/fortress/disable` | OWNER, ADMIN |
 | `DELETE` | `/api/privacy/wipe` | OWNER, ADMIN |
+| `POST` | `/api/system/factory-reset` | OWNER |
 
 ---
 
-## 16. Summary Statistics
+## 17. Summary Statistics
 
 | Metric | Count |
 |---|---|
-| **Main Source Files** | 190 |
-| **Test Files** | 81 |
-| **Total Java Files** | 271 |
-| **@Test Methods** | 613 |
-| **Controllers** | 11 |
-| **Services** | 30 |
+| **Main Source Files** | 202 |
+| **Test Files** | 89 |
+| **Total Java Files** | 291 |
+| **@Test Methods** | 649 |
+| **Controllers** | 12 |
+| **Services** | 35 |
 | **Entities (JPA)** | 17 |
 | **Database Tables** | 17 |
 | **Repositories** | 14 |
-| **DTOs (records)** | 50+ |
+| **DTOs (records)** | 56+ |
 | **Enums** | 13 |
-| **Custom Exceptions** | 13 |
-| **API Endpoints** | 75 |
+| **Custom Exceptions** | 14 |
+| **API Endpoints** | 81 |
 | **Built-in Skills** | 6 |
-| **Scheduled Jobs** | 3 (summarization 2am, insights 3am, health checks every 5min) |
+| **Scheduled Jobs** | 4 (summarization 2am, insights 3am, health checks every 5min, USB watcher every 30s) |
 | **SSE Streams** | 3 (chat tokens, sensor readings, notifications) |
-| **Integration Tests** | 20 (Testcontainers PostgreSQL) |
+| **Integration Tests** | 22 (Testcontainers PostgreSQL) |
 
 ### File Counts by Domain
 
 | Domain | Files |
 |---|---|
-| config | 7 |
-| common | 16 |
+| config | 8 |
+| common | 17 |
 | auth (Phase 1) | 14 |
 | ai (Phase 2) | 21 |
 | memory (Phase 3) | 17 |
@@ -933,10 +994,10 @@ SystemConfig (system_config)                 Singleton row
 | sensors (Phase 6) | 18 |
 | proactive (Phase 7) | 16 |
 | privacy (Phase 8a) | 17 |
-| system (Phase 8b) | 6 |
+| system (Phase 8b + Phase 11) | 16 |
 | Entry point | 1 |
 | application.yml | 1 |
-| **Main total** | **190** (+ 1 yml) |
+| **Main total** | **202** (+ 1 yml + 6 static HTML/CSS/JS) |
 
 ### Async Operations
 
@@ -945,6 +1006,8 @@ SystemConfig (system_config)                 Singleton row
 | Memory extraction | Chat message exchange | `MemoryExtractionService.extractMemories()` |
 | Title generation | First user message | `ChatService` (inline @Async via OllamaService) |
 | Document ingestion | Knowledge upload | `KnowledgeService.processDocumentAsync()` |
+| Factory reset | Owner-initiated or USB trigger | `FactoryResetService.performReset()` / `performUsbReset()` |
+| Network finalization | Setup wizard completion | `NetworkTransitionService.finalizeSetup()` |
 
 ### Scheduled Tasks
 
@@ -953,6 +1016,7 @@ SystemConfig (system_config)                 Singleton row
 | `0 0 2 * * *` (2am daily) | `SummarizationService` | Summarize stale conversations to CRITICAL memories |
 | `0 0 3 * * *` (3am daily) | `NightlyInsightJob` | Generate proactive insights for all active users |
 | Configurable interval (default 5min) | `SystemHealthMonitor` | Check disk, Ollama, heap; alert admins |
+| `fixedDelay=30000` (every 30s) | `UsbResetWatcherService` | Poll USB mount for factory reset trigger files |
 
 ---
 

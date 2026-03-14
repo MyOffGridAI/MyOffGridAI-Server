@@ -171,6 +171,27 @@ public final class AppConstants {
     /** Trigger filename that initiates a factory reset when detected */
     public static final String FACTORY_RESET_TRIGGER_FILENAME = "factory-reset.trigger";
 
+    /** USB mount point for update/reset trigger files */
+    public static final String USB_MOUNT_PATH = "/media/myoffgridai/USB";
+
+    /** Timeout in seconds for AP mode services to start */
+    public static final int AP_MODE_START_TIMEOUT_SECONDS = 10;
+
+    /** Command execution timeout in seconds for OS operations */
+    public static final int COMMAND_TIMEOUT_SECONDS = 10;
+
+    /** Confirmation phrase required for factory reset */
+    public static final String FACTORY_RESET_CONFIRM_PHRASE = "RESET MY DEVICE";
+
+    /** Delay in seconds before factory reset executes (allows HTTP response delivery) */
+    public static final int FACTORY_RESET_DELAY_SECONDS = 2;
+
+    /** Network stabilization delay in seconds after AP mode stops */
+    public static final int NETWORK_TRANSITION_DELAY_SECONDS = 2;
+
+    /** Base path for setup wizard endpoints */
+    public static final String API_SETUP = "/api/setup";
+
     // ── Password Validation ─────────────────────────────────────────────────
 
     /** Minimum password length in dev profile */

@@ -226,6 +226,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles AP mode operation failures.
+     *
+     * @param ex the exception
+     * @return 500 Internal Server Error
+     */
+    @ExceptionHandler(ApModeException.class)
+    public ResponseEntity<ApiResponse<Object>> handleApModeException(ApModeException ex) {
+        log.error("AP mode error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Handles sensor connection failures.
      *
      * @param ex the exception

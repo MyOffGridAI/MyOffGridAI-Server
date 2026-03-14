@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Complete — MyOffGrid AI</title>
+    <link rel="stylesheet" href="/setup/setup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Progress -->
+        <div class="progress-bar">
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+        </div>
+
+        <div class="confirm-icon">&#127881;</div>
+        <h1>MyOffGrid AI is Ready!</h1>
+
+        <div class="card">
+            <div class="confirm-detail">
+                <span class="confirm-label">Instance Name</span>
+                <span class="confirm-value" id="instanceNameDisplay">—</span>
+            </div>
+            <div class="confirm-detail">
+                <span class="confirm-label">AI Model</span>
+                <span class="confirm-value" id="modelDisplay">Checking...</span>
+            </div>
+            <div class="confirm-detail">
+                <span class="confirm-label">Status</span>
+                <span class="confirm-value" id="statusDisplay">Finalizing...</span>
+            </div>
+        </div>
+
+        <div class="info-box">
+            You can now access your MyOffGrid AI from any device on your home network:<br><br>
+            &#128241; Open a browser and go to:<br>
+            <code>http://offgrid.local:8080</code><br><br>
+            Or find your device's IP address in your router settings.
+        </div>
+
+        <a href="http://offgrid.local:8080" class="btn btn-primary" id="openBtn">
+            Open MyOffGrid AI &rarr;
+        </a>
+    </div>
+
+    <script src="/setup/setup.js"></script>
+    <script>
+        // Display instance name from session storage
+        const instanceName = sessionStorage.getItem('instanceName') || 'Your AI';
+        document.getElementById('instanceNameDisplay').textContent = instanceName;
+
+        // Finalize setup (stop AP mode, start avahi)
+        async function finalizeSetup() {
+            try {
+                await api('/api/system/finalize-setup', { method: 'POST' });
+                document.getElementById('statusDisplay').textContent = 'Ready';
+            } catch (e) {
+                document.getElementById('statusDisplay').textContent = 'Ready (network transitioning)';
+            }
+        }
+
+        // Check model health
+        async function checkModel() {
+            try {
+                const token = sessionStorage.getItem('accessToken');
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) {
+                    headers['Authorization'] = 'Bearer ' + token;
+                }
+                const result = await fetch('/api/models/health', { headers });
+                const data = await result.json();
+                if (data.success && data.data) {
+                    document.getElementById('modelDisplay').textContent =
+                        data.data.model || data.data.activeModel || 'Qwen3-32B';
+                } else {
+                    document.getElementById('modelDisplay').textContent = 'Qwen3-32B';
+                }
+            } catch (e) {
+                document.getElementById('modelDisplay').textContent = 'Qwen3-32B';
+            }
+        }
+
+        // Run on page load
+        finalizeSetup();
+        checkModel();
+    </script>
+</body>
+</html>

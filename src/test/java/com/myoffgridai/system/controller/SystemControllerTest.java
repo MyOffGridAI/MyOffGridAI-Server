@@ -6,23 +6,28 @@ import com.myoffgridai.auth.dto.UserSummaryDto;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
+import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.JwtAuthFilter;
 import com.myoffgridai.config.TestSecurityConfig;
+import com.myoffgridai.system.dto.FactoryResetRequest;
 import com.myoffgridai.system.dto.InitializeRequest;
 import com.myoffgridai.system.model.SystemConfig;
+import com.myoffgridai.system.service.FactoryResetService;
+import com.myoffgridai.system.service.NetworkTransitionService;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -38,6 +43,9 @@ class SystemControllerTest {
     @MockitoBean private AuthService authService;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private JwtAuthFilter jwtAuthFilter;
+    @MockitoBean private NetworkTransitionService networkTransitionService;
+    @MockitoBean private FactoryResetService factoryResetService;
+    @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     // ── Status ──────────────────────────────────────────────────────────────
 
@@ -111,5 +119,89 @@ class SystemControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidBody))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ── Finalize Setup ───────────────────────────────────────────────────
+
+    @Test
+    void finalizeSetup_initialized_returns200() throws Exception {
+        when(systemConfigService.isInitialized()).thenReturn(true);
+
+        mockMvc.perform(post("/api/system/finalize-setup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(networkTransitionService).finalizeSetup();
+    }
+
+    @Test
+    void finalizeSetup_notInitialized_returns400() throws Exception {
+        when(systemConfigService.isInitialized()).thenReturn(false);
+
+        mockMvc.perform(post("/api/system/finalize-setup"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(networkTransitionService, never()).finalizeSetup();
+    }
+
+    @Test
+    void finalizeSetup_noAuthRequired() throws Exception {
+        when(systemConfigService.isInitialized()).thenReturn(true);
+
+        // No auth header — should still succeed (public endpoint)
+        mockMvc.perform(post("/api/system/finalize-setup"))
+                .andExpect(status().isOk());
+    }
+
+    // ── Factory Reset ────────────────────────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "OWNER")
+    void factoryReset_validPhrase_returns200() throws Exception {
+        FactoryResetRequest request = new FactoryResetRequest("RESET MY DEVICE");
+
+        mockMvc.perform(post("/api/system/factory-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(factoryResetService).performReset();
+    }
+
+    @Test
+    @WithMockUser(roles = "OWNER")
+    void factoryReset_wrongPhrase_returns400() throws Exception {
+        FactoryResetRequest request = new FactoryResetRequest("wrong phrase");
+
+        mockMvc.perform(post("/api/system/factory-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(factoryResetService, never()).performReset();
+    }
+
+    @Test
+    void factoryReset_noAuth_returns401() throws Exception {
+        FactoryResetRequest request = new FactoryResetRequest("RESET MY DEVICE");
+
+        mockMvc.perform(post("/api/system/factory-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void factoryReset_memberRole_returns403() throws Exception {
+        FactoryResetRequest request = new FactoryResetRequest("RESET MY DEVICE");
+
+        mockMvc.perform(post("/api/system/factory-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
     }
 }

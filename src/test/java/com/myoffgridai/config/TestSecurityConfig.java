@@ -31,8 +31,11 @@ public class TestSecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/system/status",
                                 "/api/system/initialize",
+                                "/api/system/finalize-setup",
+                                "/api/setup/**",
                                 "/api/models",
-                                "/api/models/health"
+                                "/api/models/health",
+                                "/setup/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -51,6 +54,15 @@ public class TestSecurityConfig {
     @Bean
     public FilterRegistrationBean<JwtAuthFilter> disableJwtFilter(JwtAuthFilter filter) {
         FilterRegistrationBean<JwtAuthFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    @Bean
+    public FilterRegistrationBean<CaptivePortalRedirectFilter> disableCaptivePortalFilter(
+            CaptivePortalRedirectFilter filter) {
+        FilterRegistrationBean<CaptivePortalRedirectFilter> reg =
+                new FilterRegistrationBean<>(filter);
         reg.setEnabled(false);
         return reg;
     }

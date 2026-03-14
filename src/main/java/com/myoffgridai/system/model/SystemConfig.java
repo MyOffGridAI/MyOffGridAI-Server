@@ -32,6 +32,9 @@ public class SystemConfig {
     @Column(name = "fortress_enabled_by_user_id")
     private UUID fortressEnabledByUserId;
 
+    @Column(name = "ap_mode_enabled", nullable = false)
+    private boolean apModeEnabled = false;
+
     @Column(name = "wifi_configured", nullable = false)
     private boolean wifiConfigured = false;
 
@@ -65,6 +68,9 @@ public class SystemConfig {
 
     public UUID getFortressEnabledByUserId() { return fortressEnabledByUserId; }
     public void setFortressEnabledByUserId(UUID fortressEnabledByUserId) { this.fortressEnabledByUserId = fortressEnabledByUserId; }
+
+    public boolean isApModeEnabled() { return apModeEnabled; }
+    public void setApModeEnabled(boolean apModeEnabled) { this.apModeEnabled = apModeEnabled; }
 
     public boolean isWifiConfigured() { return wifiConfigured; }
     public void setWifiConfigured(boolean wifiConfigured) { this.wifiConfigured = wifiConfigured; }

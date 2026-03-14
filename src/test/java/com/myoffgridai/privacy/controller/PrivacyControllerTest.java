@@ -5,6 +5,7 @@ import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
+import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.JwtAuthFilter;
 import com.myoffgridai.config.TestSecurityConfig;
 import com.myoffgridai.privacy.dto.*;
@@ -47,6 +48,7 @@ class PrivacyControllerTest {
     @MockitoBean private JwtService jwtService;
     @MockitoBean private JwtAuthFilter jwtAuthFilter;
     @MockitoBean private AuthService authService;
+    @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User testOwner;
     private User regularUser;

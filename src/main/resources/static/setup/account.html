@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account — MyOffGrid AI</title>
+    <link rel="stylesheet" href="/setup/setup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Progress -->
+        <div class="progress-bar">
+            <div class="progress-step done"></div>
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+        </div>
+
+        <h1>Create Your Owner Account</h1>
+        <p class="description">This account has full control over your MyOffGrid AI device.</p>
+
+        <form id="accountForm" onsubmit="createAccount(event)">
+            <div class="form-group">
+                <label for="instanceName">Name Your AI</label>
+                <input type="text" id="instanceName" placeholder="e.g. Homestead Helper" required>
+            </div>
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Your login username" required minlength="3">
+            </div>
+
+            <div class="form-group">
+                <label for="displayName">Display Name</label>
+                <input type="text" id="displayName" placeholder="How the AI addresses you" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email (optional)</label>
+                <input type="email" id="email" placeholder="your@email.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Choose a password" required minlength="4">
+                <p class="form-hint">Minimum 4 characters</p>
+            </div>
+
+            <div id="accountMessage" class="message"></div>
+
+            <button type="submit" id="createBtn" class="btn btn-primary">Create Account &rarr;</button>
+        </form>
+    </div>
+
+    <script src="/setup/setup.js"></script>
+    <script>
+        async function createAccount(e) {
+            e.preventDefault();
+            hideMessage('accountMessage');
+
+            const btn = document.getElementById('createBtn');
+            setLoading(btn, 'Creating account...');
+
+            const body = {
+                instanceName: document.getElementById('instanceName').value.trim(),
+                username: document.getElementById('username').value.trim(),
+                displayName: document.getElementById('displayName').value.trim(),
+                email: document.getElementById('email').value.trim() || null,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const result = await api('/api/system/initialize', {
+                    method: 'POST',
+                    body: body
+                });
+
+                if (result.success) {
+                    // Store token for the confirm page
+                    if (result.data && result.data.accessToken) {
+                        sessionStorage.setItem('accessToken', result.data.accessToken);
+                    }
+                    sessionStorage.setItem('instanceName', body.instanceName);
+                    window.location.href = '/setup/confirm';
+                } else {
+                    showMessage('accountMessage', result.message || 'Failed to create account.', 'error');
+                    clearLoading(btn);
+                }
+            } catch (e) {
+                showMessage('accountMessage', 'Connection error. Please try again.', 'error');
+                clearLoading(btn);
+            }
+        }
+    </script>
+</body>
+</html>

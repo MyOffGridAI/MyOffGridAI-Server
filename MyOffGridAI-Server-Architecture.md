@@ -1,7 +1,7 @@
 # MyOffGridAI-Server — Architecture Specification
 
 **Generated:** 2026-03-14
-**Phase:** 3 — Memory & RAG
+**Phase:** 11 — Captive Portal & Setup Wizard
 **Version:** 0.1.0-SNAPSHOT
 
 ---
@@ -34,7 +34,7 @@
 
 ```
 com.myoffgridai
-├── config/           — Application configuration, security, JWT filter
+├── config/           — Application configuration, security, JWT filter, captive portal filter
 ├── auth/             — Authentication and user management
 │   ├── controller/   — REST endpoints (AuthController, UserController)
 │   ├── service/      — Business logic (AuthService, UserService, JwtService)
@@ -48,7 +48,7 @@ com.myoffgridai
 ├── sensors/          — Sensor data ingestion (Phase 3)
 ├── proactive/        — Proactive intelligence engine (Phase 3)
 ├── privacy/          — Vault and data privacy (Phase 3)
-├── system/           — System management, updates, setup (Phase 2)
+├── system/           — System management, captive portal, AP mode, factory reset (Phase 2 + 11)
 └── common/           — Cross-cutting concerns
     ├── exception/    — Global exception handler, custom exceptions
     ├── response/     — ApiResponse wrapper
@@ -63,6 +63,12 @@ com.myoffgridai
 HTTP Request
     │
     ▼
+┌──────────────────────────┐
+│ CaptivePortalRedirectFilter│  If AP mode active & not API/static,
+│ (OncePerRequest)           │  redirect to /setup
+└─────────┬────────────────┘
+          │
+          ▼
 ┌─────────────────────┐
 │   JwtAuthFilter      │  Extract Bearer token, validate JWT,
 │   (OncePerRequest)   │  set SecurityContext authentication
@@ -500,4 +506,95 @@ SummarizationService
     ├── OllamaService
     ├── MemoryService
     └── MemoryRepository
+```
+
+---
+
+## 15. Phase 11 — Captive Portal & Setup Wizard
+
+### First-Boot Flow
+```
+Device powers on (system not initialized)
+    │
+    ▼
+ApModeStartupService.onApplicationReady()
+    ├── SystemConfigService.isInitialized() → false
+    └── ApModeService.startApMode()
+        ├── hostapd → broadcast SSID "MyOffGridAI-Setup"
+        ├── dnsmasq → DHCP + DNS redirect
+        └── SystemConfig.apModeEnabled = true
+
+User connects to WiFi SSID
+    │
+    ▼
+CaptivePortalRedirectFilter
+    ├── All non-API/static requests → redirect to /setup
+    └── API requests pass through normally
+
+Setup Wizard (4-step HTML/JS)
+    │
+    ├── Step 1: Welcome (index.html)
+    ├── Step 2: WiFi Config (wifi.html)
+    │   ├── GET /api/setup/wifi/scan → ApModeService.scanWifiNetworks()
+    │   └── POST /api/setup/wifi/connect → ApModeService.connectToWifi()
+    ├── Step 3: Owner Account (account.html)
+    │   └── POST /api/system/initialize → SystemController
+    │       ├── AuthService.register(ROLE_OWNER)
+    │       └── SystemConfigService.setInitialized()
+    └── Step 4: Confirm (confirm.html)
+        └── POST /api/system/finalize-setup
+            └── NetworkTransitionService.finalizeSetup() @Async
+                ├── ApModeService.stopApMode()
+                ├── Start avahi-daemon (mDNS)
+                └── SystemConfig.wifiConfigured = true
+```
+
+### Factory Reset Flow
+```
+POST /api/system/factory-reset (OWNER only)
+    │ Requires confirmPhrase = "RESET MY DEVICE"
+    ▼
+FactoryResetService.performReset() @Async
+    ├── UserRepository.deleteAll()
+    ├── SystemConfigRepository.deleteAll()
+    ├── ApModeService.startApMode()
+    └── System returns to first-boot state
+
+USB Reset (physical trigger)
+    │
+    ▼
+UsbResetWatcherService @Scheduled(fixedDelay=30000)
+    ├── Check /media/myoffgridai/USB/myoffgridai-reset.txt
+    ├── If found → FactoryResetService.performUsbReset(path)
+    │   ├── performReset()
+    │   └── Delete trigger file
+    └── Check for myoffgridai-update.zip (logged, not yet implemented)
+```
+
+### Dependency Graph
+```
+CaptivePortalController
+    ├── SystemConfigService
+    └── ApModeService
+
+SystemController
+    ├── SystemConfigService
+    ├── AuthService
+    ├── NetworkTransitionService
+    │   ├── ApModeService
+    │   └── SystemConfigService
+    └── FactoryResetService
+        ├── UserRepository
+        ├── SystemConfigRepository
+        └── ApModeService
+
+ApModeStartupService
+    ├── SystemConfigService
+    └── ApModeService
+
+UsbResetWatcherService
+    └── FactoryResetService
+
+CaptivePortalRedirectFilter (config package)
+    └── ApModeService
 ```

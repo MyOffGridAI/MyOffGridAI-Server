@@ -5,6 +5,7 @@ import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
+import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.JwtAuthFilter;
 import com.myoffgridai.config.TestSecurityConfig;
 import com.myoffgridai.skills.dto.CreateInventoryItemRequest;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -49,6 +51,7 @@ class SkillControllerTest {
     @MockBean private JwtService jwtService;
     @MockBean private JwtAuthFilter jwtAuthFilter;
     @MockBean private AuthService authService;
+    @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User testUser;
     private User adminUser;

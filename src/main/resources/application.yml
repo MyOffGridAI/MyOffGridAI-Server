@@ -45,6 +45,8 @@ app:
     timeout-seconds: 120
   fortress:
     mock: true
+  ap:
+    mock: true
 
 ---
 spring:

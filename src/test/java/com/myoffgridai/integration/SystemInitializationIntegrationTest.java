@@ -7,10 +7,13 @@ import com.myoffgridai.knowledge.service.OcrService;
 import com.myoffgridai.memory.service.EmbeddingService;
 import com.myoffgridai.sensors.service.SerialPortService;
 import com.myoffgridai.system.dto.InitializeRequest;
+import com.myoffgridai.system.repository.SystemConfigRepository;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -36,11 +39,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * left by the preceding method.</p>
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class SystemInitializationIntegrationTest extends BaseIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private SystemConfigRepository systemConfigRepository;
+    @Autowired private com.myoffgridai.auth.repository.UserRepository userRepository;
 
     @MockBean private OllamaService ollamaService;
     @MockBean private EmbeddingService embeddingService;
@@ -51,6 +57,12 @@ class SystemInitializationIntegrationTest extends BaseIntegrationTest {
     private static final String INSTANCE_NAME = "TestGrid_" + System.nanoTime();
     private static final String OWNER_USERNAME = "owner_" + System.nanoTime();
     private static final String OWNER_PASSWORD = "pass";
+
+    @BeforeAll
+    void cleanDatabase() {
+        userRepository.deleteAll();
+        systemConfigRepository.deleteAll();
+    }
 
     @BeforeEach
     void setUp() {

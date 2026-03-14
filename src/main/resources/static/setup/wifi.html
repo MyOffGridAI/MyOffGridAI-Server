@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Setup — MyOffGrid AI</title>
+    <link rel="stylesheet" href="/setup/setup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Progress -->
+        <div class="progress-bar">
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+            <div class="progress-step"></div>
+        </div>
+
+        <h1>Connect to Your Home Network</h1>
+        <p class="description">Select your WiFi network so your AI can be reached from any device in your home.</p>
+
+        <!-- Loading state -->
+        <div id="scanning" class="loading">
+            <div class="spinner"></div>
+            <p>Scanning for networks...</p>
+        </div>
+
+        <!-- Network list -->
+        <div id="networkList" class="card hidden">
+            <ul class="network-list" id="networks"></ul>
+        </div>
+
+        <!-- Password input (shown when network selected) -->
+        <div id="passwordSection" class="hidden">
+            <div class="form-group">
+                <label for="wifiPassword">Password for <strong id="selectedSsid"></strong></label>
+                <input type="password" id="wifiPassword" placeholder="Enter WiFi password" autocomplete="off">
+            </div>
+            <div id="connectMessage" class="message"></div>
+            <button id="connectBtn" class="btn btn-primary" onclick="connectToNetwork()">Connect</button>
+        </div>
+
+        <!-- Success state -->
+        <div id="successSection" class="hidden">
+            <div class="message success visible">Connected to <strong id="connectedSsid"></strong></div>
+            <a href="/setup/account" class="btn btn-primary">Next &rarr;</a>
+        </div>
+
+        <!-- Skip link -->
+        <a href="/setup/account" class="skip-link">Skip (use ethernet instead)</a>
+    </div>
+
+    <script src="/setup/setup.js"></script>
+    <script>
+        let selectedNetwork = null;
+
+        async function scanNetworks() {
+            try {
+                const result = await api('/api/setup/wifi/scan');
+                const networks = result.data || [];
+                const list = document.getElementById('networks');
+                list.innerHTML = '';
+
+                if (networks.length === 0) {
+                    list.innerHTML = '<li class="network-item"><span class="network-ssid">No networks found</span></li>';
+                } else {
+                    networks.forEach(net => {
+                        const li = document.createElement('li');
+                        li.className = 'network-item';
+                        li.onclick = () => selectNetwork(net);
+                        li.innerHTML =
+                            '<div class="network-info">' +
+                                signalBars(net.signalStrength) +
+                                '<span class="network-ssid">' + escapeHtml(net.ssid) + '</span>' +
+                            '</div>' +
+                            '<span class="network-meta">' +
+                                (net.security !== 'Open' ? '&#128274;' : '') +
+                            '</span>';
+                        list.appendChild(li);
+                    });
+                }
+
+                document.getElementById('scanning').classList.add('hidden');
+                document.getElementById('networkList').classList.remove('hidden');
+            } catch (e) {
+                document.getElementById('scanning').innerHTML =
+                    '<p>Failed to scan networks. <a href="javascript:location.reload()">Try again</a></p>';
+            }
+        }
+
+        function selectNetwork(network) {
+            selectedNetwork = network;
+            document.getElementById('selectedSsid').textContent = network.ssid;
+
+            // Highlight selected
+            document.querySelectorAll('.network-item').forEach(el => el.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+
+            if (network.security === 'Open') {
+                connectToNetwork();
+            } else {
+                document.getElementById('passwordSection').classList.remove('hidden');
+                document.getElementById('wifiPassword').focus();
+            }
+        }
+
+        async function connectToNetwork() {
+            if (!selectedNetwork) return;
+
+            const btn = document.getElementById('connectBtn');
+            setLoading(btn, 'Connecting...');
+            hideMessage('connectMessage');
+
+            const password = document.getElementById('wifiPassword')
+                ? document.getElementById('wifiPassword').value
+                : '';
+
+            try {
+                const result = await api('/api/setup/wifi/connect', {
+                    method: 'POST',
+                    body: { ssid: selectedNetwork.ssid, password: password }
+                });
+
+                const data = result.data || {};
+                if (data.success) {
+                    document.getElementById('passwordSection').classList.add('hidden');
+                    document.getElementById('networkList').classList.add('hidden');
+                    document.getElementById('connectedSsid').textContent = selectedNetwork.ssid;
+                    document.getElementById('successSection').classList.remove('hidden');
+                } else {
+                    showMessage('connectMessage', data.message || 'Connection failed. Try again.', 'error');
+                    clearLoading(btn);
+                }
+            } catch (e) {
+                showMessage('connectMessage', 'Connection error. Please try again.', 'error');
+                clearLoading(btn);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Start scanning on page load
+        scanNetworks();
+    </script>
+</body>
+</html>
