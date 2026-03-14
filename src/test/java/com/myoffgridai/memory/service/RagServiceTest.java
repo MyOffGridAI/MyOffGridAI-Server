@@ -1,11 +1,9 @@
 package com.myoffgridai.memory.service;
 
+import com.myoffgridai.knowledge.service.SemanticSearchService;
 import com.myoffgridai.memory.dto.RagContext;
 import com.myoffgridai.memory.model.Memory;
 import com.myoffgridai.memory.model.MemoryImportance;
-import com.myoffgridai.memory.model.VectorDocument;
-import com.myoffgridai.memory.model.VectorSourceType;
-import com.myoffgridai.memory.repository.VectorDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,15 +22,14 @@ import static org.mockito.Mockito.when;
 class RagServiceTest {
 
     @Mock private MemoryService memoryService;
-    @Mock private VectorDocumentRepository vectorDocumentRepository;
-    @Mock private EmbeddingService embeddingService;
+    @Mock private SemanticSearchService semanticSearchService;
 
     private RagService ragService;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        ragService = new RagService(memoryService, vectorDocumentRepository, embeddingService);
+        ragService = new RagService(memoryService, semanticSearchService);
         userId = UUID.randomUUID();
     }
 
@@ -43,8 +40,7 @@ class RagServiceTest {
         m1.setImportance(MemoryImportance.MEDIUM);
         when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of(m1));
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1,0.2]");
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of());
 
         RagContext context = ragService.buildRagContext(userId, "how many chickens?");
@@ -58,8 +54,7 @@ class RagServiceTest {
     void buildRagContext_withNoMemories_returnsEmptyContext() {
         when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of());
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1,0.2]");
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of());
 
         RagContext context = ragService.buildRagContext(userId, "test");
@@ -72,23 +67,20 @@ class RagServiceTest {
     void buildRagContext_withKnowledgeChunks_includesKnowledge() {
         when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of());
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1,0.2]");
-
-        VectorDocument knowledgeDoc = new VectorDocument();
-        knowledgeDoc.setContent("Solar panels require 6 hours of sunlight");
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
-                .thenReturn(List.of(knowledgeDoc));
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
+                .thenReturn(List.of("[Solar Guide]: Solar panels require 6 hours of sunlight"));
 
         RagContext context = ragService.buildRagContext(userId, "solar panels");
         assertTrue(context.hasContext());
         assertEquals(1, context.knowledgeSnippets().size());
+        assertTrue(context.knowledgeSnippets().get(0).contains("Solar Guide"));
     }
 
     @Test
-    void buildRagContext_gracefullyHandlesEmbeddingFailure() {
+    void buildRagContext_gracefullyHandlesSearchFailure() {
         when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of());
-        when(embeddingService.embedAndFormat(anyString()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
                 .thenThrow(new RuntimeException("unavailable"));
 
         RagContext context = ragService.buildRagContext(userId, "test");

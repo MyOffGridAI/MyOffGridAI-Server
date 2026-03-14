@@ -1,0 +1,256 @@
+package com.myoffgridai.knowledge.service;
+
+import com.myoffgridai.common.exception.EntityNotFoundException;
+import com.myoffgridai.common.exception.UnsupportedFileTypeException;
+import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
+import com.myoffgridai.knowledge.model.DocumentStatus;
+import com.myoffgridai.knowledge.model.KnowledgeChunk;
+import com.myoffgridai.knowledge.model.KnowledgeDocument;
+import com.myoffgridai.knowledge.repository.KnowledgeChunkRepository;
+import com.myoffgridai.knowledge.repository.KnowledgeDocumentRepository;
+import com.myoffgridai.memory.model.VectorSourceType;
+import com.myoffgridai.memory.repository.VectorDocumentRepository;
+import com.myoffgridai.memory.service.EmbeddingService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.mock.web.MockMultipartFile;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class KnowledgeServiceTest {
+
+    @Mock private KnowledgeDocumentRepository documentRepository;
+    @Mock private KnowledgeChunkRepository chunkRepository;
+    @Mock private VectorDocumentRepository vectorDocumentRepository;
+    @Mock private FileStorageService fileStorageService;
+    @Mock private IngestionService ingestionService;
+    @Mock private OcrService ocrService;
+    @Mock private ChunkingService chunkingService;
+    @Mock private EmbeddingService embeddingService;
+
+    private KnowledgeService knowledgeService;
+    private UUID userId;
+
+    @BeforeEach
+    void setUp() {
+        knowledgeService = new KnowledgeService(
+                documentRepository, chunkRepository, vectorDocumentRepository,
+                fileStorageService, ingestionService, ocrService,
+                chunkingService, embeddingService);
+        userId = UUID.randomUUID();
+    }
+
+    @Test
+    void upload_validFile_createsDocumentInPendingStatus() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.txt", "text/plain", "content".getBytes());
+        when(fileStorageService.store(eq(userId), any(), eq("test.txt")))
+                .thenReturn("/path/to/file");
+        when(documentRepository.save(any(KnowledgeDocument.class)))
+                .thenAnswer(invocation -> {
+                    KnowledgeDocument doc = invocation.getArgument(0);
+                    doc.setId(UUID.randomUUID());
+                    return doc;
+                });
+
+        KnowledgeDocumentDto dto = knowledgeService.upload(userId, file);
+
+        assertThat(dto.filename()).isEqualTo("test.txt");
+        assertThat(dto.mimeType()).isEqualTo("text/plain");
+        assertThat(dto.status()).isEqualTo(DocumentStatus.PENDING);
+        verify(documentRepository).save(any(KnowledgeDocument.class));
+    }
+
+    @Test
+    void upload_unsupportedMimeType_throws() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.exe", "application/x-msdownload", "content".getBytes());
+
+        assertThatThrownBy(() -> knowledgeService.upload(userId, file))
+                .isInstanceOf(UnsupportedFileTypeException.class);
+    }
+
+    @Test
+    void upload_nullMimeType_throws() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.bin", null, "content".getBytes());
+
+        assertThatThrownBy(() -> knowledgeService.upload(userId, file))
+                .isInstanceOf(UnsupportedFileTypeException.class);
+    }
+
+    @Test
+    void listDocuments_returnsPagedResults() {
+        KnowledgeDocument doc = createTestDocument();
+        Page<KnowledgeDocument> page = new PageImpl<>(List.of(doc));
+        when(documentRepository.findByUserIdOrderByUploadedAtDesc(eq(userId), any()))
+                .thenReturn(page);
+
+        Page<KnowledgeDocumentDto> result = knowledgeService.listDocuments(userId, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).filename()).isEqualTo("test.pdf");
+    }
+
+    @Test
+    void getDocument_existing_returnsDto() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        KnowledgeDocumentDto dto = knowledgeService.getDocument(docId, userId);
+
+        assertThat(dto.id()).isEqualTo(docId);
+        assertThat(dto.filename()).isEqualTo("test.pdf");
+    }
+
+    @Test
+    void getDocument_notFound_throwsEntityNotFound() {
+        UUID docId = UUID.randomUUID();
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> knowledgeService.getDocument(docId, userId))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void updateDisplayName_updatesSuccessfully() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+        when(documentRepository.save(any(KnowledgeDocument.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        KnowledgeDocumentDto dto = knowledgeService.updateDisplayName(docId, userId, "My Guide");
+
+        assertThat(dto.displayName()).isEqualTo("My Guide");
+        verify(documentRepository).save(any());
+    }
+
+    @Test
+    void deleteDocument_deletesDocChunksVectorsFile() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        KnowledgeChunk chunk = new KnowledgeChunk();
+        chunk.setId(UUID.randomUUID());
+        when(chunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId))
+                .thenReturn(List.of(chunk));
+
+        knowledgeService.deleteDocument(docId, userId);
+
+        verify(vectorDocumentRepository).deleteBySourceIdAndSourceType(
+                chunk.getId(), VectorSourceType.KNOWLEDGE_CHUNK);
+        verify(chunkRepository).deleteByDocumentId(docId);
+        verify(fileStorageService).delete(doc.getStoragePath());
+        verify(documentRepository).delete(doc);
+    }
+
+    @Test
+    void retryProcessing_failedDocument_reQueues() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setStatus(DocumentStatus.FAILED);
+        doc.setErrorMessage("previous error");
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+        when(chunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId))
+                .thenReturn(List.of());
+        when(documentRepository.save(any(KnowledgeDocument.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        KnowledgeDocumentDto dto = knowledgeService.retryProcessing(docId, userId);
+
+        assertThat(dto.status()).isEqualTo(DocumentStatus.PENDING);
+        assertThat(dto.errorMessage()).isNull();
+    }
+
+    @Test
+    void retryProcessing_nonFailedDocument_throwsIllegalArgument() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setStatus(DocumentStatus.READY);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        assertThatThrownBy(() -> knowledgeService.retryProcessing(docId, userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only FAILED documents");
+    }
+
+    @Test
+    void getChunks_returnsOrderedChunks() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        KnowledgeChunk chunk1 = new KnowledgeChunk();
+        chunk1.setChunkIndex(0);
+        chunk1.setContent("chunk 0");
+        KnowledgeChunk chunk2 = new KnowledgeChunk();
+        chunk2.setChunkIndex(1);
+        chunk2.setContent("chunk 1");
+        when(chunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId))
+                .thenReturn(List.of(chunk1, chunk2));
+
+        List<KnowledgeChunk> chunks = knowledgeService.getChunks(docId, userId);
+
+        assertThat(chunks).hasSize(2);
+        assertThat(chunks.get(0).getChunkIndex()).isEqualTo(0);
+    }
+
+    @Test
+    void toDto_mapsAllFields() {
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(UUID.randomUUID());
+        doc.setDisplayName("My Doc");
+        doc.setChunkCount(10);
+        doc.setStatus(DocumentStatus.READY);
+
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
+
+        assertThat(dto.id()).isEqualTo(doc.getId());
+        assertThat(dto.filename()).isEqualTo(doc.getFilename());
+        assertThat(dto.displayName()).isEqualTo("My Doc");
+        assertThat(dto.mimeType()).isEqualTo(doc.getMimeType());
+        assertThat(dto.fileSizeBytes()).isEqualTo(doc.getFileSizeBytes());
+        assertThat(dto.status()).isEqualTo(DocumentStatus.READY);
+        assertThat(dto.chunkCount()).isEqualTo(10);
+    }
+
+    private KnowledgeDocument createTestDocument() {
+        KnowledgeDocument doc = new KnowledgeDocument();
+        doc.setUserId(userId);
+        doc.setFilename("test.pdf");
+        doc.setMimeType("application/pdf");
+        doc.setStoragePath("/path/to/test.pdf");
+        doc.setFileSizeBytes(1024);
+        doc.setStatus(DocumentStatus.PENDING);
+        return doc;
+    }
+}

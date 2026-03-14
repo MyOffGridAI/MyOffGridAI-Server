@@ -174,6 +174,45 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles file storage failures.
+     *
+     * @param ex the exception
+     * @return 500 Internal Server Error
+     */
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ApiResponse<Object>> handleStorageException(StorageException ex) {
+        log.error("Storage error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Handles unsupported file type uploads.
+     *
+     * @param ex the exception
+     * @return 400 Bad Request
+     */
+    @ExceptionHandler(UnsupportedFileTypeException.class)
+    public ResponseEntity<ApiResponse<Object>> handleUnsupportedFileType(UnsupportedFileTypeException ex) {
+        log.warn("Unsupported file type: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Handles OCR processing failures.
+     *
+     * @param ex the exception
+     * @return 500 Internal Server Error
+     */
+    @ExceptionHandler(OcrException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOcrException(OcrException ex) {
+        log.error("OCR error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Catch-all handler for unexpected exceptions. Logs the full stack trace
      * but returns only a generic message to the client.
      *

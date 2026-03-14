@@ -223,4 +223,39 @@ public final class AppConstants {
 
     /** Base path for memory management endpoints */
     public static final String MEMORY_API_PATH = "/api/memory";
+
+    // ── Knowledge Vault ──────────────────────────────────────────────────
+
+    /** Base path on local filesystem for uploaded knowledge documents */
+    public static final String KNOWLEDGE_STORAGE_BASE_PATH = "/var/myoffgridai/knowledge";
+
+    /** Maximum upload file size in bytes (100 MB) */
+    public static final long MAX_UPLOAD_SIZE_BYTES = 104_857_600L;
+
+    /** Target chunk size in characters for document splitting */
+    public static final int CHUNK_SIZE_CHARS = 1500;
+
+    /** Overlap in characters between consecutive chunks */
+    public static final int CHUNK_OVERLAP_CHARS = 150;
+
+    /** Maximum number of chunks per document */
+    public static final int MAX_CHUNKS_PER_DOCUMENT = 500;
+
+    /** Minimum chunk size in characters — smaller chunks are skipped */
+    public static final int MIN_CHUNK_SIZE_CHARS = 50;
+
+    /** Base path for knowledge management endpoints */
+    public static final String KNOWLEDGE_API_PATH = "/api/knowledge";
+
+    /** Supported MIME types for knowledge document upload */
+    public static final java.util.List<String> SUPPORTED_MIME_TYPES = java.util.List.of(
+            "application/pdf",
+            "text/plain",
+            "text/markdown",
+            "text/x-markdown",
+            "image/png",
+            "image/jpeg",
+            "image/tiff",
+            "image/webp"
+    );
 }

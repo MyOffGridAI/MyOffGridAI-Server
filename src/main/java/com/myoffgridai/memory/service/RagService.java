@@ -2,11 +2,9 @@ package com.myoffgridai.memory.service;
 
 import com.myoffgridai.common.util.TokenCounter;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.knowledge.service.SemanticSearchService;
 import com.myoffgridai.memory.dto.RagContext;
 import com.myoffgridai.memory.model.Memory;
-import com.myoffgridai.memory.model.VectorDocument;
-import com.myoffgridai.memory.model.VectorSourceType;
-import com.myoffgridai.memory.repository.VectorDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -29,22 +27,18 @@ public class RagService {
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
     private final MemoryService memoryService;
-    private final VectorDocumentRepository vectorDocumentRepository;
-    private final EmbeddingService embeddingService;
+    private final SemanticSearchService semanticSearchService;
 
     /**
      * Constructs the RAG service.
      *
-     * @param memoryService            the memory service for retrieving relevant memories
-     * @param vectorDocumentRepository the vector document repository for knowledge chunks
-     * @param embeddingService         the embedding service for query embedding
+     * @param memoryService         the memory service for retrieving relevant memories
+     * @param semanticSearchService the semantic search service for knowledge retrieval
      */
     public RagService(MemoryService memoryService,
-                       VectorDocumentRepository vectorDocumentRepository,
-                       EmbeddingService embeddingService) {
+                       SemanticSearchService semanticSearchService) {
         this.memoryService = memoryService;
-        this.vectorDocumentRepository = vectorDocumentRepository;
-        this.embeddingService = embeddingService;
+        this.semanticSearchService = semanticSearchService;
     }
 
     /**
@@ -70,16 +64,11 @@ public class RagService {
             log.warn("Failed to retrieve memories for RAG context: {}", e.getMessage());
         }
 
-        // Retrieve relevant knowledge chunks (Phase 4 will populate these)
+        // Retrieve relevant knowledge chunks with source attribution
         List<String> knowledgeSnippets = new ArrayList<>();
         try {
-            String formattedEmbedding = embeddingService.embedAndFormat(queryText);
-            List<VectorDocument> knowledgeDocs = vectorDocumentRepository.findMostSimilar(
-                    userId, VectorSourceType.KNOWLEDGE_CHUNK.name(),
-                    formattedEmbedding, AppConstants.RAG_TOP_K);
-            for (VectorDocument doc : knowledgeDocs) {
-                knowledgeSnippets.add(doc.getContent());
-            }
+            knowledgeSnippets = semanticSearchService.searchForRagContext(
+                    userId, queryText, AppConstants.RAG_TOP_K);
         } catch (Exception e) {
             log.debug("No knowledge chunks available for RAG context: {}", e.getMessage());
         }
