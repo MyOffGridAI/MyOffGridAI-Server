@@ -147,7 +147,7 @@ public class SystemController {
      * @return the AI settings
      */
     @GetMapping("/ai-settings")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MEMBER')")
     public ResponseEntity<ApiResponse<AiSettingsDto>> getAiSettings() {
         AiSettingsDto settings = systemConfigService.getAiSettings();
         return ResponseEntity.ok(ApiResponse.success(settings));
@@ -160,7 +160,7 @@ public class SystemController {
      * @return the updated AI settings
      */
     @PutMapping("/ai-settings")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MEMBER')")
     public ResponseEntity<ApiResponse<AiSettingsDto>> updateAiSettings(@RequestBody AiSettingsDto dto) {
         try {
             AiSettingsDto updated = systemConfigService.updateAiSettings(dto);

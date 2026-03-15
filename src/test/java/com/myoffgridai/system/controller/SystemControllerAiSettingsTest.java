@@ -78,9 +78,13 @@ class SystemControllerAiSettingsTest {
 
     @Test
     @WithMockUser(roles = "MEMBER")
-    void getAiSettings_memberRole_returns403() throws Exception {
+    void getAiSettings_memberRole_returns200() throws Exception {
+        AiSettingsDto settings = new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048);
+        when(systemConfigService.getAiSettings()).thenReturn(settings);
+
         mockMvc.perform(get("/api/system/ai-settings"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.modelName").value("test-model"));
     }
 
     @Test

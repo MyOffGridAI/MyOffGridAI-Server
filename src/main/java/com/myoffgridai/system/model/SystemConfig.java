@@ -96,18 +96,18 @@ public class SystemConfig {
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
-    public String getAiModel() { return aiModel; }
+    public String getAiModel() { return aiModel != null ? aiModel : "hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M"; }
     public void setAiModel(String aiModel) { this.aiModel = aiModel; }
 
-    public Double getAiTemperature() { return aiTemperature; }
+    public Double getAiTemperature() { return aiTemperature != null ? aiTemperature : 0.7; }
     public void setAiTemperature(Double aiTemperature) { this.aiTemperature = aiTemperature; }
 
-    public Double getAiSimilarityThreshold() { return aiSimilarityThreshold; }
+    public Double getAiSimilarityThreshold() { return aiSimilarityThreshold != null ? aiSimilarityThreshold : 0.45; }
     public void setAiSimilarityThreshold(Double aiSimilarityThreshold) { this.aiSimilarityThreshold = aiSimilarityThreshold; }
 
-    public Integer getAiMemoryTopK() { return aiMemoryTopK; }
+    public Integer getAiMemoryTopK() { return aiMemoryTopK != null ? aiMemoryTopK : 5; }
     public void setAiMemoryTopK(Integer aiMemoryTopK) { this.aiMemoryTopK = aiMemoryTopK; }
 
-    public Integer getAiRagMaxContextTokens() { return aiRagMaxContextTokens; }
+    public Integer getAiRagMaxContextTokens() { return aiRagMaxContextTokens != null ? aiRagMaxContextTokens : 2048; }
     public void setAiRagMaxContextTokens(Integer aiRagMaxContextTokens) { this.aiRagMaxContextTokens = aiRagMaxContextTokens; }
 }
