@@ -8,6 +8,8 @@ import com.myoffgridai.proactive.dto.PatternSummary;
 import com.myoffgridai.proactive.model.Insight;
 import com.myoffgridai.proactive.model.InsightCategory;
 import com.myoffgridai.proactive.repository.InsightRepository;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,7 @@ class InsightGeneratorServiceTest {
     @Mock private OllamaService ollamaService;
     @Mock private InsightRepository insightRepository;
     @Mock private NotificationService notificationService;
+    @Mock private SystemConfigService systemConfigService;
 
     private InsightGeneratorService service;
     private UUID userId;
@@ -38,8 +41,11 @@ class InsightGeneratorServiceTest {
         ObjectMapper objectMapper = new ObjectMapper();
         service = new InsightGeneratorService(
                 patternAnalysisService, ollamaService, insightRepository,
-                notificationService, objectMapper);
+                notificationService, objectMapper, systemConfigService);
         userId = UUID.randomUUID();
+
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

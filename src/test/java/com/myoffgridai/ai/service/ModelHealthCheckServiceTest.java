@@ -1,6 +1,9 @@
 package com.myoffgridai.ai.service;
 
 import com.myoffgridai.ai.dto.OllamaModelInfo;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,8 +22,17 @@ class ModelHealthCheckServiceTest {
     @Mock
     private OllamaService ollamaService;
 
+    @Mock
+    private SystemConfigService systemConfigService;
+
     @InjectMocks
     private ModelHealthCheckService healthCheckService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", 0.7, 0.45, 5, 2048));
+    }
 
     @Test
     void checkOllamaOnStartup_ollamaUnavailable_doesNotThrow() {

@@ -10,6 +10,7 @@ import com.myoffgridai.ai.repository.MessageRepository;
 import com.myoffgridai.ai.service.OllamaService;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.model.Memory;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.memory.model.MemoryImportance;
 import com.myoffgridai.memory.repository.MemoryRepository;
 import org.slf4j.Logger;
@@ -41,6 +42,7 @@ public class SummarizationService {
     private final OllamaService ollamaService;
     private final MemoryService memoryService;
     private final MemoryRepository memoryRepository;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the summarization service.
@@ -50,17 +52,20 @@ public class SummarizationService {
      * @param ollamaService          the Ollama integration service
      * @param memoryService          the memory persistence service
      * @param memoryRepository       the memory data access layer
+     * @param systemConfigService    the system config service for dynamic AI settings
      */
     public SummarizationService(ConversationRepository conversationRepository,
                                  MessageRepository messageRepository,
                                  OllamaService ollamaService,
                                  MemoryService memoryService,
-                                 MemoryRepository memoryRepository) {
+                                 MemoryRepository memoryRepository,
+                                 SystemConfigService systemConfigService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.ollamaService = ollamaService;
         this.memoryService = memoryService;
         this.memoryRepository = memoryRepository;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -83,7 +88,7 @@ public class SummarizationService {
                 + "focusing on facts about the user and their homestead.\n\n" + conversationText;
 
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 List.of(new OllamaMessage("user", prompt)),
                 false,
                 Map.of());

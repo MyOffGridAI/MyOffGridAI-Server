@@ -46,12 +46,13 @@ class SystemControllerAiSettingsTest {
     @Test
     @WithMockUser(roles = "OWNER")
     void getAiSettings_returns200() throws Exception {
-        AiSettingsDto settings = new AiSettingsDto(0.7, 0.45, 5, 2048);
+        AiSettingsDto settings = new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048);
         when(systemConfigService.getAiSettings()).thenReturn(settings);
 
         mockMvc.perform(get("/api/system/ai-settings"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.modelName").value("test-model"))
                 .andExpect(jsonPath("$.data.temperature").value(0.7))
                 .andExpect(jsonPath("$.data.similarityThreshold").value(0.45))
                 .andExpect(jsonPath("$.data.memoryTopK").value(5))
@@ -61,7 +62,7 @@ class SystemControllerAiSettingsTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void getAiSettings_adminRole_returns200() throws Exception {
-        AiSettingsDto settings = new AiSettingsDto(1.0, 0.5, 10, 4096);
+        AiSettingsDto settings = new AiSettingsDto("test-model", 1.0, 0.5, 10, 4096);
         when(systemConfigService.getAiSettings()).thenReturn(settings);
 
         mockMvc.perform(get("/api/system/ai-settings"))
@@ -85,10 +86,10 @@ class SystemControllerAiSettingsTest {
     @Test
     @WithMockUser(roles = "OWNER")
     void updateAiSettings_returns200() throws Exception {
-        AiSettingsDto updated = new AiSettingsDto(1.2, 0.6, 8, 4096);
+        AiSettingsDto updated = new AiSettingsDto("test-model", 1.2, 0.6, 8, 4096);
         when(systemConfigService.updateAiSettings(any(AiSettingsDto.class))).thenReturn(updated);
 
-        AiSettingsDto request = new AiSettingsDto(1.2, 0.6, 8, 4096);
+        AiSettingsDto request = new AiSettingsDto("test-model", 1.2, 0.6, 8, 4096);
 
         mockMvc.perform(put("/api/system/ai-settings")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -108,7 +109,7 @@ class SystemControllerAiSettingsTest {
         when(systemConfigService.updateAiSettings(any(AiSettingsDto.class)))
                 .thenThrow(new IllegalArgumentException("Temperature must be between 0.0 and 2.0"));
 
-        AiSettingsDto request = new AiSettingsDto(3.0, null, null, null);
+        AiSettingsDto request = new AiSettingsDto(null, 3.0, null, null, null);
 
         mockMvc.perform(put("/api/system/ai-settings")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -120,7 +121,7 @@ class SystemControllerAiSettingsTest {
 
     @Test
     void updateAiSettings_noAuth_returns401() throws Exception {
-        AiSettingsDto request = new AiSettingsDto(1.0, 0.5, 5, 2048);
+        AiSettingsDto request = new AiSettingsDto("test-model", 1.0, 0.5, 5, 2048);
 
         mockMvc.perform(put("/api/system/ai-settings")
                         .contentType(MediaType.APPLICATION_JSON)

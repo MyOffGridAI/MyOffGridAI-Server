@@ -204,10 +204,10 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama synchronously with dynamic temperature
-        double temperature = systemConfigService.getAiSettings().temperature();
+        // Call Ollama synchronously with dynamic model and temperature
+        AiSettingsDto aiSettings = systemConfigService.getAiSettings();
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL, messages, false, Map.of("temperature", temperature));
+                aiSettings.modelName(), messages, false, Map.of("temperature", aiSettings.temperature()));
         OllamaChatResponse response = ollamaService.chat(request);
 
         // Persist assistant message
@@ -271,10 +271,10 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama streaming with dynamic temperature
-        double streamTemperature = systemConfigService.getAiSettings().temperature();
+        // Call Ollama streaming with dynamic model and temperature
+        AiSettingsDto streamSettings = systemConfigService.getAiSettings();
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL, messages, true, Map.of("temperature", streamTemperature));
+                streamSettings.modelName(), messages, true, Map.of("temperature", streamSettings.temperature()));
 
         final boolean hasRag = ragContext != null && ragContext.hasContext();
 
@@ -358,7 +358,7 @@ public class ChatService {
                     + firstUserMessage + ". Return only the title, no punctuation.";
 
             OllamaChatRequest request = new OllamaChatRequest(
-                    AppConstants.OLLAMA_MODEL,
+                    systemConfigService.getAiSettings().modelName(),
                     List.of(new OllamaMessage("user", prompt)),
                     false,
                     Map.of("num_predict", AppConstants.TITLE_GENERATION_MAX_TOKENS)

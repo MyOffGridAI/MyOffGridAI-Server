@@ -8,6 +8,8 @@ import com.myoffgridai.skills.model.ExecutionStatus;
 import com.myoffgridai.skills.model.Skill;
 import com.myoffgridai.skills.model.SkillExecution;
 import com.myoffgridai.skills.service.SkillExecutorService;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +28,7 @@ class AgentServiceTest {
 
     @Mock private OllamaService ollamaService;
     @Mock private SkillExecutorService skillExecutorService;
+    @Mock private SystemConfigService systemConfigService;
 
     private AgentService agentService;
     private UUID userId;
@@ -33,9 +36,13 @@ class AgentServiceTest {
 
     @BeforeEach
     void setUp() {
-        agentService = new AgentService(ollamaService, skillExecutorService, new ObjectMapper());
+        agentService = new AgentService(ollamaService, skillExecutorService,
+                new ObjectMapper(), systemConfigService);
         userId = UUID.randomUUID();
         conversationId = UUID.randomUUID();
+
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

@@ -9,6 +9,8 @@ import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.skills.model.PlannedTask;
 import com.myoffgridai.skills.model.TaskStatus;
 import com.myoffgridai.skills.repository.PlannedTaskRepository;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,14 +34,19 @@ class TaskPlannerSkillTest {
 
     @Mock private PlannedTaskRepository plannedTaskRepository;
     @Mock private OllamaService ollamaService;
+    @Mock private SystemConfigService systemConfigService;
 
     private TaskPlannerSkill skill;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        skill = new TaskPlannerSkill(plannedTaskRepository, ollamaService, new ObjectMapper());
+        skill = new TaskPlannerSkill(plannedTaskRepository, ollamaService,
+                new ObjectMapper(), systemConfigService);
         userId = UUID.randomUUID();
+
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

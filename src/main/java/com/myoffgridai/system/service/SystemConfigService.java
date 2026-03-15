@@ -108,6 +108,7 @@ public class SystemConfigService {
     public AiSettingsDto getAiSettings() {
         SystemConfig config = getConfig();
         return new AiSettingsDto(
+                config.getAiModel(),
                 config.getAiTemperature(),
                 config.getAiSimilarityThreshold(),
                 config.getAiMemoryTopK(),
@@ -137,6 +138,9 @@ public class SystemConfigService {
         }
 
         SystemConfig config = getConfig();
+        if (dto.modelName() != null && !dto.modelName().isBlank()) {
+            config.setAiModel(dto.modelName());
+        }
         if (dto.temperature() != null) {
             config.setAiTemperature(dto.temperature());
         }
@@ -151,11 +155,12 @@ public class SystemConfigService {
         }
 
         SystemConfig saved = systemConfigRepository.save(config);
-        log.info("AI settings updated: temperature={}, similarityThreshold={}, memoryTopK={}, ragMaxContextTokens={}",
-                saved.getAiTemperature(), saved.getAiSimilarityThreshold(),
+        log.info("AI settings updated: model={}, temperature={}, similarityThreshold={}, memoryTopK={}, ragMaxContextTokens={}",
+                saved.getAiModel(), saved.getAiTemperature(), saved.getAiSimilarityThreshold(),
                 saved.getAiMemoryTopK(), saved.getAiRagMaxContextTokens());
 
         return new AiSettingsDto(
+                saved.getAiModel(),
                 saved.getAiTemperature(),
                 saved.getAiSimilarityThreshold(),
                 saved.getAiMemoryTopK(),

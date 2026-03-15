@@ -11,6 +11,7 @@ import com.myoffgridai.skills.model.InventoryCategory;
 import com.myoffgridai.skills.model.InventoryItem;
 import com.myoffgridai.skills.repository.InventoryItemRepository;
 import com.myoffgridai.skills.service.BuiltInSkill;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,7 @@ public class RecipeGeneratorSkill implements BuiltInSkill {
     private final InventoryItemRepository inventoryItemRepository;
     private final OllamaService ollamaService;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the recipe generator skill.
@@ -37,13 +39,16 @@ public class RecipeGeneratorSkill implements BuiltInSkill {
      * @param inventoryItemRepository the inventory item repository
      * @param ollamaService           the Ollama service for inference
      * @param objectMapper            the JSON object mapper
+     * @param systemConfigService     the system config service for dynamic AI settings
      */
     public RecipeGeneratorSkill(InventoryItemRepository inventoryItemRepository,
                                  OllamaService ollamaService,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 SystemConfigService systemConfigService) {
         this.inventoryItemRepository = inventoryItemRepository;
         this.ollamaService = ollamaService;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -92,7 +97,7 @@ public class RecipeGeneratorSkill implements BuiltInSkill {
                 );
 
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 List.of(new OllamaMessage("user", prompt)),
                 false, Map.of());
 

@@ -12,6 +12,7 @@ import com.myoffgridai.knowledge.model.DocumentStatus;
 import com.myoffgridai.knowledge.model.KnowledgeChunk;
 import com.myoffgridai.knowledge.service.KnowledgeService;
 import com.myoffgridai.skills.service.BuiltInSkill;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -33,20 +34,24 @@ public class DocumentSummarizerSkill implements BuiltInSkill {
     private final KnowledgeService knowledgeService;
     private final OllamaService ollamaService;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the document summarizer skill.
      *
-     * @param knowledgeService the knowledge service
-     * @param ollamaService    the Ollama service for inference
-     * @param objectMapper     the JSON object mapper
+     * @param knowledgeService    the knowledge service
+     * @param ollamaService       the Ollama service for inference
+     * @param objectMapper        the JSON object mapper
+     * @param systemConfigService the system config service for dynamic AI settings
      */
     public DocumentSummarizerSkill(KnowledgeService knowledgeService,
                                     OllamaService ollamaService,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    SystemConfigService systemConfigService) {
         this.knowledgeService = knowledgeService;
         this.ollamaService = ollamaService;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -101,7 +106,7 @@ public class DocumentSummarizerSkill implements BuiltInSkill {
                 .formatted(filename, chunkContent);
 
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 List.of(new OllamaMessage("user", prompt)),
                 false, Map.of());
 

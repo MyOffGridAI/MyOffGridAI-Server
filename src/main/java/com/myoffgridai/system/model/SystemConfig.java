@@ -38,6 +38,9 @@ public class SystemConfig {
     @Column(name = "wifi_configured", nullable = false)
     private boolean wifiConfigured = false;
 
+    @Column(name = "ai_model")
+    private String aiModel = "hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M";
+
     @Column(name = "ai_temperature")
     private Double aiTemperature = 0.7;
 
@@ -92,6 +95,9 @@ public class SystemConfig {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getAiModel() { return aiModel; }
+    public void setAiModel(String aiModel) { this.aiModel = aiModel; }
 
     public Double getAiTemperature() { return aiTemperature; }
     public void setAiTemperature(Double aiTemperature) { this.aiTemperature = aiTemperature; }

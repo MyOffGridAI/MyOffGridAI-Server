@@ -8,6 +8,8 @@ import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
 import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.TestSecurityConfig;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,11 +40,15 @@ class ModelControllerTest {
     @MockBean private AuthService authService;
     @MockBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
+    @MockitoBean private SystemConfigService systemConfigService;
 
     private User testUser;
 
     @BeforeEach
     void setUp() {
+        when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", 0.7, 0.45, 5, 2048));
+
         testUser = new User();
         testUser.setId(UUID.randomUUID());
         testUser.setUsername("testuser");

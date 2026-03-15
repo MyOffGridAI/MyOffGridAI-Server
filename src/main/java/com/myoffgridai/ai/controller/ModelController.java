@@ -6,6 +6,7 @@ import com.myoffgridai.ai.dto.OllamaModelInfo;
 import com.myoffgridai.ai.service.OllamaService;
 import com.myoffgridai.common.response.ApiResponse;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -28,14 +29,18 @@ public class ModelController {
     private static final Logger log = LoggerFactory.getLogger(ModelController.class);
 
     private final OllamaService ollamaService;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the model controller.
      *
-     * @param ollamaService the Ollama integration service
+     * @param ollamaService       the Ollama integration service
+     * @param systemConfigService the system config service for dynamic AI settings
      */
-    public ModelController(OllamaService ollamaService) {
+    public ModelController(OllamaService ollamaService,
+                           SystemConfigService systemConfigService) {
         this.ollamaService = ollamaService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -59,7 +64,7 @@ public class ModelController {
     public ResponseEntity<ApiResponse<ActiveModelDto>> getActiveModel() {
         log.debug("Getting active model configuration");
         ActiveModelDto dto = new ActiveModelDto(
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 AppConstants.OLLAMA_EMBED_MODEL);
         return ResponseEntity.ok(ApiResponse.success(dto));
     }
@@ -78,7 +83,7 @@ public class ModelController {
 
         OllamaHealthDto dto = new OllamaHealthDto(
                 available,
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 AppConstants.OLLAMA_EMBED_MODEL,
                 responseTime);
 

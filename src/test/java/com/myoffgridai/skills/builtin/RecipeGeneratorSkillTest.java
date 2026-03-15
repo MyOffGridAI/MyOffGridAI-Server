@@ -8,6 +8,8 @@ import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.skills.model.InventoryCategory;
 import com.myoffgridai.skills.model.InventoryItem;
 import com.myoffgridai.skills.repository.InventoryItemRepository;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,21 +22,26 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RecipeGeneratorSkillTest {
 
     @Mock private InventoryItemRepository inventoryItemRepository;
     @Mock private OllamaService ollamaService;
+    @Mock private SystemConfigService systemConfigService;
 
     private RecipeGeneratorSkill skill;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        skill = new RecipeGeneratorSkill(inventoryItemRepository, ollamaService, new ObjectMapper());
+        skill = new RecipeGeneratorSkill(inventoryItemRepository, ollamaService,
+                new ObjectMapper(), systemConfigService);
         userId = UUID.randomUUID();
+
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

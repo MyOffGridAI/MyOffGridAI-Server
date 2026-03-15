@@ -187,6 +187,7 @@ class SystemConfigServiceTest {
 
         var result = systemConfigService.getAiSettings();
 
+        assertEquals("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", result.modelName());
         assertEquals(0.7, result.temperature());
         assertEquals(0.45, result.similarityThreshold());
         assertEquals(5, result.memoryTopK());
@@ -205,7 +206,7 @@ class SystemConfigServiceTest {
         savedConfig.setAiRagMaxContextTokens(4096);
         when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(savedConfig);
 
-        var dto = new com.myoffgridai.system.dto.AiSettingsDto(1.0, 0.6, 10, 4096);
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, 1.0, 0.6, 10, 4096);
         var result = systemConfigService.updateAiSettings(dto);
 
         assertEquals(1.0, result.temperature());
@@ -216,28 +217,28 @@ class SystemConfigServiceTest {
 
     @Test
     void updateAiSettings_temperatureOutOfRange_throws() {
-        var dto = new com.myoffgridai.system.dto.AiSettingsDto(2.5, null, null, null);
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, 2.5, null, null, null);
         assertThrows(IllegalArgumentException.class,
                 () -> systemConfigService.updateAiSettings(dto));
     }
 
     @Test
     void updateAiSettings_similarityThresholdOutOfRange_throws() {
-        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, 1.5, null, null);
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, 1.5, null, null);
         assertThrows(IllegalArgumentException.class,
                 () -> systemConfigService.updateAiSettings(dto));
     }
 
     @Test
     void updateAiSettings_memoryTopKOutOfRange_throws() {
-        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, 0, null);
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, null, 0, null);
         assertThrows(IllegalArgumentException.class,
                 () -> systemConfigService.updateAiSettings(dto));
     }
 
     @Test
     void updateAiSettings_ragMaxContextTokensOutOfRange_throws() {
-        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, null, 100);
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, null, null, 100);
         assertThrows(IllegalArgumentException.class,
                 () -> systemConfigService.updateAiSettings(dto));
     }

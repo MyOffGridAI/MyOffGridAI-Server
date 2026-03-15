@@ -12,6 +12,8 @@ import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.model.Memory;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.memory.model.MemoryImportance;
 import com.myoffgridai.memory.repository.MemoryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +42,7 @@ class SummarizationServiceTest {
     @Mock private OllamaService ollamaService;
     @Mock private MemoryService memoryService;
     @Mock private MemoryRepository memoryRepository;
+    @Mock private SystemConfigService systemConfigService;
 
     private SummarizationService summarizationService;
     private UUID userId;
@@ -49,9 +52,12 @@ class SummarizationServiceTest {
     void setUp() {
         summarizationService = new SummarizationService(
                 conversationRepository, messageRepository, ollamaService,
-                memoryService, memoryRepository);
+                memoryService, memoryRepository, systemConfigService);
         userId = UUID.randomUUID();
         conversationId = UUID.randomUUID();
+
+        when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

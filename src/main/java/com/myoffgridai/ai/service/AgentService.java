@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myoffgridai.ai.dto.*;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.skills.model.SkillExecution;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.skills.service.SkillExecutorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class AgentService {
     private final OllamaService ollamaService;
     private final SkillExecutorService skillExecutorService;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the agent service.
@@ -43,13 +45,16 @@ public class AgentService {
      * @param ollamaService        the Ollama integration service
      * @param skillExecutorService the skill executor for tool-call dispatch
      * @param objectMapper         the JSON object mapper
+     * @param systemConfigService  the system config service for dynamic AI settings
      */
     public AgentService(OllamaService ollamaService,
                         SkillExecutorService skillExecutorService,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        SystemConfigService systemConfigService) {
         this.ollamaService = ollamaService;
         this.skillExecutorService = skillExecutorService;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -86,7 +91,7 @@ public class AgentService {
             step++;
 
             OllamaChatRequest request = new OllamaChatRequest(
-                    AppConstants.OLLAMA_MODEL, List.copyOf(messages), false, Map.of());
+                    systemConfigService.getAiSettings().modelName(), List.copyOf(messages), false, Map.of());
 
             OllamaChatResponse response = ollamaService.chat(request);
             lastResponse = response.message().content();

@@ -5,6 +5,8 @@ import com.myoffgridai.ai.dto.OllamaChatResponse;
 import com.myoffgridai.ai.dto.OllamaMessage;
 import com.myoffgridai.ai.service.OllamaService;
 import com.myoffgridai.memory.model.MemoryImportance;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +24,7 @@ class MemoryExtractionServiceTest {
 
     @Mock private OllamaService ollamaService;
     @Mock private MemoryService memoryService;
+    @Mock private SystemConfigService systemConfigService;
 
     private MemoryExtractionService extractionService;
     private UUID userId;
@@ -30,9 +33,12 @@ class MemoryExtractionServiceTest {
     @BeforeEach
     void setUp() {
         extractionService = new MemoryExtractionService(
-                ollamaService, memoryService, new ObjectMapper());
+                ollamaService, memoryService, new ObjectMapper(), systemConfigService);
         userId = UUID.randomUUID();
         conversationId = UUID.randomUUID();
+
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

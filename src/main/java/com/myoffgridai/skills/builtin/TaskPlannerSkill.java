@@ -12,6 +12,7 @@ import com.myoffgridai.skills.model.PlannedTask;
 import com.myoffgridai.skills.model.TaskStatus;
 import com.myoffgridai.skills.repository.PlannedTaskRepository;
 import com.myoffgridai.skills.service.BuiltInSkill;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +32,7 @@ public class TaskPlannerSkill implements BuiltInSkill {
     private final PlannedTaskRepository plannedTaskRepository;
     private final OllamaService ollamaService;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the task planner skill.
@@ -38,13 +40,16 @@ public class TaskPlannerSkill implements BuiltInSkill {
      * @param plannedTaskRepository the planned task repository
      * @param ollamaService         the Ollama service for inference
      * @param objectMapper          the JSON object mapper
+     * @param systemConfigService   the system config service for dynamic AI settings
      */
     public TaskPlannerSkill(PlannedTaskRepository plannedTaskRepository,
                              OllamaService ollamaService,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper,
+                             SystemConfigService systemConfigService) {
         this.plannedTaskRepository = plannedTaskRepository;
         this.ollamaService = ollamaService;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -87,7 +92,7 @@ public class TaskPlannerSkill implements BuiltInSkill {
                 .formatted(goal);
 
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 List.of(new OllamaMessage("user", prompt)),
                 false, Map.of());
 

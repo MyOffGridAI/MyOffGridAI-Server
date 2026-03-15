@@ -8,6 +8,7 @@ import com.myoffgridai.ai.dto.OllamaMessage;
 import com.myoffgridai.ai.service.OllamaService;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.proactive.dto.PatternSummary;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.proactive.model.Insight;
 import com.myoffgridai.proactive.model.InsightCategory;
 import com.myoffgridai.proactive.model.NotificationType;
@@ -36,6 +37,7 @@ public class InsightGeneratorService {
     private final InsightRepository insightRepository;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the insight generator service.
@@ -45,17 +47,20 @@ public class InsightGeneratorService {
      * @param insightRepository      the insight repository
      * @param notificationService    the notification service
      * @param objectMapper           the JSON object mapper
+     * @param systemConfigService    the system config service for dynamic AI settings
      */
     public InsightGeneratorService(PatternAnalysisService patternAnalysisService,
                                    OllamaService ollamaService,
                                    InsightRepository insightRepository,
                                    NotificationService notificationService,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   SystemConfigService systemConfigService) {
         this.patternAnalysisService = patternAnalysisService;
         this.ollamaService = ollamaService;
         this.insightRepository = insightRepository;
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -84,7 +89,7 @@ public class InsightGeneratorService {
 
         String prompt = buildPrompt(summary);
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL,
+                systemConfigService.getAiSettings().modelName(),
                 List.of(new OllamaMessage("user", prompt)),
                 false,
                 null

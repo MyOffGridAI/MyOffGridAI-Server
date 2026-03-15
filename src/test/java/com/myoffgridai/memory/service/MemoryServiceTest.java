@@ -45,7 +45,7 @@ class MemoryServiceTest {
 
         // Default AI settings for similarity threshold
         when(systemConfigService.getAiSettings())
-                .thenReturn(new AiSettingsDto(0.7, 0.45, 5, 2048));
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

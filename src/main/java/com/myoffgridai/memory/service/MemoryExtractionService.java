@@ -8,6 +8,7 @@ import com.myoffgridai.ai.dto.OllamaMessage;
 import com.myoffgridai.ai.service.OllamaService;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.model.MemoryImportance;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -32,20 +33,24 @@ public class MemoryExtractionService {
     private final OllamaService ollamaService;
     private final MemoryService memoryService;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the memory extraction service.
      *
-     * @param ollamaService the Ollama integration service
-     * @param memoryService the memory persistence service
-     * @param objectMapper  the JSON object mapper
+     * @param ollamaService       the Ollama integration service
+     * @param memoryService       the memory persistence service
+     * @param objectMapper        the JSON object mapper
+     * @param systemConfigService the system config service for dynamic AI settings
      */
     public MemoryExtractionService(OllamaService ollamaService,
                                     MemoryService memoryService,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    SystemConfigService systemConfigService) {
         this.ollamaService = ollamaService;
         this.memoryService = memoryService;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -82,7 +87,7 @@ public class MemoryExtractionService {
                     AppConstants.MEMORY_EXTRACTION_MAX_FACTS, userMessage, assistantResponse);
 
             OllamaChatRequest request = new OllamaChatRequest(
-                    AppConstants.OLLAMA_MODEL,
+                    systemConfigService.getAiSettings().modelName(),
                     List.of(new OllamaMessage("user", prompt)),
                     false,
                     Map.of());

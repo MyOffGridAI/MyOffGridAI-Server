@@ -2,6 +2,7 @@ package com.myoffgridai.ai.service;
 
 import com.myoffgridai.ai.dto.OllamaModelInfo;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -22,14 +23,18 @@ public class ModelHealthCheckService {
     private static final Logger log = LoggerFactory.getLogger(ModelHealthCheckService.class);
 
     private final OllamaService ollamaService;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the health check service.
      *
-     * @param ollamaService the Ollama integration service
+     * @param ollamaService       the Ollama integration service
+     * @param systemConfigService the system config service for dynamic AI settings
      */
-    public ModelHealthCheckService(OllamaService ollamaService) {
+    public ModelHealthCheckService(OllamaService ollamaService,
+                                    SystemConfigService systemConfigService) {
         this.ollamaService = ollamaService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -57,13 +62,14 @@ public class ModelHealthCheckService {
                     .map(OllamaModelInfo::name)
                     .toList());
 
+            String configuredModel = systemConfigService.getAiSettings().modelName();
             boolean configuredModelFound = models.stream()
-                    .anyMatch(m -> m.name().equals(AppConstants.OLLAMA_MODEL));
+                    .anyMatch(m -> m.name().equals(configuredModel));
 
             if (!configuredModelFound) {
                 log.warn("Configured model '{}' not found in available models. "
                         + "Run 'ollama pull {}' to download it.",
-                        AppConstants.OLLAMA_MODEL, AppConstants.OLLAMA_MODEL);
+                        configuredModel, configuredModel);
             }
         } catch (Exception e) {
             log.warn("Failed to list Ollama models: {}", e.getMessage());

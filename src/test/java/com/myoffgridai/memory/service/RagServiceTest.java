@@ -37,7 +37,7 @@ class RagServiceTest {
 
         // Default AI settings for top-K values
         when(systemConfigService.getAiSettings())
-                .thenReturn(new AiSettingsDto(0.7, 0.45, 5, 2048));
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test

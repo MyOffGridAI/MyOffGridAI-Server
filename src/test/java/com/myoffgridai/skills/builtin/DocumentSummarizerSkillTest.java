@@ -9,6 +9,8 @@ import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
 import com.myoffgridai.knowledge.model.DocumentStatus;
 import com.myoffgridai.knowledge.model.KnowledgeChunk;
 import com.myoffgridai.knowledge.service.KnowledgeService;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,21 +24,26 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentSummarizerSkillTest {
 
     @Mock private KnowledgeService knowledgeService;
     @Mock private OllamaService ollamaService;
+    @Mock private SystemConfigService systemConfigService;
 
     private DocumentSummarizerSkill skill;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        skill = new DocumentSummarizerSkill(knowledgeService, ollamaService, new ObjectMapper());
+        skill = new DocumentSummarizerSkill(knowledgeService, ollamaService,
+                new ObjectMapper(), systemConfigService);
         userId = UUID.randomUUID();
+
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
     }
 
     @Test
