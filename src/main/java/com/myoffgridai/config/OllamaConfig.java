@@ -2,6 +2,7 @@ package com.myoffgridai.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -12,15 +13,51 @@ import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * Configuration for Ollama LLM service HTTP clients.
+ * Configuration for Ollama LLM service HTTP clients and runtime model resolution.
  *
- * <p>Provides a blocking {@link RestClient} for synchronous calls (chat, embed, health)
- * and a reactive {@link WebClient} for Server-Sent Events streaming responses.</p>
+ * <p>Provides a blocking {@link RestClient} for synchronous calls (chat, embed, health),
+ * a reactive {@link WebClient} for Server-Sent Events streaming responses, and
+ * runtime-resolved model names read from {@code application.yml} with
+ * {@link AppConstants} production defaults as fallbacks.</p>
  */
 @Configuration
 public class OllamaConfig {
 
     private static final Logger log = LoggerFactory.getLogger(OllamaConfig.class);
+
+    @Value("${app.ollama.model:" + AppConstants.OLLAMA_MODEL + "}")
+    private String ollamaModel;
+
+    @Value("${app.ollama.embed-model:" + AppConstants.OLLAMA_EMBED_MODEL + "}")
+    private String ollamaEmbedModel;
+
+    /**
+     * Provides the runtime-resolved Ollama chat model name.
+     *
+     * <p>Reads from {@code app.ollama.model} in application.yml, falling back
+     * to {@link AppConstants#OLLAMA_MODEL} if not specified.</p>
+     *
+     * @return the resolved chat model name
+     */
+    @Bean("ollamaModelName")
+    public String ollamaModelName() {
+        log.info("Resolved Ollama chat model: {}", ollamaModel);
+        return ollamaModel;
+    }
+
+    /**
+     * Provides the runtime-resolved Ollama embedding model name.
+     *
+     * <p>Reads from {@code app.ollama.embed-model} in application.yml, falling back
+     * to {@link AppConstants#OLLAMA_EMBED_MODEL} if not specified.</p>
+     *
+     * @return the resolved embedding model name
+     */
+    @Bean("ollamaEmbedModelName")
+    public String ollamaEmbedModelName() {
+        log.info("Resolved Ollama embed model: {}", ollamaEmbedModel);
+        return ollamaEmbedModel;
+    }
 
     /**
      * Creates a blocking {@link RestClient} configured for Ollama API calls.
