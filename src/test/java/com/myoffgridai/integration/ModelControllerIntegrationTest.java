@@ -44,7 +44,7 @@ class ModelControllerIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(get("/api/models/active")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.modelName").value("qwen3:32b"));
+                .andExpect(jsonPath("$.data.modelName").value("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M"));
     }
 
     @Test

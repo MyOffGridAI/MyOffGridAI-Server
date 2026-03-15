@@ -87,7 +87,7 @@ class ModelControllerTest {
         mockMvc.perform(get("/api/models/active")
                         .with(authentication(createAuth(testUser))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.modelName").value("qwen3:32b"));
+                .andExpect(jsonPath("$.data.modelName").value("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M"));
     }
 
     @Test

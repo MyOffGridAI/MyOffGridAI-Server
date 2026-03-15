@@ -206,7 +206,7 @@ public final class AppConstants {
     public static final String OLLAMA_BASE_URL = "http://localhost:11434";
 
     /** Default Ollama chat model */
-    public static final String OLLAMA_MODEL = "qwen3:32b";
+    public static final String OLLAMA_MODEL = "hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M";
 
     /** Default Ollama embedding model */
     public static final String OLLAMA_EMBED_MODEL = "nomic-embed-text";
