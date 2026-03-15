@@ -387,6 +387,11 @@ public final class AppConstants {
     /** Built-in skill name: resource calculator */
     public static final String SKILL_RESOURCE_CALCULATOR = "resource-calculator";
 
+    // ── Events ─────────────────────────────────────────────────────────────
+
+    /** Base path for scheduled event management endpoints */
+    public static final String EVENTS_API_PATH = "/api/events";
+
     // ── Proactive Engine ──────────────────────────────────────────────────
 
     /** Base path for insights endpoints */
