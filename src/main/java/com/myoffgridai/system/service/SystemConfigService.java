@@ -1,5 +1,6 @@
 package com.myoffgridai.system.service;
 
+import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.model.SystemConfig;
 import com.myoffgridai.system.repository.SystemConfigRepository;
 import org.slf4j.Logger;
@@ -97,5 +98,68 @@ public class SystemConfigService {
      */
     public boolean isWifiConfigured() {
         return getConfig().isWifiConfigured();
+    }
+
+    /**
+     * Returns the current AI and memory settings from the system configuration.
+     *
+     * @return the AI settings DTO
+     */
+    public AiSettingsDto getAiSettings() {
+        SystemConfig config = getConfig();
+        return new AiSettingsDto(
+                config.getAiTemperature(),
+                config.getAiSimilarityThreshold(),
+                config.getAiMemoryTopK(),
+                config.getAiRagMaxContextTokens()
+        );
+    }
+
+    /**
+     * Validates and updates AI and memory settings.
+     *
+     * @param dto the new AI settings
+     * @return the updated AI settings DTO
+     * @throws IllegalArgumentException if any value is out of range
+     */
+    public AiSettingsDto updateAiSettings(AiSettingsDto dto) {
+        if (dto.temperature() != null && (dto.temperature() < 0.0 || dto.temperature() > 2.0)) {
+            throw new IllegalArgumentException("Temperature must be between 0.0 and 2.0");
+        }
+        if (dto.similarityThreshold() != null && (dto.similarityThreshold() < 0.0 || dto.similarityThreshold() > 1.0)) {
+            throw new IllegalArgumentException("Similarity threshold must be between 0.0 and 1.0");
+        }
+        if (dto.memoryTopK() != null && (dto.memoryTopK() < 1 || dto.memoryTopK() > 20)) {
+            throw new IllegalArgumentException("Memory Top-K must be between 1 and 20");
+        }
+        if (dto.ragMaxContextTokens() != null && (dto.ragMaxContextTokens() < 512 || dto.ragMaxContextTokens() > 8192)) {
+            throw new IllegalArgumentException("RAG max context tokens must be between 512 and 8192");
+        }
+
+        SystemConfig config = getConfig();
+        if (dto.temperature() != null) {
+            config.setAiTemperature(dto.temperature());
+        }
+        if (dto.similarityThreshold() != null) {
+            config.setAiSimilarityThreshold(dto.similarityThreshold());
+        }
+        if (dto.memoryTopK() != null) {
+            config.setAiMemoryTopK(dto.memoryTopK());
+        }
+        if (dto.ragMaxContextTokens() != null) {
+            config.setAiRagMaxContextTokens(dto.ragMaxContextTokens());
+        }
+
+        SystemConfig saved = systemConfigRepository.save(config);
+        log.info("AI settings updated: temperature={}, similarityThreshold={}, memoryTopK={}, ragMaxContextTokens={}",
+                saved.getAiTemperature(), saved.getAiSimilarityThreshold(),
+                saved.getAiMemoryTopK(), saved.getAiRagMaxContextTokens());
+
+        return new AiSettingsDto(
+                saved.getAiTemperature(),
+                saved.getAiSimilarityThreshold(),
+                saved.getAiMemoryTopK(),
+                saved.getAiRagMaxContextTokens()
+        );
     }
 }

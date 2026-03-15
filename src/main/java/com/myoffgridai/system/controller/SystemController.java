@@ -7,6 +7,7 @@ import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.common.response.ApiResponse;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.dto.FactoryResetRequest;
 import com.myoffgridai.system.dto.InitializeRequest;
 import com.myoffgridai.system.dto.SystemStatusDto;
@@ -138,6 +139,35 @@ public class SystemController {
         networkTransitionService.finalizeSetup();
         return ResponseEntity.ok(
                 ApiResponse.success("Setup finalized — transitioning to home network"));
+    }
+
+    /**
+     * Returns the current AI and memory settings.
+     *
+     * @return the AI settings
+     */
+    @GetMapping("/ai-settings")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<AiSettingsDto>> getAiSettings() {
+        AiSettingsDto settings = systemConfigService.getAiSettings();
+        return ResponseEntity.ok(ApiResponse.success(settings));
+    }
+
+    /**
+     * Updates AI and memory settings. Validates ranges before persisting.
+     *
+     * @param dto the new AI settings
+     * @return the updated AI settings
+     */
+    @PutMapping("/ai-settings")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<AiSettingsDto>> updateAiSettings(@RequestBody AiSettingsDto dto) {
+        try {
+            AiSettingsDto updated = systemConfigService.updateAiSettings(dto);
+            return ResponseEntity.ok(ApiResponse.success(updated, "AI settings updated successfully"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
     }
 
     /**

@@ -3,6 +3,8 @@ package com.myoffgridai.memory.service;
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.model.Memory;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.memory.model.MemoryImportance;
 import com.myoffgridai.memory.model.VectorDocument;
 import com.myoffgridai.memory.model.VectorSourceType;
@@ -30,14 +32,20 @@ class MemoryServiceTest {
     @Mock private MemoryRepository memoryRepository;
     @Mock private VectorDocumentRepository vectorDocumentRepository;
     @Mock private EmbeddingService embeddingService;
+    @Mock private SystemConfigService systemConfigService;
 
     private MemoryService memoryService;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        memoryService = new MemoryService(memoryRepository, vectorDocumentRepository, embeddingService);
+        memoryService = new MemoryService(memoryRepository, vectorDocumentRepository,
+                embeddingService, systemConfigService);
         userId = UUID.randomUUID();
+
+        // Default AI settings for similarity threshold
+        when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto(0.7, 0.45, 5, 2048));
     }
 
     @Test

@@ -4,6 +4,8 @@ import com.myoffgridai.knowledge.service.SemanticSearchService;
 import com.myoffgridai.memory.dto.RagContext;
 import com.myoffgridai.memory.model.Memory;
 import com.myoffgridai.memory.model.MemoryImportance;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,14 +25,19 @@ class RagServiceTest {
 
     @Mock private MemoryService memoryService;
     @Mock private SemanticSearchService semanticSearchService;
+    @Mock private SystemConfigService systemConfigService;
 
     private RagService ragService;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        ragService = new RagService(memoryService, semanticSearchService);
+        ragService = new RagService(memoryService, semanticSearchService, systemConfigService);
         userId = UUID.randomUUID();
+
+        // Default AI settings for top-K values
+        when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto(0.7, 0.45, 5, 2048));
     }
 
     @Test

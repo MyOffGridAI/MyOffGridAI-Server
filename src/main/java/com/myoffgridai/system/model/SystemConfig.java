@@ -38,6 +38,18 @@ public class SystemConfig {
     @Column(name = "wifi_configured", nullable = false)
     private boolean wifiConfigured = false;
 
+    @Column(name = "ai_temperature")
+    private Double aiTemperature = 0.7;
+
+    @Column(name = "ai_similarity_threshold")
+    private Double aiSimilarityThreshold = 0.45;
+
+    @Column(name = "ai_memory_top_k")
+    private Integer aiMemoryTopK = 5;
+
+    @Column(name = "ai_rag_max_context_tokens")
+    private Integer aiRagMaxContextTokens = 2048;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -80,4 +92,16 @@ public class SystemConfig {
 
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public Double getAiTemperature() { return aiTemperature; }
+    public void setAiTemperature(Double aiTemperature) { this.aiTemperature = aiTemperature; }
+
+    public Double getAiSimilarityThreshold() { return aiSimilarityThreshold; }
+    public void setAiSimilarityThreshold(Double aiSimilarityThreshold) { this.aiSimilarityThreshold = aiSimilarityThreshold; }
+
+    public Integer getAiMemoryTopK() { return aiMemoryTopK; }
+    public void setAiMemoryTopK(Integer aiMemoryTopK) { this.aiMemoryTopK = aiMemoryTopK; }
+
+    public Integer getAiRagMaxContextTokens() { return aiRagMaxContextTokens; }
+    public void setAiRagMaxContextTokens(Integer aiRagMaxContextTokens) { this.aiRagMaxContextTokens = aiRagMaxContextTokens; }
 }

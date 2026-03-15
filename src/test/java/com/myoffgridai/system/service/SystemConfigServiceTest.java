@@ -177,4 +177,68 @@ class SystemConfigServiceTest {
 
         assertTrue(systemConfigService.isWifiConfigured());
     }
+
+    // ── AI Settings tests ────────────────────────────────────────────────
+
+    @Test
+    void getAiSettings_returnsDefaults() {
+        SystemConfig config = new SystemConfig();
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        var result = systemConfigService.getAiSettings();
+
+        assertEquals(0.7, result.temperature());
+        assertEquals(0.45, result.similarityThreshold());
+        assertEquals(5, result.memoryTopK());
+        assertEquals(2048, result.ragMaxContextTokens());
+    }
+
+    @Test
+    void updateAiSettings_success() {
+        SystemConfig config = new SystemConfig();
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        SystemConfig savedConfig = new SystemConfig();
+        savedConfig.setAiTemperature(1.0);
+        savedConfig.setAiSimilarityThreshold(0.6);
+        savedConfig.setAiMemoryTopK(10);
+        savedConfig.setAiRagMaxContextTokens(4096);
+        when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(savedConfig);
+
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(1.0, 0.6, 10, 4096);
+        var result = systemConfigService.updateAiSettings(dto);
+
+        assertEquals(1.0, result.temperature());
+        assertEquals(0.6, result.similarityThreshold());
+        assertEquals(10, result.memoryTopK());
+        assertEquals(4096, result.ragMaxContextTokens());
+    }
+
+    @Test
+    void updateAiSettings_temperatureOutOfRange_throws() {
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(2.5, null, null, null);
+        assertThrows(IllegalArgumentException.class,
+                () -> systemConfigService.updateAiSettings(dto));
+    }
+
+    @Test
+    void updateAiSettings_similarityThresholdOutOfRange_throws() {
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, 1.5, null, null);
+        assertThrows(IllegalArgumentException.class,
+                () -> systemConfigService.updateAiSettings(dto));
+    }
+
+    @Test
+    void updateAiSettings_memoryTopKOutOfRange_throws() {
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, 0, null);
+        assertThrows(IllegalArgumentException.class,
+                () -> systemConfigService.updateAiSettings(dto));
+    }
+
+    @Test
+    void updateAiSettings_ragMaxContextTokensOutOfRange_throws() {
+        var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, null, 100);
+        assertThrows(IllegalArgumentException.class,
+                () -> systemConfigService.updateAiSettings(dto));
+    }
 }

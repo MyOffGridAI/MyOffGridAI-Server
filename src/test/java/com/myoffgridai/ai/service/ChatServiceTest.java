@@ -14,6 +14,8 @@ import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.memory.service.MemoryExtractionService;
 import com.myoffgridai.memory.service.RagService;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +50,7 @@ class ChatServiceTest {
     @Mock private ContextWindowService contextWindowService;
     @Mock private RagService ragService;
     @Mock private MemoryExtractionService memoryExtractionService;
+    @Mock private SystemConfigService systemConfigService;
 
     @InjectMocks
     private ChatService chatService;
@@ -74,6 +77,10 @@ class ChatServiceTest {
         testConversation.setMessageCount(0);
         testConversation.setCreatedAt(Instant.now());
         testConversation.setUpdatedAt(Instant.now());
+
+        // Default AI settings for all tests that call sendMessage/streamMessage
+        lenient().when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto(0.7, 0.45, 5, 2048));
     }
 
     // ── createConversation tests ─────────────────────────────────────────

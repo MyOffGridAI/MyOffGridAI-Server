@@ -17,6 +17,8 @@ import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.dto.RagContext;
 import com.myoffgridai.memory.service.MemoryExtractionService;
 import com.myoffgridai.memory.service.RagService;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -51,6 +53,7 @@ public class ChatService {
     private final ContextWindowService contextWindowService;
     private final RagService ragService;
     private final MemoryExtractionService memoryExtractionService;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the chat service with required dependencies.
@@ -63,6 +66,7 @@ public class ChatService {
      * @param contextWindowService    the context window manager
      * @param ragService              the RAG pipeline service
      * @param memoryExtractionService the memory extraction service
+     * @param systemConfigService     the system config service for dynamic AI settings
      */
     public ChatService(ConversationRepository conversationRepository,
                        MessageRepository messageRepository,
@@ -71,7 +75,8 @@ public class ChatService {
                        SystemPromptBuilder systemPromptBuilder,
                        ContextWindowService contextWindowService,
                        RagService ragService,
-                       MemoryExtractionService memoryExtractionService) {
+                       MemoryExtractionService memoryExtractionService,
+                       SystemConfigService systemConfigService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -80,6 +85,7 @@ public class ChatService {
         this.contextWindowService = contextWindowService;
         this.ragService = ragService;
         this.memoryExtractionService = memoryExtractionService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -198,9 +204,10 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama synchronously
+        // Call Ollama synchronously with dynamic temperature
+        double temperature = systemConfigService.getAiSettings().temperature();
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL, messages, false, Map.of());
+                AppConstants.OLLAMA_MODEL, messages, false, Map.of("temperature", temperature));
         OllamaChatResponse response = ollamaService.chat(request);
 
         // Persist assistant message
@@ -264,9 +271,10 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama streaming
+        // Call Ollama streaming with dynamic temperature
+        double streamTemperature = systemConfigService.getAiSettings().temperature();
         OllamaChatRequest request = new OllamaChatRequest(
-                AppConstants.OLLAMA_MODEL, messages, true, Map.of());
+                AppConstants.OLLAMA_MODEL, messages, true, Map.of("temperature", streamTemperature));
 
         final boolean hasRag = ragContext != null && ragContext.hasContext();
 

@@ -3,6 +3,8 @@ package com.myoffgridai.memory.service;
 import com.myoffgridai.common.util.TokenCounter;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.knowledge.service.SemanticSearchService;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.memory.dto.RagContext;
 import com.myoffgridai.memory.model.Memory;
 import org.slf4j.Logger;
@@ -28,17 +30,21 @@ public class RagService {
 
     private final MemoryService memoryService;
     private final SemanticSearchService semanticSearchService;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the RAG service.
      *
      * @param memoryService         the memory service for retrieving relevant memories
      * @param semanticSearchService the semantic search service for knowledge retrieval
+     * @param systemConfigService   the system config service for dynamic AI settings
      */
     public RagService(MemoryService memoryService,
-                       SemanticSearchService semanticSearchService) {
+                       SemanticSearchService semanticSearchService,
+                       SystemConfigService systemConfigService) {
         this.memoryService = memoryService;
         this.semanticSearchService = semanticSearchService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -52,11 +58,16 @@ public class RagService {
     public RagContext buildRagContext(UUID userId, String queryText) {
         log.debug("Building RAG context for user: {}", userId);
 
+        // Read dynamic AI settings
+        AiSettingsDto aiSettings = systemConfigService.getAiSettings();
+        int memoryTopK = aiSettings.memoryTopK();
+        int ragTopK = memoryTopK; // use same top-K for knowledge retrieval
+
         // Retrieve relevant memories
         List<String> memorySnippets = new ArrayList<>();
         try {
             List<Memory> memories = memoryService.findRelevantMemories(
-                    userId, queryText, AppConstants.MEMORY_TOP_K);
+                    userId, queryText, memoryTopK);
             for (Memory memory : memories) {
                 memorySnippets.add(memory.getContent());
             }
@@ -68,7 +79,7 @@ public class RagService {
         List<String> knowledgeSnippets = new ArrayList<>();
         try {
             knowledgeSnippets = semanticSearchService.searchForRagContext(
-                    userId, queryText, AppConstants.RAG_TOP_K);
+                    userId, queryText, ragTopK);
         } catch (Exception e) {
             log.debug("No knowledge chunks available for RAG context: {}", e.getMessage());
         }

@@ -3,6 +3,7 @@ package com.myoffgridai.memory.service;
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.memory.dto.MemoryDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.memory.dto.MemorySearchResultDto;
 import com.myoffgridai.memory.model.Memory;
 import com.myoffgridai.memory.model.MemoryImportance;
@@ -36,6 +37,7 @@ public class MemoryService {
     private final MemoryRepository memoryRepository;
     private final VectorDocumentRepository vectorDocumentRepository;
     private final EmbeddingService embeddingService;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the memory service.
@@ -43,13 +45,16 @@ public class MemoryService {
      * @param memoryRepository         the memory data access layer
      * @param vectorDocumentRepository the vector document data access layer
      * @param embeddingService         the embedding generation service
+     * @param systemConfigService      the system config service for dynamic AI settings
      */
     public MemoryService(MemoryRepository memoryRepository,
                           VectorDocumentRepository vectorDocumentRepository,
-                          EmbeddingService embeddingService) {
+                          EmbeddingService embeddingService,
+                          SystemConfigService systemConfigService) {
         this.memoryRepository = memoryRepository;
         this.vectorDocumentRepository = vectorDocumentRepository;
         this.embeddingService = embeddingService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -274,7 +279,8 @@ public class MemoryService {
             Memory memory = memoryMap.get(doc.getSourceId());
             if (memory != null) {
                 float similarity = embeddingService.cosineSimilarity(queryEmbedding, doc.getEmbedding());
-                if (similarity >= AppConstants.SIMILARITY_THRESHOLD) {
+                double similarityThreshold = systemConfigService.getAiSettings().similarityThreshold();
+                if (similarity >= similarityThreshold) {
                     results.add(new MemoryWithScore(memory, similarity));
                 }
             }
