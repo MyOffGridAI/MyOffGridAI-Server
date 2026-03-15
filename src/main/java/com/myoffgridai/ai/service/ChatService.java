@@ -361,7 +361,8 @@ public class ChatService {
                     systemConfigService.getAiSettings().modelName(),
                     List.of(new OllamaMessage("user", prompt)),
                     false,
-                    Map.of("num_predict", AppConstants.TITLE_GENERATION_MAX_TOKENS)
+                    Map.of("num_predict", AppConstants.TITLE_GENERATION_MAX_TOKENS),
+                    false
             );
 
             OllamaChatResponse response = ollamaService.chat(request);
