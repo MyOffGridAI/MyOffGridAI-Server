@@ -47,7 +47,7 @@ class ModelControllerTest {
     @BeforeEach
     void setUp() {
         when(systemConfigService.getAiSettings())
-                .thenReturn(new AiSettingsDto("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", 0.7, 0.45, 5, 2048));
+                .thenReturn(new AiSettingsDto("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", 0.7, 0.45, 5, 2048, 4096, 20));
 
         testUser = new User();
         testUser.setId(UUID.randomUUID());

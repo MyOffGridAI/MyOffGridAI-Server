@@ -4,10 +4,11 @@ import com.myoffgridai.ai.dto.OllamaMessage;
 import com.myoffgridai.ai.model.Message;
 import com.myoffgridai.ai.model.MessageRole;
 import com.myoffgridai.ai.repository.MessageRepository;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
@@ -25,14 +26,21 @@ class ContextWindowServiceTest {
     @Mock
     private MessageRepository messageRepository;
 
-    @InjectMocks
+    @Mock
+    private SystemConfigService systemConfigService;
+
     private ContextWindowService contextWindowService;
 
     private UUID conversationId;
 
     @BeforeEach
     void setUp() {
+        contextWindowService = new ContextWindowService(messageRepository, systemConfigService);
         conversationId = UUID.randomUUID();
+
+        // Default AI settings for all tests
+        when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048, 4096, 20));
     }
 
     @Test

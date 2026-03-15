@@ -8,11 +8,15 @@ package com.myoffgridai.system.dto;
  * @param similarityThreshold  the minimum cosine similarity for memory/RAG results (0.0–1.0)
  * @param memoryTopK           the number of top-K memory results to retrieve (1–20)
  * @param ragMaxContextTokens  the maximum tokens for RAG context injection (512–8192)
+ * @param contextSize          the Ollama num_ctx value — context window size in tokens (1024–131072)
+ * @param contextMessageLimit  the maximum number of messages fetched from DB per conversation (5–100)
  */
 public record AiSettingsDto(
         String modelName,
         Double temperature,
         Double similarityThreshold,
         Integer memoryTopK,
-        Integer ragMaxContextTokens
+        Integer ragMaxContextTokens,
+        Integer contextSize,
+        Integer contextMessageLimit
 ) {}

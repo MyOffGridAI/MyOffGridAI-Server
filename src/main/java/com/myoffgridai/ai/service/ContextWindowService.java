@@ -4,7 +4,8 @@ import com.myoffgridai.ai.dto.OllamaMessage;
 import com.myoffgridai.ai.model.Message;
 import com.myoffgridai.ai.repository.MessageRepository;
 import com.myoffgridai.common.util.TokenCounter;
-import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -28,14 +29,18 @@ public class ContextWindowService {
     private static final Logger log = LoggerFactory.getLogger(ContextWindowService.class);
 
     private final MessageRepository messageRepository;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the context window service.
      *
-     * @param messageRepository the message data access layer
+     * @param messageRepository   the message data access layer
+     * @param systemConfigService the system config service for dynamic AI settings
      */
-    public ContextWindowService(MessageRepository messageRepository) {
+    public ContextWindowService(MessageRepository messageRepository,
+                                SystemConfigService systemConfigService) {
         this.messageRepository = messageRepository;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -53,10 +58,12 @@ public class ContextWindowService {
     public List<OllamaMessage> prepareMessages(UUID conversationId, String systemPrompt, String newUserMessage) {
         log.debug("Preparing context window for conversation: {}", conversationId);
 
+        AiSettingsDto aiSettings = systemConfigService.getAiSettings();
+
         // Fetch recent messages (most recent N, ordered newest-first)
         List<Message> recentMessages = messageRepository.findTopNByConversationIdOrderByCreatedAtDesc(
                 conversationId,
-                PageRequest.of(0, AppConstants.OLLAMA_CONTEXT_WINDOW_MESSAGES)
+                PageRequest.of(0, aiSettings.contextMessageLimit())
         );
 
         // Reverse to chronological order
@@ -73,13 +80,14 @@ public class ContextWindowService {
 
         messages.add(new OllamaMessage("user", newUserMessage));
 
-        // Truncate to token limit
+        // Truncate to token limit using the configured context size
         List<OllamaMessage> truncated = TokenCounter.truncateToTokenLimit(
-                messages, AppConstants.OLLAMA_MAX_CONTEXT_TOKENS);
+                messages, aiSettings.contextSize());
 
-        log.debug("Context window: {} messages, estimated {} tokens",
+        log.debug("Context window: {} messages, estimated {} tokens (limit: {} tokens, {} messages)",
                 truncated.size(),
-                truncated.stream().mapToInt(m -> TokenCounter.estimateTokens(m.content())).sum());
+                truncated.stream().mapToInt(m -> TokenCounter.estimateTokens(m.content())).sum(),
+                aiSettings.contextSize(), aiSettings.contextMessageLimit());
 
         return truncated;
     }

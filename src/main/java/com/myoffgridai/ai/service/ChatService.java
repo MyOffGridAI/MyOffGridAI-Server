@@ -204,10 +204,11 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama synchronously with dynamic model and temperature
+        // Call Ollama synchronously with dynamic model, temperature, and context size
         AiSettingsDto aiSettings = systemConfigService.getAiSettings();
         OllamaChatRequest request = new OllamaChatRequest(
-                aiSettings.modelName(), messages, false, Map.of("temperature", aiSettings.temperature()));
+                aiSettings.modelName(), messages, false,
+                Map.of("temperature", aiSettings.temperature(), "num_ctx", aiSettings.contextSize()));
         OllamaChatResponse response = ollamaService.chat(request);
 
         // Persist assistant message
@@ -271,10 +272,11 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama streaming with dynamic model and temperature
+        // Call Ollama streaming with dynamic model, temperature, and context size
         AiSettingsDto streamSettings = systemConfigService.getAiSettings();
         OllamaChatRequest request = new OllamaChatRequest(
-                streamSettings.modelName(), messages, true, Map.of("temperature", streamSettings.temperature()));
+                streamSettings.modelName(), messages, true,
+                Map.of("temperature", streamSettings.temperature(), "num_ctx", streamSettings.contextSize()));
 
         final boolean hasRag = ragContext != null && ragContext.hasContext();
 

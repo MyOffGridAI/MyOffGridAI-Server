@@ -223,6 +223,12 @@ public final class AppConstants {
     /** Maximum number of recent messages to include in context window */
     public static final int OLLAMA_CONTEXT_WINDOW_MESSAGES = 20;
 
+    /** Default Ollama num_ctx value (context size in tokens sent to Ollama) */
+    public static final int OLLAMA_NUM_CTX_DEFAULT = 4096;
+
+    /** Default maximum number of messages fetched from DB per conversation */
+    public static final int OLLAMA_CONTEXT_MESSAGE_LIMIT_DEFAULT = 20;
+
     // ── Chat ───────────────────────────────────────────────────────────────
 
     /** Maximum length of a single user message in characters */

@@ -117,7 +117,9 @@ public class SystemConfigService {
                 config.getAiTemperature(),
                 config.getAiSimilarityThreshold(),
                 config.getAiMemoryTopK(),
-                config.getAiRagMaxContextTokens()
+                config.getAiRagMaxContextTokens(),
+                config.getAiContextSize(),
+                config.getAiContextMessageLimit()
         );
     }
 
@@ -197,6 +199,12 @@ public class SystemConfigService {
         if (dto.ragMaxContextTokens() != null && (dto.ragMaxContextTokens() < 512 || dto.ragMaxContextTokens() > 8192)) {
             throw new IllegalArgumentException("RAG max context tokens must be between 512 and 8192");
         }
+        if (dto.contextSize() != null && (dto.contextSize() < 1024 || dto.contextSize() > 131072)) {
+            throw new IllegalArgumentException("Context size must be between 1024 and 131072");
+        }
+        if (dto.contextMessageLimit() != null && (dto.contextMessageLimit() < 5 || dto.contextMessageLimit() > 100)) {
+            throw new IllegalArgumentException("Context message limit must be between 5 and 100");
+        }
 
         SystemConfig config = getConfig();
         if (dto.modelName() != null && !dto.modelName().isBlank()) {
@@ -214,18 +222,27 @@ public class SystemConfigService {
         if (dto.ragMaxContextTokens() != null) {
             config.setAiRagMaxContextTokens(dto.ragMaxContextTokens());
         }
+        if (dto.contextSize() != null) {
+            config.setAiContextSize(dto.contextSize());
+        }
+        if (dto.contextMessageLimit() != null) {
+            config.setAiContextMessageLimit(dto.contextMessageLimit());
+        }
 
         SystemConfig saved = systemConfigRepository.save(config);
-        log.info("AI settings updated: model={}, temperature={}, similarityThreshold={}, memoryTopK={}, ragMaxContextTokens={}",
+        log.info("AI settings updated: model={}, temperature={}, similarityThreshold={}, memoryTopK={}, ragMaxContextTokens={}, contextSize={}, contextMessageLimit={}",
                 saved.getAiModel(), saved.getAiTemperature(), saved.getAiSimilarityThreshold(),
-                saved.getAiMemoryTopK(), saved.getAiRagMaxContextTokens());
+                saved.getAiMemoryTopK(), saved.getAiRagMaxContextTokens(),
+                saved.getAiContextSize(), saved.getAiContextMessageLimit());
 
         return new AiSettingsDto(
                 saved.getAiModel(),
                 saved.getAiTemperature(),
                 saved.getAiSimilarityThreshold(),
                 saved.getAiMemoryTopK(),
-                saved.getAiRagMaxContextTokens()
+                saved.getAiRagMaxContextTokens(),
+                saved.getAiContextSize(),
+                saved.getAiContextMessageLimit()
         );
     }
 }

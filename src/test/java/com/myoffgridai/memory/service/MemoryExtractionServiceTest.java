@@ -38,7 +38,7 @@ class MemoryExtractionServiceTest {
         conversationId = UUID.randomUUID();
 
         lenient().when(systemConfigService.getAiSettings())
-                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048));
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048, 4096, 20));
     }
 
     @Test
