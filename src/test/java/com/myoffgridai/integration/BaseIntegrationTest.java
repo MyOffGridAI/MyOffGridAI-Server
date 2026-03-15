@@ -1,5 +1,9 @@
 package com.myoffgridai.integration;
 
+import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+import org.junit.jupiter.api.extension.ExecutionCondition;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -10,48 +14,61 @@ import org.testcontainers.containers.PostgreSQLContainer;
 /**
  * Base class for integration tests using Testcontainers PostgreSQL.
  *
- * <p>Falls back to a direct JDBC connection if Testcontainers cannot
- * connect to Docker (e.g., Docker Desktop API mismatch).</p>
+ * <p>Starts an isolated Testcontainers PostgreSQL instance so integration
+ * tests never touch the dev database. If Docker is not available,
+ * the entire test class is DISABLED (not errored, not fallen back to dev DB).</p>
+ *
+ * <p><strong>IMPORTANT:</strong> Integration tests must NEVER connect to
+ * the dev database ({@code localhost:5432/myoffgridai}). All integration
+ * tests run against a disposable Testcontainers instance.</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@ExtendWith(BaseIntegrationTest.DockerAvailableCondition.class)
 abstract class BaseIntegrationTest {
 
-    private static final PostgreSQLContainer<?> postgres;
-    private static final boolean useTestcontainers;
+    static PostgreSQLContainer<?> postgres;
+    static boolean dockerAvailable = false;
 
     static {
-        PostgreSQLContainer<?> container = null;
-        boolean tc = false;
         try {
-            container = new PostgreSQLContainer<>("postgres:16")
+            postgres = new PostgreSQLContainer<>("postgres:16")
                     .withDatabaseName("myoffgridai_test")
                     .withUsername("test")
                     .withPassword("test");
-            container.start();
-            tc = true;
+            postgres.start();
+            dockerAvailable = true;
         } catch (Exception e) {
-            // Testcontainers unavailable — fall back to Docker Compose Postgres
-            container = null;
-            tc = false;
+            // Docker unavailable — tests will be disabled via DockerAvailableCondition
+            dockerAvailable = false;
         }
-        postgres = container;
-        useTestcontainers = tc;
     }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        if (useTestcontainers && postgres != null) {
+        if (dockerAvailable && postgres != null) {
             registry.add("spring.datasource.url", postgres::getJdbcUrl);
             registry.add("spring.datasource.username", postgres::getUsername);
             registry.add("spring.datasource.password", postgres::getPassword);
-        } else {
-            registry.add("spring.datasource.url",
-                    () -> "jdbc:postgresql://localhost:5432/myoffgridai");
-            registry.add("spring.datasource.username", () -> "myoffgridai");
-            registry.add("spring.datasource.password", () -> "myoffgridai");
         }
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+    }
+
+    /**
+     * JUnit 5 {@link ExecutionCondition} that disables the entire test class
+     * when Docker is not available. This runs BEFORE Spring context loading,
+     * preventing context initialization failures when there is no database.
+     */
+    static class DockerAvailableCondition implements ExecutionCondition {
+        @Override
+        public ConditionEvaluationResult evaluateExecutionCondition(
+                ExtensionContext context) {
+            if (dockerAvailable) {
+                return ConditionEvaluationResult.enabled("Docker is available");
+            }
+            return ConditionEvaluationResult.disabled(
+                    "Docker is not available — skipping integration tests");
+        }
     }
 }
