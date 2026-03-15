@@ -304,6 +304,22 @@ public class ChatService {
     }
 
     /**
+     * Renames a conversation with a new title.
+     *
+     * @param conversationId the conversation ID
+     * @param userId         the user's ID
+     * @param newTitle       the new title
+     * @return the updated conversation
+     */
+    @Transactional
+    public Conversation renameConversation(UUID conversationId, UUID userId, String newTitle) {
+        log.info("Renaming conversation: {} for user: {}", conversationId, userId);
+        Conversation conversation = getConversation(conversationId, userId);
+        conversation.setTitle(newTitle);
+        return conversationRepository.save(conversation);
+    }
+
+    /**
      * Generates a title for a conversation based on the first user message.
      *
      * <p>Runs asynchronously so it does not block the chat response.

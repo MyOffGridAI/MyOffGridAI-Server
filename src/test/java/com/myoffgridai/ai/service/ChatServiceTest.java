@@ -216,6 +216,30 @@ class ChatServiceTest {
         verify(conversationRepository).save(testConversation);
     }
 
+    // ── renameConversation tests ────────────────────────────────────────
+
+    @Test
+    void renameConversation_updatesTitle() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        Conversation result = chatService.renameConversation(conversationId, userId, "New Title");
+
+        assertEquals("New Title", result.getTitle());
+        verify(conversationRepository).save(testConversation);
+    }
+
+    @Test
+    void renameConversation_notOwned_throws() {
+        UUID otherUserId = UUID.randomUUID();
+        when(conversationRepository.findByIdAndUserId(conversationId, otherUserId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(EntityNotFoundException.class,
+                () -> chatService.renameConversation(conversationId, otherUserId, "New Title"));
+    }
+
     // ── generateTitle tests ──────────────────────────────────────────────
 
     @Test

@@ -148,6 +148,25 @@ public class ChatController {
     }
 
     /**
+     * Renames a conversation.
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the conversation ID
+     * @param request        the rename request with new title
+     * @return the updated conversation
+     */
+    @PutMapping("/conversations/{conversationId}/title")
+    public ResponseEntity<ApiResponse<ConversationDto>> renameConversation(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId,
+            @Valid @RequestBody RenameConversationRequest request) {
+        log.info("Renaming conversation: {} for user: {}", conversationId, principal.getUsername());
+        Conversation conversation = chatService.renameConversation(
+                conversationId, principal.getId(), request.title());
+        return ResponseEntity.ok(ApiResponse.success(toConversationDto(conversation)));
+    }
+
+    /**
      * Sends a message in a conversation. Supports synchronous and streaming modes.
      *
      * <p>If {@code stream=false}, returns a standard JSON response with the assistant's

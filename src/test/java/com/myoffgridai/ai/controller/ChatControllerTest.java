@@ -144,6 +144,28 @@ class ChatControllerTest {
     }
 
     @Test
+    void renameConversation_returns200() throws Exception {
+        testConversation.setTitle("New Title");
+        when(chatService.renameConversation(any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(testConversation);
+
+        mockMvc.perform(put("/api/chat/conversations/" + conversationId + "/title")
+                        .with(authentication(createAuth(testUser)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"New Title\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("New Title"));
+    }
+
+    @Test
+    void renameConversation_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(put("/api/chat/conversations/" + conversationId + "/title")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"New Title\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void sendMessage_sync_returns200() throws Exception {
         Message assistantMsg = new Message();
         assistantMsg.setId(UUID.randomUUID());
