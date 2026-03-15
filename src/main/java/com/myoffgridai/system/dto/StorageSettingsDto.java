@@ -7,10 +7,12 @@ package com.myoffgridai.system.dto;
  * @param totalSpaceMb         total disk space in megabytes
  * @param usedSpaceMb          used disk space in megabytes
  * @param freeSpaceMb          free disk space in megabytes
+ * @param maxUploadSizeMb      maximum single-file upload size in megabytes
  */
 public record StorageSettingsDto(
         String knowledgeStoragePath,
         Long totalSpaceMb,
         Long usedSpaceMb,
-        Long freeSpaceMb
+        Long freeSpaceMb,
+        Integer maxUploadSizeMb
 ) {}

@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.core.MethodParameter;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,6 +89,15 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ApiResponse<Object>> response =
                 handler.handleFortressActive(new FortressActiveException("Locked"));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void handleMaxUploadSize_shouldReturn413() {
+        ResponseEntity<ApiResponse<Object>> response =
+                handler.handleMaxUploadSize(new MaxUploadSizeExceededException(104857600L));
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(response.getBody().isSuccess()).isFalse();
+        assertThat(response.getBody().getMessage()).contains("File too large");
     }
 
     @Test

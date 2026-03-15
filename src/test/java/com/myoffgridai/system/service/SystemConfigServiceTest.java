@@ -1,5 +1,6 @@
 package com.myoffgridai.system.service;
 
+import com.myoffgridai.system.dto.StorageSettingsDto;
 import com.myoffgridai.system.model.SystemConfig;
 import com.myoffgridai.system.repository.SystemConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -261,5 +262,56 @@ class SystemConfigServiceTest {
         var dto = new com.myoffgridai.system.dto.AiSettingsDto(null, null, null, null, null, null, 2);
         assertThrows(IllegalArgumentException.class,
                 () -> systemConfigService.updateAiSettings(dto));
+    }
+
+    // ── Storage Settings tests ──────────────────────────────────────────
+
+    @Test
+    void getStorageSettings_includesMaxUploadSizeMb() {
+        SystemConfig config = new SystemConfig();
+        config.setMaxUploadSizeMb(50);
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        StorageSettingsDto result = systemConfigService.getStorageSettings();
+
+        assertEquals(50, result.maxUploadSizeMb());
+    }
+
+    @Test
+    void getStorageSettings_defaultMaxUploadSizeMb() {
+        SystemConfig config = new SystemConfig();
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+
+        StorageSettingsDto result = systemConfigService.getStorageSettings();
+
+        assertEquals(25, result.maxUploadSizeMb());
+    }
+
+    @Test
+    void updateStorageSettings_maxUploadSizeMb_tooLow_throws() {
+        var dto = new StorageSettingsDto("/var/myoffgridai/knowledge", null, null, null, 0);
+        assertThrows(IllegalArgumentException.class,
+                () -> systemConfigService.updateStorageSettings(dto));
+    }
+
+    @Test
+    void updateStorageSettings_maxUploadSizeMb_tooHigh_throws() {
+        var dto = new StorageSettingsDto("/var/myoffgridai/knowledge", null, null, null, 101);
+        assertThrows(IllegalArgumentException.class,
+                () -> systemConfigService.updateStorageSettings(dto));
+    }
+
+    @Test
+    void updateStorageSettings_maxUploadSizeMb_validBoundary() {
+        SystemConfig config = new SystemConfig();
+        when(systemConfigRepository.findFirst()).thenReturn(Optional.of(config));
+        when(systemConfigRepository.save(any(SystemConfig.class))).thenReturn(config);
+
+        var dto = new StorageSettingsDto("/var/myoffgridai/knowledge", null, null, null, 100);
+        systemConfigService.updateStorageSettings(dto);
+
+        ArgumentCaptor<SystemConfig> captor = ArgumentCaptor.forClass(SystemConfig.class);
+        verify(systemConfigRepository).save(captor.capture());
+        assertEquals(100, captor.getValue().getMaxUploadSizeMb());
     }
 }

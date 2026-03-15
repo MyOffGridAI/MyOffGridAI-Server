@@ -9,6 +9,7 @@ import com.myoffgridai.knowledge.dto.KnowledgeSearchResultDto;
 import com.myoffgridai.knowledge.dto.UpdateDisplayNameRequest;
 import com.myoffgridai.knowledge.service.KnowledgeService;
 import com.myoffgridai.knowledge.service.SemanticSearchService;
+import com.myoffgridai.system.service.SystemConfigService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,17 +36,21 @@ public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
     private final SemanticSearchService semanticSearchService;
+    private final SystemConfigService systemConfigService;
 
     /**
      * Constructs the knowledge controller.
      *
      * @param knowledgeService       the knowledge service
      * @param semanticSearchService  the semantic search service
+     * @param systemConfigService    the system config service
      */
     public KnowledgeController(KnowledgeService knowledgeService,
-                                SemanticSearchService semanticSearchService) {
+                                SemanticSearchService semanticSearchService,
+                                SystemConfigService systemConfigService) {
         this.knowledgeService = knowledgeService;
         this.semanticSearchService = semanticSearchService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -60,6 +65,15 @@ public class KnowledgeController {
             @AuthenticationPrincipal User principal,
             @RequestParam("file") MultipartFile file) {
         log.info("Upload request from user {}: {}", principal.getId(), file.getOriginalFilename());
+
+        int maxMb = systemConfigService.getConfig().getMaxUploadSizeMb();
+        long maxBytes = (long) maxMb * 1024 * 1024;
+        if (file.getSize() > maxBytes) {
+            long fileSizeMb = file.getSize() / (1024 * 1024);
+            throw new IllegalArgumentException(
+                    String.format("File size (%d MB) exceeds the maximum allowed (%d MB)", fileSizeMb, maxMb));
+        }
+
         KnowledgeDocumentDto dto = knowledgeService.upload(principal.getId(), file);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(dto, "Document uploaded, processing started"));

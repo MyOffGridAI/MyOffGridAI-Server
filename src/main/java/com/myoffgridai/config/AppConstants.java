@@ -86,6 +86,9 @@ public final class AppConstants {
     /** Maximum file upload size in bytes (100 MB) */
     public static final long MAX_FILE_SIZE_BYTES = 100L * 1024 * 1024;
 
+    /** Default maximum upload size per file in megabytes (configurable via Settings) */
+    public static final int MAX_UPLOAD_SIZE_MB_DEFAULT = 25;
+
     // ── Sensors ─────────────────────────────────────────────────────────────
 
     /** Base path for sensor management endpoints */

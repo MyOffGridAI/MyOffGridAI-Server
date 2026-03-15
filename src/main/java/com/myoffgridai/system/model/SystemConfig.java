@@ -62,6 +62,9 @@ public class SystemConfig {
     @Column(name = "knowledge_storage_path")
     private String knowledgeStoragePath = "/var/myoffgridai/knowledge";
 
+    @Column(name = "max_upload_size_mb")
+    private Integer maxUploadSizeMb = 25;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -128,4 +131,7 @@ public class SystemConfig {
 
     public String getKnowledgeStoragePath() { return knowledgeStoragePath != null ? knowledgeStoragePath : "/var/myoffgridai/knowledge"; }
     public void setKnowledgeStoragePath(String knowledgeStoragePath) { this.knowledgeStoragePath = knowledgeStoragePath; }
+
+    public Integer getMaxUploadSizeMb() { return maxUploadSizeMb != null ? maxUploadSizeMb : 25; }
+    public void setMaxUploadSizeMb(Integer maxUploadSizeMb) { this.maxUploadSizeMb = maxUploadSizeMb; }
 }

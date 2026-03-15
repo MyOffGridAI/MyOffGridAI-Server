@@ -13,6 +13,8 @@ import com.myoffgridai.knowledge.dto.KnowledgeSearchResultDto;
 import com.myoffgridai.knowledge.model.DocumentStatus;
 import com.myoffgridai.knowledge.service.KnowledgeService;
 import com.myoffgridai.knowledge.service.SemanticSearchService;
+import com.myoffgridai.system.model.SystemConfig;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,7 @@ class KnowledgeControllerTest {
 
     @MockBean private KnowledgeService knowledgeService;
     @MockBean private SemanticSearchService semanticSearchService;
+    @MockBean private SystemConfigService systemConfigService;
     @MockBean private JwtService jwtService;
     @MockBean private JwtAuthFilter jwtAuthFilter;
     @MockBean private AuthService authService;
@@ -61,6 +64,9 @@ class KnowledgeControllerTest {
         testUser.setDisplayName("Test User");
         testUser.setRole(Role.ROLE_MEMBER);
         testUser.setPasswordHash("hash");
+
+        SystemConfig config = new SystemConfig();
+        when(systemConfigService.getConfig()).thenReturn(config);
     }
 
     @Test

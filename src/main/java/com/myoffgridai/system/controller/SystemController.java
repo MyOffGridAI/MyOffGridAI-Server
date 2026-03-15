@@ -177,7 +177,7 @@ public class SystemController {
      * @return the storage settings
      */
     @GetMapping("/storage-settings")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MEMBER')")
     public ResponseEntity<ApiResponse<StorageSettingsDto>> getStorageSettings() {
         StorageSettingsDto settings = systemConfigService.getStorageSettings();
         return ResponseEntity.ok(ApiResponse.success(settings));

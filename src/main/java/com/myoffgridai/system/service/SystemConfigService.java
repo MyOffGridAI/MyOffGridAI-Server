@@ -143,7 +143,7 @@ public class SystemConfigService {
             usedSpaceMb = totalSpaceMb - freeSpaceMb;
         }
 
-        return new StorageSettingsDto(storagePath, totalSpaceMb, usedSpaceMb, freeSpaceMb);
+        return new StorageSettingsDto(storagePath, totalSpaceMb, usedSpaceMb, freeSpaceMb, config.getMaxUploadSizeMb());
     }
 
     /**
@@ -171,10 +171,18 @@ public class SystemConfigService {
             throw new IllegalArgumentException("Storage path is not writable");
         }
 
+        if (dto.maxUploadSizeMb() != null && (dto.maxUploadSizeMb() < 1 || dto.maxUploadSizeMb() > 100)) {
+            throw new IllegalArgumentException("Max upload size must be between 1 and 100 MB");
+        }
+
         SystemConfig config = getConfig();
         config.setKnowledgeStoragePath(dto.knowledgeStoragePath());
+        if (dto.maxUploadSizeMb() != null) {
+            config.setMaxUploadSizeMb(dto.maxUploadSizeMb());
+        }
         systemConfigRepository.save(config);
-        log.info("Knowledge storage path updated to: {}", dto.knowledgeStoragePath());
+        log.info("Storage settings updated — path: {}, maxUploadSizeMb: {}",
+                dto.knowledgeStoragePath(), config.getMaxUploadSizeMb());
 
         return getStorageSettings();
     }

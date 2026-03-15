@@ -139,7 +139,7 @@ class SystemControllerAiSettingsTest {
     @Test
     @WithMockUser(roles = "OWNER")
     void getStorageSettings_returns200() throws Exception {
-        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L);
+        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L, 25);
         when(systemConfigService.getStorageSettings()).thenReturn(settings);
 
         mockMvc.perform(get("/api/system/storage-settings"))
@@ -154,7 +154,7 @@ class SystemControllerAiSettingsTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void getStorageSettings_adminRole_returns200() throws Exception {
-        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L);
+        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L, 25);
         when(systemConfigService.getStorageSettings()).thenReturn(settings);
 
         mockMvc.perform(get("/api/system/storage-settings"))
@@ -170,18 +170,22 @@ class SystemControllerAiSettingsTest {
 
     @Test
     @WithMockUser(roles = "MEMBER")
-    void getStorageSettings_memberRole_returns403() throws Exception {
+    void getStorageSettings_memberRole_returns200() throws Exception {
+        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L, 25);
+        when(systemConfigService.getStorageSettings()).thenReturn(settings);
+
         mockMvc.perform(get("/api/system/storage-settings"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.maxUploadSizeMb").value(25));
     }
 
     @Test
     @WithMockUser(roles = "OWNER")
     void updateStorageSettings_returns200() throws Exception {
-        StorageSettingsDto updated = new StorageSettingsDto("/data/knowledge", 200000L, 80000L, 120000L);
+        StorageSettingsDto updated = new StorageSettingsDto("/data/knowledge", 200000L, 80000L, 120000L, 25);
         when(systemConfigService.updateStorageSettings(any(StorageSettingsDto.class))).thenReturn(updated);
 
-        StorageSettingsDto request = new StorageSettingsDto("/data/knowledge", null, null, null);
+        StorageSettingsDto request = new StorageSettingsDto("/data/knowledge", null, null, null, null);
 
         mockMvc.perform(put("/api/system/storage-settings")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -198,7 +202,7 @@ class SystemControllerAiSettingsTest {
         when(systemConfigService.updateStorageSettings(any(StorageSettingsDto.class)))
                 .thenThrow(new IllegalArgumentException("Storage path must be an absolute path"));
 
-        StorageSettingsDto request = new StorageSettingsDto("relative/path", null, null, null);
+        StorageSettingsDto request = new StorageSettingsDto("relative/path", null, null, null, null);
 
         mockMvc.perform(put("/api/system/storage-settings")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -210,7 +214,7 @@ class SystemControllerAiSettingsTest {
 
     @Test
     void updateStorageSettings_noAuth_returns401() throws Exception {
-        StorageSettingsDto request = new StorageSettingsDto("/data/knowledge", null, null, null);
+        StorageSettingsDto request = new StorageSettingsDto("/data/knowledge", null, null, null, null);
 
         mockMvc.perform(put("/api/system/storage-settings")
                         .contentType(MediaType.APPLICATION_JSON)
