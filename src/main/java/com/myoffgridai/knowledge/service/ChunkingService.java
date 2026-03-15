@@ -49,10 +49,28 @@ public class ChunkingService {
                 i++;
             }
 
-            // If we couldn't add any sentence (single sentence exceeds target), add it anyway
+            // If we couldn't add any sentence (single sentence exceeds target),
+            // hard-split it at word boundaries into CHUNK_SIZE_CHARS pieces
             if (i == sentenceStart && i < sentences.size()) {
-                chunk.append(sentences.get(i));
+                String oversized = sentences.get(i);
+                int pos = 0;
+                while (pos < oversized.length() && chunks.size() < AppConstants.MAX_CHUNKS_PER_DOCUMENT) {
+                    int end = Math.min(pos + AppConstants.CHUNK_SIZE_CHARS, oversized.length());
+                    // Try to break at a word boundary
+                    if (end < oversized.length()) {
+                        int lastSpace = oversized.lastIndexOf(' ', end);
+                        if (lastSpace > pos) {
+                            end = lastSpace;
+                        }
+                    }
+                    String piece = oversized.substring(pos, end).trim();
+                    if (piece.length() >= AppConstants.MIN_CHUNK_SIZE_CHARS) {
+                        chunks.add(piece);
+                    }
+                    pos = end;
+                }
                 i++;
+                continue;
             }
 
             String chunkText = chunk.toString().trim();

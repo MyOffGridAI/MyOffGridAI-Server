@@ -101,13 +101,16 @@ class ChunkingServiceTest {
     }
 
     @Test
-    void chunkText_singleLongSentence_producesChunk() {
-        // Single sentence longer than CHUNK_SIZE_CHARS
+    void chunkText_singleLongSentence_hardSplitsIntoMultipleChunks() {
+        // Single sentence longer than CHUNK_SIZE_CHARS is hard-split
         String longSentence = "A".repeat(2000) + ".";
 
         List<String> chunks = chunkingService.chunkText(longSentence);
 
-        assertThat(chunks).hasSize(1);
-        assertThat(chunks.get(0)).isEqualTo(longSentence);
+        assertThat(chunks).hasSize(2);
+        for (String chunk : chunks) {
+            assertThat(chunk.length()).isLessThanOrEqualTo(
+                    com.myoffgridai.config.AppConstants.CHUNK_SIZE_CHARS + 1);
+        }
     }
 }
