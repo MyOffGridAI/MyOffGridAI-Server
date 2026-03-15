@@ -304,6 +304,20 @@ public class ChatService {
     }
 
     /**
+     * Searches conversations by title for the given user.
+     *
+     * @param userId   the user's ID
+     * @param query    the search query to match against conversation titles
+     * @param pageable pagination parameters
+     * @return a page of conversations matching the query
+     */
+    public Page<Conversation> searchConversations(UUID userId, String query, Pageable pageable) {
+        log.debug("Searching conversations for user: {} with query: '{}'", userId, query);
+        return conversationRepository.findByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
+                userId, query, pageable);
+    }
+
+    /**
      * Renames a conversation with a new title.
      *
      * @param conversationId the conversation ID

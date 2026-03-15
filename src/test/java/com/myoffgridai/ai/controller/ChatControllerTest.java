@@ -166,6 +166,27 @@ class ChatControllerTest {
     }
 
     @Test
+    void searchConversations_returns200() throws Exception {
+        Page<Conversation> page = new PageImpl<>(List.of(testConversation));
+        when(chatService.searchConversations(any(UUID.class), anyString(), any()))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/chat/conversations/search")
+                        .param("q", "Test")
+                        .with(authentication(createAuth(testUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].title").value("Test Conversation"));
+    }
+
+    @Test
+    void searchConversations_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/chat/conversations/search")
+                        .param("q", "Test"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void sendMessage_sync_returns200() throws Exception {
         Message assistantMsg = new Message();
         assistantMsg.setId(UUID.randomUUID());

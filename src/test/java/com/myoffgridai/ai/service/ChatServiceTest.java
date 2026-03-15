@@ -24,6 +24,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -214,6 +218,36 @@ class ChatServiceTest {
 
         assertTrue(testConversation.getIsArchived());
         verify(conversationRepository).save(testConversation);
+    }
+
+    // ── searchConversations tests ──────────────────────────────────────
+
+    @Test
+    void searchConversations_returnsMatchingConversations() {
+        testConversation.setTitle("Solar Panel Setup");
+        Page<Conversation> page = new PageImpl<>(List.of(testConversation));
+        when(conversationRepository.findByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
+                eq(userId), eq("Solar"), any()))
+                .thenReturn(page);
+
+        Page<Conversation> result = chatService.searchConversations(
+                userId, "Solar", PageRequest.of(0, 20));
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Solar Panel Setup", result.getContent().get(0).getTitle());
+    }
+
+    @Test
+    void searchConversations_emptyQuery_returnsEmptyPage() {
+        Page<Conversation> emptyPage = new PageImpl<>(List.of());
+        when(conversationRepository.findByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
+                eq(userId), eq(""), any()))
+                .thenReturn(emptyPage);
+
+        Page<Conversation> result = chatService.searchConversations(
+                userId, "", PageRequest.of(0, 20));
+
+        assertEquals(0, result.getTotalElements());
     }
 
     // ── renameConversation tests ────────────────────────────────────────

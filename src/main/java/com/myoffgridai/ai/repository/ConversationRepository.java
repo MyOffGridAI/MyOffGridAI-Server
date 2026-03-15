@@ -25,6 +25,9 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
 
     List<Conversation> findByUserId(UUID userId);
 
+    Page<Conversation> findByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(
+            UUID userId, String title, Pageable pageable);
+
     @Modifying
     @Query("DELETE FROM Conversation c WHERE c.user.id = :userId")
     void deleteByUserId(@Param("userId") UUID userId);

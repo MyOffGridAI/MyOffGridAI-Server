@@ -100,6 +100,37 @@ public class ChatController {
     }
 
     /**
+     * Searches conversations by title for the authenticated user.
+     *
+     * @param principal the authenticated user
+     * @param q         the search query
+     * @param page      page number (default 0)
+     * @param size      page size (default 20)
+     * @return paginated list of matching conversation summaries
+     */
+    @GetMapping("/conversations/search")
+    public ResponseEntity<ApiResponse<List<ConversationSummaryDto>>> searchConversations(
+            @AuthenticationPrincipal User principal,
+            @RequestParam String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.debug("Searching conversations for user: {} with query: '{}'", principal.getUsername(), q);
+        int clampedSize = Math.min(size, AppConstants.MAX_PAGE_SIZE);
+        Page<Conversation> conversations = chatService.searchConversations(
+                principal.getId(), q, PageRequest.of(page, clampedSize));
+
+        List<ConversationSummaryDto> summaries = conversations.getContent().stream()
+                .map(this::toConversationSummaryDto)
+                .toList();
+
+        return ResponseEntity.ok(ApiResponse.paginated(
+                summaries,
+                conversations.getTotalElements(),
+                conversations.getNumber(),
+                conversations.getSize()));
+    }
+
+    /**
      * Gets a conversation with its messages.
      *
      * @param principal      the authenticated user
