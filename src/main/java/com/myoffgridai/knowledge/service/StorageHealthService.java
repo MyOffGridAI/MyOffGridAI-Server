@@ -1,6 +1,6 @@
 package com.myoffgridai.knowledge.service;
 
-import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -23,13 +23,24 @@ public class StorageHealthService {
 
     private static final Logger log = LoggerFactory.getLogger(StorageHealthService.class);
 
+    private final SystemConfigService systemConfigService;
+
+    /**
+     * Constructs the storage health service.
+     *
+     * @param systemConfigService the system config service for resolving the storage path
+     */
+    public StorageHealthService(SystemConfigService systemConfigService) {
+        this.systemConfigService = systemConfigService;
+    }
+
     /**
      * Verifies the knowledge storage directory on application startup.
      * Creates the directory if it does not exist.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void checkStorageDirectory() {
-        Path storagePath = Paths.get(AppConstants.KNOWLEDGE_STORAGE_BASE_PATH);
+        Path storagePath = Paths.get(systemConfigService.getConfig().getKnowledgeStoragePath());
         if (!Files.exists(storagePath)) {
             try {
                 Files.createDirectories(storagePath);

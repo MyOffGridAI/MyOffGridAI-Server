@@ -7,6 +7,7 @@ import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.JwtAuthFilter;
 import com.myoffgridai.config.TestSecurityConfig;
 import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.dto.StorageSettingsDto;
 import com.myoffgridai.system.service.FactoryResetService;
 import com.myoffgridai.system.service.NetworkTransitionService;
 import com.myoffgridai.system.service.SystemConfigService;
@@ -128,6 +129,90 @@ class SystemControllerAiSettingsTest {
         AiSettingsDto request = new AiSettingsDto("test-model", 1.0, 0.5, 5, 2048);
 
         mockMvc.perform(put("/api/system/ai-settings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── Storage Settings Tests ───────────────────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "OWNER")
+    void getStorageSettings_returns200() throws Exception {
+        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L);
+        when(systemConfigService.getStorageSettings()).thenReturn(settings);
+
+        mockMvc.perform(get("/api/system/storage-settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.knowledgeStoragePath").value("/var/myoffgridai/knowledge"))
+                .andExpect(jsonPath("$.data.totalSpaceMb").value(100000))
+                .andExpect(jsonPath("$.data.usedSpaceMb").value(60000))
+                .andExpect(jsonPath("$.data.freeSpaceMb").value(40000));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void getStorageSettings_adminRole_returns200() throws Exception {
+        StorageSettingsDto settings = new StorageSettingsDto("/var/myoffgridai/knowledge", 100000L, 60000L, 40000L);
+        when(systemConfigService.getStorageSettings()).thenReturn(settings);
+
+        mockMvc.perform(get("/api/system/storage-settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.knowledgeStoragePath").value("/var/myoffgridai/knowledge"));
+    }
+
+    @Test
+    void getStorageSettings_noAuth_returns401() throws Exception {
+        mockMvc.perform(get("/api/system/storage-settings"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "MEMBER")
+    void getStorageSettings_memberRole_returns403() throws Exception {
+        mockMvc.perform(get("/api/system/storage-settings"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "OWNER")
+    void updateStorageSettings_returns200() throws Exception {
+        StorageSettingsDto updated = new StorageSettingsDto("/data/knowledge", 200000L, 80000L, 120000L);
+        when(systemConfigService.updateStorageSettings(any(StorageSettingsDto.class))).thenReturn(updated);
+
+        StorageSettingsDto request = new StorageSettingsDto("/data/knowledge", null, null, null);
+
+        mockMvc.perform(put("/api/system/storage-settings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.knowledgeStoragePath").value("/data/knowledge"))
+                .andExpect(jsonPath("$.message").value("Storage settings updated successfully"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OWNER")
+    void updateStorageSettings_invalidPath_returns400() throws Exception {
+        when(systemConfigService.updateStorageSettings(any(StorageSettingsDto.class)))
+                .thenThrow(new IllegalArgumentException("Storage path must be an absolute path"));
+
+        StorageSettingsDto request = new StorageSettingsDto("relative/path", null, null, null);
+
+        mockMvc.perform(put("/api/system/storage-settings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Storage path must be an absolute path"));
+    }
+
+    @Test
+    void updateStorageSettings_noAuth_returns401() throws Exception {
+        StorageSettingsDto request = new StorageSettingsDto("/data/knowledge", null, null, null);
+
+        mockMvc.perform(put("/api/system/storage-settings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());

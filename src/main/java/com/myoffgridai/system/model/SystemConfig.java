@@ -53,6 +53,9 @@ public class SystemConfig {
     @Column(name = "ai_rag_max_context_tokens")
     private Integer aiRagMaxContextTokens = 2048;
 
+    @Column(name = "knowledge_storage_path")
+    private String knowledgeStoragePath = "/var/myoffgridai/knowledge";
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -110,4 +113,7 @@ public class SystemConfig {
 
     public Integer getAiRagMaxContextTokens() { return aiRagMaxContextTokens != null ? aiRagMaxContextTokens : 2048; }
     public void setAiRagMaxContextTokens(Integer aiRagMaxContextTokens) { this.aiRagMaxContextTokens = aiRagMaxContextTokens; }
+
+    public String getKnowledgeStoragePath() { return knowledgeStoragePath != null ? knowledgeStoragePath : "/var/myoffgridai/knowledge"; }
+    public void setKnowledgeStoragePath(String knowledgeStoragePath) { this.knowledgeStoragePath = knowledgeStoragePath; }
 }

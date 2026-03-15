@@ -1,7 +1,7 @@
 package com.myoffgridai.knowledge.service;
 
 import com.myoffgridai.common.exception.StorageException;
-import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -26,6 +26,17 @@ public class FileStorageService {
 
     private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
 
+    private final SystemConfigService systemConfigService;
+
+    /**
+     * Constructs the file storage service.
+     *
+     * @param systemConfigService the system config service for resolving the storage path
+     */
+    public FileStorageService(SystemConfigService systemConfigService) {
+        this.systemConfigService = systemConfigService;
+    }
+
     /**
      * Stores an uploaded file to the local filesystem under the user's directory.
      *
@@ -37,7 +48,7 @@ public class FileStorageService {
      */
     public String store(UUID userId, MultipartFile file, String filename) {
         try {
-            Path userDir = Paths.get(AppConstants.KNOWLEDGE_STORAGE_BASE_PATH, userId.toString());
+            Path userDir = Paths.get(getStorageBasePath(), userId.toString());
             Files.createDirectories(userDir);
 
             String safeFilename = UUID.randomUUID() + "-" + sanitizeFilename(filename);
@@ -74,7 +85,7 @@ public class FileStorageService {
      * @param userId the user's ID
      */
     public void deleteAllForUser(UUID userId) {
-        Path userDir = Paths.get(AppConstants.KNOWLEDGE_STORAGE_BASE_PATH, userId.toString());
+        Path userDir = Paths.get(getStorageBasePath(), userId.toString());
         if (!Files.exists(userDir)) {
             return;
         }
@@ -106,6 +117,10 @@ public class FileStorageService {
         } catch (IOException e) {
             throw new StorageException("Failed to read file: " + storagePath, e);
         }
+    }
+
+    private String getStorageBasePath() {
+        return systemConfigService.getConfig().getKnowledgeStoragePath();
     }
 
     private String sanitizeFilename(String filename) {

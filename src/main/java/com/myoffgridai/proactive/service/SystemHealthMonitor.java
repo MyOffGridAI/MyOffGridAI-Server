@@ -6,6 +6,7 @@ import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.proactive.model.NotificationType;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,6 +36,7 @@ public class SystemHealthMonitor {
     private final OllamaService ollamaService;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final SystemConfigService systemConfigService;
 
     private final Map<String, Instant> lastAlertTime = new ConcurrentHashMap<>();
 
@@ -44,13 +46,16 @@ public class SystemHealthMonitor {
      * @param ollamaService       the Ollama service for availability checks
      * @param userRepository      the user repository
      * @param notificationService the notification service
+     * @param systemConfigService the system config service for resolving the storage path
      */
     public SystemHealthMonitor(OllamaService ollamaService,
                                UserRepository userRepository,
-                               NotificationService notificationService) {
+                               NotificationService notificationService,
+                               SystemConfigService systemConfigService) {
         this.ollamaService = ollamaService;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -64,9 +69,10 @@ public class SystemHealthMonitor {
     }
 
     void checkDiskSpace() {
-        File storageDir = new File(AppConstants.KNOWLEDGE_STORAGE_BASE_PATH).getParentFile();
+        String storagePath = systemConfigService.getConfig().getKnowledgeStoragePath();
+        File storageDir = new File(storagePath).getParentFile();
         if (storageDir == null) {
-            storageDir = new File(AppConstants.KNOWLEDGE_STORAGE_BASE_PATH);
+            storageDir = new File(storagePath);
         }
 
         long freeSpaceMb = storageDir.getUsableSpace() / (1024 * 1024);

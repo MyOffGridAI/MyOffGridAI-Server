@@ -1,12 +1,17 @@
 package com.myoffgridai.system.service;
 
 import com.myoffgridai.system.dto.AiSettingsDto;
+import com.myoffgridai.system.dto.StorageSettingsDto;
 import com.myoffgridai.system.model.SystemConfig;
 import com.myoffgridai.system.repository.SystemConfigRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -114,6 +119,62 @@ public class SystemConfigService {
                 config.getAiMemoryTopK(),
                 config.getAiRagMaxContextTokens()
         );
+    }
+
+    /**
+     * Returns the current storage settings including disk usage for the knowledge storage path.
+     *
+     * @return the storage settings DTO
+     */
+    public StorageSettingsDto getStorageSettings() {
+        SystemConfig config = getConfig();
+        String storagePath = config.getKnowledgeStoragePath();
+        File storageDir = new File(storagePath);
+
+        long totalSpaceMb = 0;
+        long usedSpaceMb = 0;
+        long freeSpaceMb = 0;
+
+        if (storageDir.exists()) {
+            totalSpaceMb = storageDir.getTotalSpace() / (1024 * 1024);
+            freeSpaceMb = storageDir.getUsableSpace() / (1024 * 1024);
+            usedSpaceMb = totalSpaceMb - freeSpaceMb;
+        }
+
+        return new StorageSettingsDto(storagePath, totalSpaceMb, usedSpaceMb, freeSpaceMb);
+    }
+
+    /**
+     * Validates and updates the knowledge storage path.
+     *
+     * @param dto the new storage settings (only knowledgeStoragePath is used)
+     * @return the updated storage settings DTO with current disk usage
+     * @throws IllegalArgumentException if the path is not absolute or not writable
+     */
+    public StorageSettingsDto updateStorageSettings(StorageSettingsDto dto) {
+        if (dto.knowledgeStoragePath() == null || dto.knowledgeStoragePath().isBlank()) {
+            throw new IllegalArgumentException("Storage path must not be empty");
+        }
+
+        Path path = Paths.get(dto.knowledgeStoragePath());
+        if (!path.isAbsolute()) {
+            throw new IllegalArgumentException("Storage path must be an absolute path");
+        }
+
+        File dir = path.toFile();
+        if (dir.exists() && !dir.isDirectory()) {
+            throw new IllegalArgumentException("Storage path exists but is not a directory");
+        }
+        if (dir.exists() && !dir.canWrite()) {
+            throw new IllegalArgumentException("Storage path is not writable");
+        }
+
+        SystemConfig config = getConfig();
+        config.setKnowledgeStoragePath(dto.knowledgeStoragePath());
+        systemConfigRepository.save(config);
+        log.info("Knowledge storage path updated to: {}", dto.knowledgeStoragePath());
+
+        return getStorageSettings();
     }
 
     /**

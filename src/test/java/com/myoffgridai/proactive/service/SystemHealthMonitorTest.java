@@ -4,6 +4,8 @@ import com.myoffgridai.ai.service.OllamaService;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.repository.UserRepository;
+import com.myoffgridai.system.model.SystemConfig;
+import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,12 +24,17 @@ class SystemHealthMonitorTest {
     @Mock private OllamaService ollamaService;
     @Mock private UserRepository userRepository;
     @Mock private NotificationService notificationService;
+    @Mock private SystemConfigService systemConfigService;
 
     private SystemHealthMonitor monitor;
 
     @BeforeEach
     void setUp() {
-        monitor = new SystemHealthMonitor(ollamaService, userRepository, notificationService);
+        SystemConfig config = new SystemConfig();
+        config.setKnowledgeStoragePath("/tmp");
+        lenient().when(systemConfigService.getConfig()).thenReturn(config);
+
+        monitor = new SystemHealthMonitor(ollamaService, userRepository, notificationService, systemConfigService);
     }
 
     @Test

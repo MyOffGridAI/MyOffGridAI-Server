@@ -10,6 +10,7 @@ import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.dto.FactoryResetRequest;
 import com.myoffgridai.system.dto.InitializeRequest;
+import com.myoffgridai.system.dto.StorageSettingsDto;
 import com.myoffgridai.system.dto.SystemStatusDto;
 import com.myoffgridai.system.model.SystemConfig;
 import com.myoffgridai.system.service.FactoryResetService;
@@ -165,6 +166,35 @@ public class SystemController {
         try {
             AiSettingsDto updated = systemConfigService.updateAiSettings(dto);
             return ResponseEntity.ok(ApiResponse.success(updated, "AI settings updated successfully"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    /**
+     * Returns the current file storage settings and disk usage.
+     *
+     * @return the storage settings
+     */
+    @GetMapping("/storage-settings")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<StorageSettingsDto>> getStorageSettings() {
+        StorageSettingsDto settings = systemConfigService.getStorageSettings();
+        return ResponseEntity.ok(ApiResponse.success(settings));
+    }
+
+    /**
+     * Updates the file storage path. Validates that the path is absolute and writable.
+     *
+     * @param dto the new storage settings
+     * @return the updated storage settings with disk usage
+     */
+    @PutMapping("/storage-settings")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<StorageSettingsDto>> updateStorageSettings(@RequestBody StorageSettingsDto dto) {
+        try {
+            StorageSettingsDto updated = systemConfigService.updateStorageSettings(dto);
+            return ResponseEntity.ok(ApiResponse.success(updated, "Storage settings updated successfully"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
