@@ -190,7 +190,7 @@ public class SystemController {
      * @return the updated storage settings with disk usage
      */
     @PutMapping("/storage-settings")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'MEMBER')")
     public ResponseEntity<ApiResponse<StorageSettingsDto>> updateStorageSettings(@RequestBody StorageSettingsDto dto) {
         try {
             StorageSettingsDto updated = systemConfigService.updateStorageSettings(dto);
