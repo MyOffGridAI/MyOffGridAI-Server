@@ -249,7 +249,7 @@ public final class AppConstants {
     public static final int MEMORY_TOP_K = 5;
 
     /** Minimum cosine similarity threshold for RAG/memory results */
-    public static final float SIMILARITY_THRESHOLD = 0.7f;
+    public static final float SIMILARITY_THRESHOLD = 0.45f;
 
     /** Maximum tokens for RAG context injected into system prompt */
     public static final int RAG_MAX_CONTEXT_TOKENS = 2048;
