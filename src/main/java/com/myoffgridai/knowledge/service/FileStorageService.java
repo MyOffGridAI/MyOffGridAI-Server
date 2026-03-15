@@ -63,6 +63,34 @@ public class FileStorageService {
     }
 
     /**
+     * Stores raw bytes to the local filesystem under the user's directory.
+     *
+     * <p>Used for editor-created documents that don't originate from a
+     * {@link MultipartFile} upload.</p>
+     *
+     * @param userId   the owning user's ID
+     * @param bytes    the file content as a byte array
+     * @param filename the filename to use (will be sanitized)
+     * @return the absolute storage path
+     * @throws StorageException if the file cannot be written
+     */
+    public String storeBytes(UUID userId, byte[] bytes, String filename) {
+        try {
+            Path userDir = Paths.get(getStorageBasePath(), userId.toString());
+            Files.createDirectories(userDir);
+
+            String safeFilename = UUID.randomUUID() + "-" + sanitizeFilename(filename);
+            Path target = userDir.resolve(safeFilename);
+
+            Files.write(target, bytes);
+            log.info("Stored bytes: {} ({} bytes)", target, bytes.length);
+            return target.toAbsolutePath().toString();
+        } catch (IOException e) {
+            throw new StorageException("Failed to store file: " + filename, e);
+        }
+    }
+
+    /**
      * Deletes a file from the local filesystem.
      *
      * @param storagePath the absolute path of the file to delete

@@ -122,4 +122,24 @@ class FileStorageServiceTest {
         assertThatThrownBy(() -> fileStorageService.getInputStream("/nonexistent/file.txt"))
                 .isInstanceOf(StorageException.class);
     }
+
+    @Test
+    void storeBytes_savesFileSuccessfully() throws Exception {
+        byte[] bytes = "Hello from editor".getBytes();
+
+        String storagePath = fileStorageService.storeBytes(userId, bytes, "editor-doc.txt");
+
+        assertThat(storagePath).isNotEmpty();
+        assertThat(Files.exists(Path.of(storagePath))).isTrue();
+        assertThat(Files.readString(Path.of(storagePath))).isEqualTo("Hello from editor");
+    }
+
+    @Test
+    void storeBytes_sanitizesFilename() throws Exception {
+        byte[] bytes = "content".getBytes();
+
+        String storagePath = fileStorageService.storeBytes(userId, bytes, "my doc (1).txt");
+
+        assertThat(storagePath).doesNotContain(" ").doesNotContain("(");
+    }
 }

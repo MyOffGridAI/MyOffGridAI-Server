@@ -4,9 +4,11 @@ import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.common.exception.StorageException;
 import com.myoffgridai.common.exception.UnsupportedFileTypeException;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.knowledge.dto.DocumentContentDto;
 import com.myoffgridai.knowledge.dto.ExtractionResult;
 import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
 import com.myoffgridai.knowledge.model.DocumentStatus;
+import com.myoffgridai.knowledge.util.DeltaJsonUtils;
 import com.myoffgridai.knowledge.model.KnowledgeChunk;
 import com.myoffgridai.knowledge.model.KnowledgeDocument;
 import com.myoffgridai.knowledge.repository.KnowledgeChunkRepository;
@@ -143,6 +145,12 @@ public class KnowledgeService {
             ExtractionResult extraction = extractText(doc);
             if (extraction.fullText().isBlank()) {
                 throw new StorageException("No text could be extracted from document");
+            }
+
+            // 1b. Store Delta JSON content if not already set (editor-created docs already have it)
+            if (doc.getContent() == null || doc.getContent().isBlank()) {
+                doc.setContent(DeltaJsonUtils.textToDeltaJson(extraction.fullText()));
+                documentRepository.save(doc);
             }
 
             // 2. Chunk
@@ -325,8 +333,124 @@ public class KnowledgeService {
                 doc.getErrorMessage(),
                 doc.getChunkCount(),
                 doc.getUploadedAt(),
-                doc.getProcessedAt()
+                doc.getProcessedAt(),
+                doc.getContent() != null && !doc.getContent().isBlank(),
+                AppConstants.EDITABLE_MIME_TYPES.contains(doc.getMimeType())
         );
+    }
+
+    /**
+     * Retrieves the content of a document for viewing or editing.
+     *
+     * @param documentId the document ID
+     * @param userId     the requesting user's ID
+     * @return the document content DTO
+     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     */
+    @Transactional(readOnly = true)
+    public DocumentContentDto getDocumentContent(UUID documentId, UUID userId) {
+        KnowledgeDocument doc = findDocumentForUser(documentId, userId);
+        String title = doc.getDisplayName() != null ? doc.getDisplayName() : doc.getFilename();
+        return new DocumentContentDto(
+                doc.getId(),
+                title,
+                doc.getContent(),
+                doc.getMimeType(),
+                AppConstants.EDITABLE_MIME_TYPES.contains(doc.getMimeType())
+        );
+    }
+
+    /**
+     * Retrieves a document entity for download (streaming the original file).
+     *
+     * @param documentId the document ID
+     * @param userId     the requesting user's ID
+     * @return the knowledge document entity
+     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     */
+    @Transactional(readOnly = true)
+    public KnowledgeDocument getDocumentForDownload(UUID documentId, UUID userId) {
+        return findDocumentForUser(documentId, userId);
+    }
+
+    /**
+     * Creates a new document from the rich text editor.
+     *
+     * <p>Stores the plain text as a file, sets the MIME type to
+     * {@link AppConstants#MIME_QUILL_DELTA}, and triggers async processing.</p>
+     *
+     * @param userId          the owning user's ID
+     * @param title           the document title
+     * @param deltaJsonContent the Quill Delta JSON content
+     * @return DTO representing the newly created document
+     */
+    @Transactional
+    public KnowledgeDocumentDto createFromEditor(UUID userId, String title, String deltaJsonContent) {
+        String plainText = DeltaJsonUtils.deltaJsonToText(deltaJsonContent);
+        byte[] bytes = plainText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String filename = title.replaceAll("[^a-zA-Z0-9._-]", "_") + ".txt";
+        String storagePath = fileStorageService.storeBytes(userId, bytes, filename);
+
+        KnowledgeDocument doc = new KnowledgeDocument();
+        doc.setUserId(userId);
+        doc.setFilename(filename);
+        doc.setDisplayName(title);
+        doc.setMimeType(AppConstants.MIME_QUILL_DELTA);
+        doc.setStoragePath(storagePath);
+        doc.setFileSizeBytes(bytes.length);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setContent(deltaJsonContent);
+
+        doc = documentRepository.save(doc);
+        log.info("Created editor document: {} ({}), id={}", title, filename, doc.getId());
+
+        processDocumentAsync(doc.getId());
+
+        return toDto(doc);
+    }
+
+    /**
+     * Updates a document's content from the rich text editor.
+     *
+     * <p>Clears existing chunks and vector embeddings, updates the stored
+     * content, and triggers re-processing.</p>
+     *
+     * @param documentId       the document ID
+     * @param userId           the requesting user's ID
+     * @param deltaJsonContent the updated Quill Delta JSON content
+     * @return the updated document DTO
+     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     */
+    @Transactional
+    public KnowledgeDocumentDto updateContent(UUID documentId, UUID userId, String deltaJsonContent) {
+        KnowledgeDocument doc = findDocumentForUser(documentId, userId);
+
+        // Clear existing chunks and vectors
+        List<KnowledgeChunk> existingChunks = chunkRepository.findByDocumentIdOrderByChunkIndexAsc(documentId);
+        for (KnowledgeChunk chunk : existingChunks) {
+            vectorDocumentRepository.deleteBySourceIdAndSourceType(
+                    chunk.getId(), VectorSourceType.KNOWLEDGE_CHUNK);
+        }
+        chunkRepository.deleteByDocumentId(documentId);
+
+        // Update content
+        doc.setContent(deltaJsonContent);
+        doc.setStatus(DocumentStatus.PENDING);
+        doc.setErrorMessage(null);
+        doc.setChunkCount(0);
+        doc.setProcessedAt(null);
+
+        // Update the stored file with new plain text
+        String plainText = DeltaJsonUtils.deltaJsonToText(deltaJsonContent);
+        byte[] bytes = plainText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        doc.setFileSizeBytes(bytes.length);
+
+        doc = documentRepository.save(doc);
+        log.info("Updated content for document {}, re-processing", documentId);
+
+        processDocumentAsync(doc.getId());
+
+        return toDto(doc);
     }
 
     /**
@@ -368,6 +492,18 @@ public class KnowledgeService {
                 return ingestionService.extractPdf(is);
             } else if (mimeType.startsWith("image/")) {
                 return ocrService.extractFromImage(is);
+            } else if (AppConstants.MIME_DOCX.equals(mimeType)) {
+                return ingestionService.extractDocx(is);
+            } else if (AppConstants.MIME_DOC.equals(mimeType)) {
+                return ingestionService.extractDoc(is);
+            } else if (AppConstants.MIME_XLSX.equals(mimeType)) {
+                return ingestionService.extractXlsx(is);
+            } else if (AppConstants.MIME_XLS.equals(mimeType)) {
+                return ingestionService.extractXls(is);
+            } else if (AppConstants.MIME_PPTX.equals(mimeType)) {
+                return ingestionService.extractPptx(is);
+            } else if (AppConstants.MIME_PPT.equals(mimeType)) {
+                return ingestionService.extractPpt(is);
             } else {
                 return ingestionService.extractText(is);
             }

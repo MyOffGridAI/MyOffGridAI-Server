@@ -3,18 +3,19 @@ package com.myoffgridai.knowledge.controller;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.common.response.ApiResponse;
 import com.myoffgridai.config.AppConstants;
-import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
-import com.myoffgridai.knowledge.dto.KnowledgeSearchRequest;
-import com.myoffgridai.knowledge.dto.KnowledgeSearchResultDto;
-import com.myoffgridai.knowledge.dto.UpdateDisplayNameRequest;
+import com.myoffgridai.knowledge.dto.*;
+import com.myoffgridai.knowledge.model.KnowledgeDocument;
+import com.myoffgridai.knowledge.service.FileStorageService;
 import com.myoffgridai.knowledge.service.KnowledgeService;
 import com.myoffgridai.knowledge.service.SemanticSearchService;
 import com.myoffgridai.system.service.SystemConfigService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -37,6 +39,7 @@ public class KnowledgeController {
     private final KnowledgeService knowledgeService;
     private final SemanticSearchService semanticSearchService;
     private final SystemConfigService systemConfigService;
+    private final FileStorageService fileStorageService;
 
     /**
      * Constructs the knowledge controller.
@@ -44,13 +47,16 @@ public class KnowledgeController {
      * @param knowledgeService       the knowledge service
      * @param semanticSearchService  the semantic search service
      * @param systemConfigService    the system config service
+     * @param fileStorageService     the file storage service
      */
     public KnowledgeController(KnowledgeService knowledgeService,
                                 SemanticSearchService semanticSearchService,
-                                SystemConfigService systemConfigService) {
+                                SystemConfigService systemConfigService,
+                                FileStorageService fileStorageService) {
         this.knowledgeService = knowledgeService;
         this.semanticSearchService = semanticSearchService;
         this.systemConfigService = systemConfigService;
+        this.fileStorageService = fileStorageService;
     }
 
     /**
@@ -161,6 +167,81 @@ public class KnowledgeController {
         KnowledgeDocumentDto dto = knowledgeService.retryProcessing(
                 documentId, principal.getId());
         return ResponseEntity.ok(ApiResponse.success(dto, "Document re-queued for processing"));
+    }
+
+    /**
+     * Downloads the original file of a knowledge document.
+     *
+     * @param principal  the authenticated user
+     * @param documentId the document ID
+     * @return the file as a streaming response with appropriate headers
+     */
+    @GetMapping("/{documentId}/download")
+    public ResponseEntity<InputStreamResource> downloadDocument(
+            @AuthenticationPrincipal User principal,
+            @PathVariable java.util.UUID documentId) {
+        KnowledgeDocument doc = knowledgeService.getDocumentForDownload(documentId, principal.getId());
+        InputStream inputStream = fileStorageService.getInputStream(doc.getStoragePath());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(doc.getMimeType()));
+        headers.setContentDispositionFormData("attachment", doc.getFilename());
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(new InputStreamResource(inputStream));
+    }
+
+    /**
+     * Retrieves the content of a knowledge document for viewing or editing.
+     *
+     * @param principal  the authenticated user
+     * @param documentId the document ID
+     * @return the document content DTO
+     */
+    @GetMapping("/{documentId}/content")
+    public ResponseEntity<ApiResponse<DocumentContentDto>> getDocumentContent(
+            @AuthenticationPrincipal User principal,
+            @PathVariable java.util.UUID documentId) {
+        DocumentContentDto dto = knowledgeService.getDocumentContent(documentId, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    /**
+     * Creates a new document from the rich text editor.
+     *
+     * @param principal the authenticated user
+     * @param request   the request containing title and Delta JSON content
+     * @return 201 Created with the document DTO
+     */
+    @PostMapping("/create")
+    public ResponseEntity<ApiResponse<KnowledgeDocumentDto>> createDocument(
+            @AuthenticationPrincipal User principal,
+            @Valid @RequestBody CreateDocumentRequest request) {
+        log.info("Create document request from user {}: {}", principal.getId(), request.title());
+        KnowledgeDocumentDto dto = knowledgeService.createFromEditor(
+                principal.getId(), request.title(), request.content());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(dto, "Document created, processing started"));
+    }
+
+    /**
+     * Updates the content of a knowledge document from the rich text editor.
+     *
+     * @param principal  the authenticated user
+     * @param documentId the document ID
+     * @param request    the request containing updated Delta JSON content
+     * @return the updated document DTO
+     */
+    @PutMapping("/{documentId}/content")
+    public ResponseEntity<ApiResponse<KnowledgeDocumentDto>> updateDocumentContent(
+            @AuthenticationPrincipal User principal,
+            @PathVariable java.util.UUID documentId,
+            @Valid @RequestBody UpdateContentRequest request) {
+        log.info("Update content request from user {} for document {}", principal.getId(), documentId);
+        KnowledgeDocumentDto dto = knowledgeService.updateContent(
+                documentId, principal.getId(), request.content());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Content updated, re-processing started"));
     }
 
     /**

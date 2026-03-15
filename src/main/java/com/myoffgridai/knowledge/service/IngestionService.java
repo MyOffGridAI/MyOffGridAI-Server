@@ -5,6 +5,21 @@ import com.myoffgridai.knowledge.dto.PageContent;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.hslf.usermodel.HSLFSlideShow;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.extractor.WordExtractor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFShape;
+import org.apache.poi.xslf.usermodel.XSLFSlide;
+import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.sl.extractor.SlideShowExtractor;
+import org.apache.poi.hslf.usermodel.HSLFShape;
+import org.apache.poi.hslf.usermodel.HSLFTextParagraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -71,5 +86,181 @@ public class IngestionService {
         String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim();
         List<PageContent> pages = List.of(new PageContent(null, content));
         return new ExtractionResult(pages, content);
+    }
+
+    /**
+     * Extracts text from a DOCX (Office Open XML) document.
+     *
+     * @param inputStream the DOCX file input stream
+     * @return an extraction result with paragraphs as a single page
+     * @throws IOException if the document cannot be read
+     */
+    public ExtractionResult extractDocx(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from DOCX");
+        StringBuilder fullText = new StringBuilder();
+        try (XWPFDocument document = new XWPFDocument(inputStream)) {
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                String text = paragraph.getText();
+                if (text != null && !text.isBlank()) {
+                    fullText.append(text).append("\n");
+                }
+            }
+        }
+        String text = fullText.toString().trim();
+        List<PageContent> pages = text.isEmpty()
+                ? List.of() : List.of(new PageContent(null, text));
+        log.info("Extracted {} characters from DOCX", text.length());
+        return new ExtractionResult(pages, text);
+    }
+
+    /**
+     * Extracts text from a legacy DOC (BIFF) document.
+     *
+     * @param inputStream the DOC file input stream
+     * @return an extraction result with the full text as a single page
+     * @throws IOException if the document cannot be read
+     */
+    public ExtractionResult extractDoc(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from DOC");
+        String text;
+        try (HWPFDocument document = new HWPFDocument(inputStream);
+             WordExtractor extractor = new WordExtractor(document)) {
+            text = extractor.getText().trim();
+        }
+        List<PageContent> pages = text.isEmpty()
+                ? List.of() : List.of(new PageContent(null, text));
+        log.info("Extracted {} characters from DOC", text.length());
+        return new ExtractionResult(pages, text);
+    }
+
+    /**
+     * Extracts text from an XLSX (Office Open XML) spreadsheet.
+     *
+     * <p>Each sheet is treated as a separate page. Cells are joined by tabs,
+     * rows by newlines.</p>
+     *
+     * @param inputStream the XLSX file input stream
+     * @return an extraction result with each sheet as a page
+     * @throws IOException if the spreadsheet cannot be read
+     */
+    public ExtractionResult extractXlsx(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from XLSX");
+        try (XSSFWorkbook workbook = new XSSFWorkbook(inputStream)) {
+            return extractSpreadsheet(workbook);
+        }
+    }
+
+    /**
+     * Extracts text from a legacy XLS (BIFF) spreadsheet.
+     *
+     * <p>Each sheet is treated as a separate page. Cells are joined by tabs,
+     * rows by newlines.</p>
+     *
+     * @param inputStream the XLS file input stream
+     * @return an extraction result with each sheet as a page
+     * @throws IOException if the spreadsheet cannot be read
+     */
+    public ExtractionResult extractXls(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from XLS");
+        try (HSSFWorkbook workbook = new HSSFWorkbook(inputStream)) {
+            return extractSpreadsheet(workbook);
+        }
+    }
+
+    /**
+     * Extracts text from a PPTX (Office Open XML) presentation.
+     *
+     * <p>Each slide is treated as a separate page. Text is extracted from
+     * all text shapes on each slide.</p>
+     *
+     * @param inputStream the PPTX file input stream
+     * @return an extraction result with each slide as a page
+     * @throws IOException if the presentation cannot be read
+     */
+    public ExtractionResult extractPptx(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from PPTX");
+        List<PageContent> pages = new ArrayList<>();
+        StringBuilder fullText = new StringBuilder();
+        try (XMLSlideShow pptx = new XMLSlideShow(inputStream)) {
+            int slideNum = 1;
+            for (XSLFSlide slide : pptx.getSlides()) {
+                StringBuilder slideText = new StringBuilder();
+                for (XSLFShape shape : slide.getShapes()) {
+                    if (shape instanceof XSLFTextShape textShape) {
+                        String text = textShape.getText();
+                        if (text != null && !text.isBlank()) {
+                            slideText.append(text).append("\n");
+                        }
+                    }
+                }
+                String text = slideText.toString().trim();
+                if (!text.isEmpty()) {
+                    pages.add(new PageContent(slideNum, text));
+                    fullText.append(text).append("\n");
+                }
+                slideNum++;
+            }
+        }
+        String result = fullText.toString().trim();
+        log.info("Extracted {} slides from PPTX", pages.size());
+        return new ExtractionResult(pages, result);
+    }
+
+    /**
+     * Extracts text from a legacy PPT (BIFF) presentation.
+     *
+     * <p>Uses {@link SlideShowExtractor} to extract all text from the
+     * slide show. The entire text is returned as a single page.</p>
+     *
+     * @param inputStream the PPT file input stream
+     * @return an extraction result with the full text as a single page
+     * @throws IOException if the presentation cannot be read
+     */
+    public ExtractionResult extractPpt(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from PPT");
+        String text;
+        try (HSLFSlideShow ppt = new HSLFSlideShow(inputStream);
+             SlideShowExtractor<HSLFShape, HSLFTextParagraph> extractor =
+                     new SlideShowExtractor<>(ppt)) {
+            text = extractor.getText().trim();
+        }
+        List<PageContent> pages = text.isEmpty()
+                ? List.of() : List.of(new PageContent(null, text));
+        log.info("Extracted {} characters from PPT", text.length());
+        return new ExtractionResult(pages, text);
+    }
+
+    private ExtractionResult extractSpreadsheet(Workbook workbook) {
+        List<PageContent> pages = new ArrayList<>();
+        StringBuilder fullText = new StringBuilder();
+        DataFormatter formatter = new DataFormatter();
+
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet sheet = workbook.getSheetAt(i);
+            StringBuilder sheetText = new StringBuilder();
+            for (Row row : sheet) {
+                StringBuilder rowText = new StringBuilder();
+                for (Cell cell : row) {
+                    String value = formatter.formatCellValue(cell);
+                    if (!value.isBlank()) {
+                        if (rowText.length() > 0) {
+                            rowText.append("\t");
+                        }
+                        rowText.append(value);
+                    }
+                }
+                if (rowText.length() > 0) {
+                    sheetText.append(rowText).append("\n");
+                }
+            }
+            String text = sheetText.toString().trim();
+            if (!text.isEmpty()) {
+                pages.add(new PageContent(i + 1, text));
+                fullText.append(text).append("\n");
+            }
+        }
+        String result = fullText.toString().trim();
+        log.info("Extracted {} sheets from spreadsheet", pages.size());
+        return new ExtractionResult(pages, result);
     }
 }

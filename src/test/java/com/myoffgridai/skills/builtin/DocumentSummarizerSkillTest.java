@@ -68,7 +68,7 @@ class DocumentSummarizerSkillTest {
         UUID docId = UUID.randomUUID();
         KnowledgeDocumentDto doc = new KnowledgeDocumentDto(
                 docId, "test.txt", "Test Doc", "text/plain",
-                1000L, DocumentStatus.PENDING, null, 0, Instant.now(), Instant.now());
+                1000L, DocumentStatus.PENDING, null, 0, Instant.now(), Instant.now(), false, true);
         when(knowledgeService.getDocument(docId, userId)).thenReturn(doc);
 
         Map<String, Object> result = skill.execute(userId,
@@ -83,7 +83,7 @@ class DocumentSummarizerSkillTest {
         UUID docId = UUID.randomUUID();
         KnowledgeDocumentDto doc = new KnowledgeDocumentDto(
                 docId, "guide.pdf", "Solar Guide", "application/pdf",
-                5000L, DocumentStatus.READY, null, 3, Instant.now(), Instant.now());
+                5000L, DocumentStatus.READY, null, 3, Instant.now(), Instant.now(), false, false);
         when(knowledgeService.getDocument(docId, userId)).thenReturn(doc);
 
         KnowledgeChunk chunk = new KnowledgeChunk();
@@ -110,7 +110,7 @@ class DocumentSummarizerSkillTest {
         UUID docId = UUID.randomUUID();
         KnowledgeDocumentDto doc = new KnowledgeDocumentDto(
                 docId, "test.txt", null, "text/plain",
-                1000L, DocumentStatus.READY, null, 1, Instant.now(), Instant.now());
+                1000L, DocumentStatus.READY, null, 1, Instant.now(), Instant.now(), false, true);
         when(knowledgeService.getDocument(docId, userId)).thenReturn(doc);
 
         KnowledgeChunk chunk = new KnowledgeChunk();
@@ -134,7 +134,7 @@ class DocumentSummarizerSkillTest {
         UUID docId = UUID.randomUUID();
         KnowledgeDocumentDto doc = new KnowledgeDocumentDto(
                 docId, "file.txt", "My Custom Name", "text/plain",
-                1000L, DocumentStatus.READY, null, 1, Instant.now(), Instant.now());
+                1000L, DocumentStatus.READY, null, 1, Instant.now(), Instant.now(), false, true);
         when(knowledgeService.getDocument(docId, userId)).thenReturn(doc);
         when(knowledgeService.getChunks(docId, userId)).thenReturn(List.of());
 

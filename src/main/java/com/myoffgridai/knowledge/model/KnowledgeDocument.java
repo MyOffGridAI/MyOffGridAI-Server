@@ -53,6 +53,9 @@ public class KnowledgeDocument {
     @Column(name = "processed_at")
     private Instant processedAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
     public KnowledgeDocument() {
     }
 
@@ -100,4 +103,7 @@ public class KnowledgeDocument {
 
     public Instant getProcessedAt() { return processedAt; }
     public void setProcessedAt(Instant processedAt) { this.processedAt = processedAt; }
+
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
 }

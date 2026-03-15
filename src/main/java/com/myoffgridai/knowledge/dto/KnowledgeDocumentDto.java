@@ -18,6 +18,8 @@ import java.util.UUID;
  * @param chunkCount    the number of chunks produced
  * @param uploadedAt    the upload timestamp
  * @param processedAt   the processing completion timestamp (may be null)
+ * @param hasContent    whether extracted content is available for viewing
+ * @param editable      whether the document can be edited in the rich text editor
  */
 public record KnowledgeDocumentDto(
         UUID id,
@@ -29,6 +31,8 @@ public record KnowledgeDocumentDto(
         String errorMessage,
         int chunkCount,
         Instant uploadedAt,
-        Instant processedAt
+        Instant processedAt,
+        boolean hasContent,
+        boolean editable
 ) {
 }

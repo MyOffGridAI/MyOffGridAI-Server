@@ -301,6 +301,42 @@ public final class AppConstants {
     /** Base path for knowledge management endpoints */
     public static final String KNOWLEDGE_API_PATH = "/api/knowledge";
 
+    /** MIME type for DOCX files */
+    public static final String MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    /** MIME type for legacy DOC files */
+    public static final String MIME_DOC = "application/msword";
+
+    /** MIME type for XLSX files */
+    public static final String MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /** MIME type for legacy XLS files */
+    public static final String MIME_XLS = "application/vnd.ms-excel";
+
+    /** MIME type for PPTX files */
+    public static final String MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+
+    /** MIME type for legacy PPT files */
+    public static final String MIME_PPT = "application/vnd.ms-powerpoint";
+
+    /** MIME type for Quill Delta JSON documents created in the editor */
+    public static final String MIME_QUILL_DELTA = "application/x-quill-delta";
+
+    /** Word-processing MIME types (DOC, DOCX) */
+    public static final java.util.List<String> WORD_MIME_TYPES = java.util.List.of(MIME_DOCX, MIME_DOC);
+
+    /** Spreadsheet MIME types (XLSX, XLS) */
+    public static final java.util.List<String> SPREADSHEET_MIME_TYPES = java.util.List.of(MIME_XLSX, MIME_XLS);
+
+    /** Presentation MIME types (PPTX, PPT) */
+    public static final java.util.List<String> PRESENTATION_MIME_TYPES = java.util.List.of(MIME_PPTX, MIME_PPT);
+
+    /** MIME types that support in-app editing via the rich text editor */
+    public static final java.util.List<String> EDITABLE_MIME_TYPES = java.util.List.of(
+            "text/plain", "text/markdown", "text/x-markdown",
+            MIME_DOCX, MIME_DOC, MIME_QUILL_DELTA
+    );
+
     /** Supported MIME types for knowledge document upload */
     public static final java.util.List<String> SUPPORTED_MIME_TYPES = java.util.List.of(
             "application/pdf",
@@ -310,7 +346,13 @@ public final class AppConstants {
             "image/png",
             "image/jpeg",
             "image/tiff",
-            "image/webp"
+            "image/webp",
+            MIME_DOCX,
+            MIME_DOC,
+            MIME_XLSX,
+            MIME_XLS,
+            MIME_PPTX,
+            MIME_PPT
     );
 
     // ── Skills & Automation ───────────────────────────────────────────────

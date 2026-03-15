@@ -2,6 +2,7 @@ package com.myoffgridai.knowledge.service;
 
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.common.exception.UnsupportedFileTypeException;
+import com.myoffgridai.knowledge.dto.DocumentContentDto;
 import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
 import com.myoffgridai.knowledge.model.DocumentStatus;
 import com.myoffgridai.knowledge.model.KnowledgeChunk;
@@ -225,12 +226,14 @@ class KnowledgeServiceTest {
     }
 
     @Test
-    void toDto_mapsAllFields() {
+    void toDto_mapsAllFieldsIncludingHasContentAndEditable() {
         KnowledgeDocument doc = createTestDocument();
         doc.setId(UUID.randomUUID());
         doc.setDisplayName("My Doc");
         doc.setChunkCount(10);
         doc.setStatus(DocumentStatus.READY);
+        doc.setContent("[{\"insert\":\"some content\\n\"}]");
+        doc.setMimeType("text/plain");
 
         KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
 
@@ -241,6 +244,126 @@ class KnowledgeServiceTest {
         assertThat(dto.fileSizeBytes()).isEqualTo(doc.getFileSizeBytes());
         assertThat(dto.status()).isEqualTo(DocumentStatus.READY);
         assertThat(dto.chunkCount()).isEqualTo(10);
+        assertThat(dto.hasContent()).isTrue();
+        assertThat(dto.editable()).isTrue();
+    }
+
+    @Test
+    void toDto_noContent_hasContentFalse() {
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(UUID.randomUUID());
+
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
+
+        assertThat(dto.hasContent()).isFalse();
+    }
+
+    @Test
+    void toDto_nonEditableMimeType_editableFalse() {
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(UUID.randomUUID());
+        doc.setMimeType("application/pdf");
+
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
+
+        assertThat(dto.editable()).isFalse();
+    }
+
+    @Test
+    void getDocumentContent_returnsContentDto() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setDisplayName("My Guide");
+        doc.setContent("[{\"insert\":\"hello\\n\"}]");
+        doc.setMimeType("text/plain");
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        DocumentContentDto dto = knowledgeService.getDocumentContent(docId, userId);
+
+        assertThat(dto.documentId()).isEqualTo(docId);
+        assertThat(dto.title()).isEqualTo("My Guide");
+        assertThat(dto.content()).isEqualTo("[{\"insert\":\"hello\\n\"}]");
+        assertThat(dto.editable()).isTrue();
+    }
+
+    @Test
+    void getDocumentContent_noDisplayName_usesFilename() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setContent("[{\"insert\":\"text\\n\"}]");
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        DocumentContentDto dto = knowledgeService.getDocumentContent(docId, userId);
+
+        assertThat(dto.title()).isEqualTo("test.pdf");
+    }
+
+    @Test
+    void getDocumentForDownload_returnsEntity() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        KnowledgeDocument result = knowledgeService.getDocumentForDownload(docId, userId);
+
+        assertThat(result.getId()).isEqualTo(docId);
+    }
+
+    @Test
+    void createFromEditor_createsDocumentWithQuillMimeType() {
+        String deltaJson = "[{\"insert\":\"New doc content\\n\"}]";
+        when(fileStorageService.storeBytes(eq(userId), any(byte[].class), anyString()))
+                .thenReturn("/path/to/file");
+        when(documentRepository.save(any(KnowledgeDocument.class)))
+                .thenAnswer(invocation -> {
+                    KnowledgeDocument doc = invocation.getArgument(0);
+                    doc.setId(UUID.randomUUID());
+                    return doc;
+                });
+
+        KnowledgeDocumentDto dto = knowledgeService.createFromEditor(userId, "My New Doc", deltaJson);
+
+        assertThat(dto.status()).isEqualTo(DocumentStatus.PENDING);
+        assertThat(dto.mimeType()).isEqualTo("application/x-quill-delta");
+        verify(fileStorageService).storeBytes(eq(userId), any(byte[].class), anyString());
+        verify(documentRepository).save(any(KnowledgeDocument.class));
+    }
+
+    @Test
+    void updateContent_clearsChunksAndReProcesses() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setMimeType("text/plain");
+        doc.setContent("[{\"insert\":\"old\\n\"}]");
+        doc.setStatus(DocumentStatus.READY);
+        doc.setChunkCount(5);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+
+        KnowledgeChunk chunk = new KnowledgeChunk();
+        chunk.setId(UUID.randomUUID());
+        when(chunkRepository.findByDocumentIdOrderByChunkIndexAsc(docId))
+                .thenReturn(List.of(chunk));
+
+        when(documentRepository.save(any(KnowledgeDocument.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        String newDelta = "[{\"insert\":\"updated content\\n\"}]";
+        KnowledgeDocumentDto dto = knowledgeService.updateContent(docId, userId, newDelta);
+
+        assertThat(dto.status()).isEqualTo(DocumentStatus.PENDING);
+        assertThat(dto.chunkCount()).isEqualTo(0);
+        verify(vectorDocumentRepository).deleteBySourceIdAndSourceType(
+                chunk.getId(), VectorSourceType.KNOWLEDGE_CHUNK);
+        verify(chunkRepository).deleteByDocumentId(docId);
+        verify(documentRepository).save(any(KnowledgeDocument.class));
     }
 
     private KnowledgeDocument createTestDocument() {

@@ -8,9 +8,12 @@ import com.myoffgridai.auth.service.JwtService;
 import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.JwtAuthFilter;
 import com.myoffgridai.config.TestSecurityConfig;
+import com.myoffgridai.knowledge.dto.DocumentContentDto;
 import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
 import com.myoffgridai.knowledge.dto.KnowledgeSearchResultDto;
 import com.myoffgridai.knowledge.model.DocumentStatus;
+import com.myoffgridai.knowledge.model.KnowledgeDocument;
+import com.myoffgridai.knowledge.service.FileStorageService;
 import com.myoffgridai.knowledge.service.KnowledgeService;
 import com.myoffgridai.knowledge.service.SemanticSearchService;
 import com.myoffgridai.system.model.SystemConfig;
@@ -27,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -47,6 +51,7 @@ class KnowledgeControllerTest {
     @MockBean private KnowledgeService knowledgeService;
     @MockBean private SemanticSearchService semanticSearchService;
     @MockBean private SystemConfigService systemConfigService;
+    @MockBean private FileStorageService fileStorageService;
     @MockBean private JwtService jwtService;
     @MockBean private JwtAuthFilter jwtAuthFilter;
     @MockBean private AuthService authService;
@@ -127,7 +132,8 @@ class KnowledgeControllerTest {
         UUID docId = UUID.randomUUID();
         KnowledgeDocumentDto dto = new KnowledgeDocumentDto(
                 docId, "test.pdf", "My Doc", "application/pdf",
-                1024, DocumentStatus.READY, null, 5, Instant.now(), Instant.now());
+                1024, DocumentStatus.READY, null, 5, Instant.now(), Instant.now(),
+                true, false);
         when(knowledgeService.updateDisplayName(docId, userId, "My Doc")).thenReturn(dto);
 
         mockMvc.perform(put("/api/knowledge/" + docId + "/display-name")
@@ -213,9 +219,106 @@ class KnowledgeControllerTest {
         verify(semanticSearchService).search(userId, "test", 5);
     }
 
+    // ── New endpoint tests ──────────────────────────────────────────────────
+
+    @Test
+    void downloadDocument_returnsFile() throws Exception {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = new KnowledgeDocument();
+        doc.setId(docId);
+        doc.setFilename("test.pdf");
+        doc.setMimeType("application/pdf");
+        doc.setStoragePath("/path/to/test.pdf");
+        when(knowledgeService.getDocumentForDownload(docId, userId)).thenReturn(doc);
+        when(fileStorageService.getInputStream("/path/to/test.pdf"))
+                .thenReturn(new ByteArrayInputStream("pdf bytes".getBytes()));
+
+        mockMvc.perform(get("/api/knowledge/" + docId + "/download")
+                        .with(user(testUser)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().exists("Content-Disposition"));
+    }
+
+    @Test
+    void getDocumentContent_returnsContent() throws Exception {
+        UUID docId = UUID.randomUUID();
+        DocumentContentDto contentDto = new DocumentContentDto(
+                docId, "My Doc", "[{\"insert\":\"hello\\n\"}]", "text/plain", true);
+        when(knowledgeService.getDocumentContent(docId, userId)).thenReturn(contentDto);
+
+        mockMvc.perform(get("/api/knowledge/" + docId + "/content")
+                        .with(user(testUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.title").value("My Doc"))
+                .andExpect(jsonPath("$.data.editable").value(true));
+    }
+
+    @Test
+    void createDocument_returnsCreated() throws Exception {
+        KnowledgeDocumentDto dto = createTestDto();
+        when(knowledgeService.createFromEditor(eq(userId), eq("My Note"), anyString()))
+                .thenReturn(dto);
+
+        mockMvc.perform(post("/api/knowledge/create")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"My Note\",\"content\":\"[{\\\"insert\\\":\\\"test\\\\n\\\"}]\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Document created, processing started"));
+    }
+
+    @Test
+    void createDocument_blankTitle_returns400() throws Exception {
+        mockMvc.perform(post("/api/knowledge/create")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"\",\"content\":\"[{\\\"insert\\\":\\\"x\\\"}]\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createDocument_blankContent_returns400() throws Exception {
+        mockMvc.perform(post("/api/knowledge/create")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"content\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDocumentContent_returnsUpdated() throws Exception {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocumentDto dto = createTestDto();
+        when(knowledgeService.updateContent(eq(docId), eq(userId), anyString()))
+                .thenReturn(dto);
+
+        mockMvc.perform(put("/api/knowledge/" + docId + "/content")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"[{\\\"insert\\\":\\\"updated\\\\n\\\"}]\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Content updated, re-processing started"));
+    }
+
+    @Test
+    void updateDocumentContent_blankContent_returns400() throws Exception {
+        UUID docId = UUID.randomUUID();
+
+        mockMvc.perform(put("/api/knowledge/" + docId + "/content")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     private KnowledgeDocumentDto createTestDto() {
         return new KnowledgeDocumentDto(
                 UUID.randomUUID(), "test.pdf", null, "application/pdf",
-                1024, DocumentStatus.PENDING, null, 0, Instant.now(), null);
+                1024, DocumentStatus.PENDING, null, 0, Instant.now(), null,
+                false, false);
     }
 }
