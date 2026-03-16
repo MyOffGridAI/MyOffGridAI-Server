@@ -70,7 +70,7 @@ class InsightGeneratorServiceTest {
         assertEquals(1, insights.size());
         assertEquals("Temperature is dropping, protect your plants", insights.get(0).getContent());
         assertEquals(InsightCategory.HOMESTEAD, insights.get(0).getCategory());
-        verify(notificationService).createNotification(eq(userId), anyString(), anyString(), any(), any());
+        verify(notificationService).createNotification(eq(userId), anyString(), anyString(), any(), any(), any());
     }
 
     @Test

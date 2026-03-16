@@ -5,6 +5,7 @@ import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.proactive.model.NotificationSeverity;
 import com.myoffgridai.proactive.model.NotificationType;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
@@ -129,7 +130,8 @@ public class SystemHealthMonitor {
 
         for (User admin : admins) {
             notificationService.createNotification(
-                    admin.getId(), title, body, NotificationType.SYSTEM_HEALTH, null);
+                    admin.getId(), title, body,
+                    NotificationType.SYSTEM_HEALTH, NotificationSeverity.WARNING, null);
         }
     }
 }

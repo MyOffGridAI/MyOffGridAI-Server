@@ -32,6 +32,7 @@
         <byte-buddy.version>1.18.4</byte-buddy.version>
         <bucket4j.version>8.10.1</bucket4j.version>
         <logstash-logback.version>8.0</logstash-logback.version>
+        <paho.version>1.2.5</paho.version>
     </properties>
 
     <dependencyManagement>
@@ -164,6 +165,13 @@
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j-core</artifactId>
             <version>${bucket4j.version}</version>
+        </dependency>
+
+        <!-- MQTT Client -->
+        <dependency>
+            <groupId>org.eclipse.paho</groupId>
+            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+            <version>${paho.version}</version>
         </dependency>
 
         <!-- Structured JSON Logging -->

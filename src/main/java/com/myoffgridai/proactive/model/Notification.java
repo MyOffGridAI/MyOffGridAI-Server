@@ -45,6 +45,13 @@ public class Notification {
     @Column(name = "read_at")
     private Instant readAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private NotificationSeverity severity;
+
+    @Column(name = "mqtt_delivered", nullable = false)
+    private boolean mqttDelivered = false;
+
     @Column(columnDefinition = "TEXT")
     private String metadata;
 
@@ -81,6 +88,12 @@ public class Notification {
 
     public Instant getReadAt() { return readAt; }
     public void setReadAt(Instant readAt) { this.readAt = readAt; }
+
+    public NotificationSeverity getSeverity() { return severity; }
+    public void setSeverity(NotificationSeverity severity) { this.severity = severity; }
+
+    public boolean getMqttDelivered() { return mqttDelivered; }
+    public void setMqttDelivered(boolean mqttDelivered) { this.mqttDelivered = mqttDelivered; }
 
     public String getMetadata() { return metadata; }
     public void setMetadata(String metadata) { this.metadata = metadata; }

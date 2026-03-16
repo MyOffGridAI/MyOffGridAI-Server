@@ -47,7 +47,7 @@ class SystemHealthMonitorTest {
         monitor.checkOllamaAvailability();
 
         verify(notificationService).createNotification(
-                eq(admin.getId()), eq("Ollama Unavailable"), anyString(), any(), any());
+                eq(admin.getId()), eq("Ollama Unavailable"), anyString(), any(), any(), any());
     }
 
     @Test
@@ -88,7 +88,7 @@ class SystemHealthMonitorTest {
 
         // Only one notification due to cooldown
         verify(notificationService, times(1)).createNotification(
-                eq(admin.getId()), eq("Ollama Unavailable"), anyString(), any(), any());
+                eq(admin.getId()), eq("Ollama Unavailable"), anyString(), any(), any(), any());
     }
 
     @Test

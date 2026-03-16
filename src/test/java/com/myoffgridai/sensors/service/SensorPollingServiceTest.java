@@ -69,10 +69,10 @@ class SensorPollingServiceTest {
 
     @Test
     void startPolling_alreadyPolling_skips() {
-        when(serialPort.isOpen()).thenReturn(true);
+        lenient().when(serialPort.isOpen()).thenReturn(true);
         when(serialPortService.openPort(anyString(), anyInt())).thenReturn(serialPort);
-        when(sensorRepository.save(any(Sensor.class))).thenAnswer(i -> i.getArgument(0));
-        when(serialPortService.readLine(serialPort)).thenReturn(Optional.empty());
+        lenient().when(sensorRepository.save(any(Sensor.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(serialPortService.readLine(serialPort)).thenReturn(Optional.empty());
 
         pollingService.startPolling(testSensor);
         pollingService.startPolling(testSensor);

@@ -475,4 +475,16 @@ public final class AppConstants {
 
     /** Default MQTT WebSocket port */
     public static final int MQTT_WEBSOCKET_PORT = 9001;
+
+    /** MQTT topic pattern for user-specific notifications (format with userId) */
+    public static final String MQTT_TOPIC_USER_NOTIFICATIONS = "/myoffgridai/%s/notifications";
+
+    /** MQTT topic for broadcast notifications to all connected devices */
+    public static final String MQTT_TOPIC_BROADCAST = "/myoffgridai/broadcast";
+
+    /** Default MQTT client ID for the server publisher */
+    public static final String MQTT_SERVER_CLIENT_ID = "myoffgridai-server";
+
+    /** MQTT QoS level: at-least-once delivery */
+    public static final int MQTT_QOS = 1;
 }

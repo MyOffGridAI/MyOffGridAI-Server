@@ -1,7 +1,10 @@
 package com.myoffgridai.proactive.service;
 
 import com.myoffgridai.common.exception.EntityNotFoundException;
+import com.myoffgridai.notification.service.DeviceRegistrationService;
+import com.myoffgridai.notification.service.MqttPublisherService;
 import com.myoffgridai.proactive.model.Notification;
+import com.myoffgridai.proactive.model.NotificationSeverity;
 import com.myoffgridai.proactive.model.NotificationType;
 import com.myoffgridai.proactive.repository.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,13 +29,16 @@ class NotificationServiceTest {
 
     @Mock private NotificationRepository notificationRepository;
     @Mock private NotificationSseRegistry sseRegistry;
+    @Mock private MqttPublisherService mqttPublisherService;
+    @Mock private DeviceRegistrationService deviceRegistrationService;
 
     private NotificationService service;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        service = new NotificationService(notificationRepository, sseRegistry);
+        service = new NotificationService(notificationRepository, sseRegistry,
+                mqttPublisherService, deviceRegistrationService);
         userId = UUID.randomUUID();
     }
 
@@ -40,10 +46,11 @@ class NotificationServiceTest {
     void createNotification_persistsAndBroadcasts() {
         when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> {
             Notification n = i.getArgument(0);
-            n.setId(UUID.randomUUID());
-            n.setCreatedAt(Instant.now());
+            if (n.getId() == null) n.setId(UUID.randomUUID());
+            if (n.getCreatedAt() == null) n.setCreatedAt(Instant.now());
             return n;
         });
+        when(deviceRegistrationService.getTopicsForUser(userId)).thenReturn(List.of());
 
         Notification result = service.createNotification(
                 userId, "Test", "Body", NotificationType.GENERAL, null);
@@ -52,7 +59,46 @@ class NotificationServiceTest {
         assertEquals("Test", result.getTitle());
         assertEquals("Body", result.getBody());
         assertEquals(NotificationType.GENERAL, result.getType());
+        assertEquals(NotificationSeverity.INFO, result.getSeverity());
         verify(sseRegistry).broadcast(eq(userId), any(Notification.class));
+    }
+
+    @Test
+    void createNotification_withSeverity_setsSeverity() {
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> {
+            Notification n = i.getArgument(0);
+            if (n.getId() == null) n.setId(UUID.randomUUID());
+            if (n.getCreatedAt() == null) n.setCreatedAt(Instant.now());
+            return n;
+        });
+        when(deviceRegistrationService.getTopicsForUser(userId)).thenReturn(List.of());
+
+        Notification result = service.createNotification(
+                userId, "Alert", "Body", NotificationType.SYSTEM_HEALTH,
+                NotificationSeverity.CRITICAL, null);
+
+        assertEquals(NotificationSeverity.CRITICAL, result.getSeverity());
+    }
+
+    @Test
+    void createNotification_withRegisteredDevices_publishesMqtt() {
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> {
+            Notification n = i.getArgument(0);
+            if (n.getId() == null) n.setId(UUID.randomUUID());
+            if (n.getCreatedAt() == null) n.setCreatedAt(Instant.now());
+            return n;
+        });
+        when(deviceRegistrationService.getTopicsForUser(userId))
+                .thenReturn(List.of("/myoffgridai/" + userId + "/notifications"));
+        when(mqttPublisherService.publishToTopic(anyString(), any())).thenReturn(true);
+
+        Notification result = service.createNotification(
+                userId, "Test", "Body", NotificationType.GENERAL, null);
+
+        assertTrue(result.getMqttDelivered());
+        verify(mqttPublisherService).publishToTopic(anyString(), any());
+        // Save called twice: initial persist + mqttDelivered update
+        verify(notificationRepository, times(2)).save(any(Notification.class));
     }
 
     @Test

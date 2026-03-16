@@ -11,6 +11,7 @@ import com.myoffgridai.proactive.dto.PatternSummary;
 import com.myoffgridai.system.service.SystemConfigService;
 import com.myoffgridai.proactive.model.Insight;
 import com.myoffgridai.proactive.model.InsightCategory;
+import com.myoffgridai.proactive.model.NotificationSeverity;
 import com.myoffgridai.proactive.model.NotificationType;
 import com.myoffgridai.proactive.repository.InsightRepository;
 import org.slf4j.Logger;
@@ -138,6 +139,7 @@ public class InsightGeneratorService {
                     "New Insights Ready",
                     "You have " + insights.size() + " new insight" + (insights.size() > 1 ? "s" : "") + " ready",
                     NotificationType.INSIGHT_READY,
+                    NotificationSeverity.INFO,
                     null
             );
             log.info("Generated {} insights for user {}", insights.size(), userId);

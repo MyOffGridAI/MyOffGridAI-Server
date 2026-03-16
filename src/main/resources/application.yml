@@ -50,8 +50,8 @@ app:
     enabled: true
   mqtt:
     enabled: false
-    host: localhost
-    port: 1883
+    broker-url: tcp://localhost:1883
+    client-id: myoffgridai-server
 
 ---
 spring:
@@ -69,5 +69,5 @@ app:
     enabled: true
   mqtt:
     enabled: true
-    host: localhost
-    port: 1883
+    broker-url: tcp://localhost:1883
+    client-id: myoffgridai-server
