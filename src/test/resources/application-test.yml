@@ -15,3 +15,7 @@ app:
     mock: true
   fortress:
     mock: true
+  rate-limiting:
+    enabled: false
+  mqtt:
+    enabled: false

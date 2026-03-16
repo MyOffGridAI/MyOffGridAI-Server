@@ -30,6 +30,8 @@
         <lombok.version>1.18.42</lombok.version>
         <mockito.version>5.21.0</mockito.version>
         <byte-buddy.version>1.18.4</byte-buddy.version>
+        <bucket4j.version>8.10.1</bucket4j.version>
+        <logstash-logback.version>8.0</logstash-logback.version>
     </properties>
 
     <dependencyManagement>
@@ -155,6 +157,20 @@
             <groupId>com.fazecast</groupId>
             <artifactId>jSerialComm</artifactId>
             <version>${jserialcomm.version}</version>
+        </dependency>
+
+        <!-- Rate Limiting -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j-core</artifactId>
+            <version>${bucket4j.version}</version>
+        </dependency>
+
+        <!-- Structured JSON Logging -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>${logstash-logback.version}</version>
         </dependency>
 
         <!-- API Documentation -->

@@ -46,6 +46,12 @@ app:
     mock: true
   ap:
     mock: true
+  rate-limiting:
+    enabled: true
+  mqtt:
+    enabled: false
+    host: localhost
+    port: 1883
 
 ---
 spring:
@@ -57,3 +63,11 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+
+app:
+  rate-limiting:
+    enabled: true
+  mqtt:
+    enabled: true
+    host: localhost
+    port: 1883

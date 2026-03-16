@@ -10,14 +10,27 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Test security configuration that disables the JWT filter
- * for @WebMvcTest controller tests.
+ * Test security configuration that disables servlet filters
+ * for {@code @WebMvcTest} controller tests.
+ *
+ * <p>Disables {@link JwtAuthFilter}, {@link CaptivePortalRedirectFilter},
+ * {@link MdcFilter}, {@link RateLimitingFilter}, and
+ * {@link RequestResponseLoggingFilter} via {@link FilterRegistrationBean}
+ * beans with {@code setEnabled(false)}.</p>
  */
 @TestConfiguration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class TestSecurityConfig {
 
+    /**
+     * Configures a stateless security filter chain for tests with
+     * the same public endpoint rules as production.
+     *
+     * @param http the HTTP security builder
+     * @return the configured test security filter chain
+     * @throws Exception if configuration fails
+     */
     @Bean
     public SecurityFilterChain testSecurityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -51,6 +64,12 @@ public class TestSecurityConfig {
         return http.build();
     }
 
+    /**
+     * Disables the JWT authentication filter in test context.
+     *
+     * @param filter the JWT filter bean
+     * @return a disabled filter registration
+     */
     @Bean
     public FilterRegistrationBean<JwtAuthFilter> disableJwtFilter(JwtAuthFilter filter) {
         FilterRegistrationBean<JwtAuthFilter> reg = new FilterRegistrationBean<>(filter);
@@ -58,10 +77,58 @@ public class TestSecurityConfig {
         return reg;
     }
 
+    /**
+     * Disables the captive portal redirect filter in test context.
+     *
+     * @param filter the captive portal filter bean
+     * @return a disabled filter registration
+     */
     @Bean
     public FilterRegistrationBean<CaptivePortalRedirectFilter> disableCaptivePortalFilter(
             CaptivePortalRedirectFilter filter) {
         FilterRegistrationBean<CaptivePortalRedirectFilter> reg =
+                new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    /**
+     * Disables the MDC filter in test context.
+     *
+     * @param filter the MDC filter bean
+     * @return a disabled filter registration
+     */
+    @Bean
+    public FilterRegistrationBean<MdcFilter> disableMdcFilter(MdcFilter filter) {
+        FilterRegistrationBean<MdcFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    /**
+     * Disables the rate limiting filter in test context.
+     *
+     * @param filter the rate limiting filter bean
+     * @return a disabled filter registration
+     */
+    @Bean
+    public FilterRegistrationBean<RateLimitingFilter> disableRateLimitFilter(
+            RateLimitingFilter filter) {
+        FilterRegistrationBean<RateLimitingFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
+
+    /**
+     * Disables the request/response logging filter in test context.
+     *
+     * @param filter the logging filter bean
+     * @return a disabled filter registration
+     */
+    @Bean
+    public FilterRegistrationBean<RequestResponseLoggingFilter> disableRequestResponseLoggingFilter(
+            RequestResponseLoggingFilter filter) {
+        FilterRegistrationBean<RequestResponseLoggingFilter> reg =
                 new FilterRegistrationBean<>(filter);
         reg.setEnabled(false);
         return reg;

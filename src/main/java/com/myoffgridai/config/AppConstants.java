@@ -441,4 +441,38 @@ public final class AppConstants {
 
     /** Server version string */
     public static final String SERVER_VERSION = "1.0.0";
+
+    // ── Rate Limiting ────────────────────────────────────────────────────────
+
+    /** Maximum requests per minute for authentication endpoints (/api/auth/**) */
+    public static final int RATE_LIMIT_AUTH_CAPACITY = 10;
+
+    /** Maximum requests per minute for general API endpoints */
+    public static final int RATE_LIMIT_API_CAPACITY = 200;
+
+    /** Rate limit refill period in minutes */
+    public static final int RATE_LIMIT_REFILL_MINUTES = 1;
+
+    /** HTTP 429 error message returned when rate limit is exceeded */
+    public static final String RATE_LIMIT_EXCEEDED_MESSAGE = "Rate limit exceeded. Please try again shortly.";
+
+    // ── MQTT ─────────────────────────────────────────────────────────────────
+
+    /** MQTT topic for sensor reading events */
+    public static final String MQTT_TOPIC_SENSOR_READINGS = "myoffgridai/sensors/readings";
+
+    /** MQTT topic for system alerts */
+    public static final String MQTT_TOPIC_SYSTEM_ALERTS = "myoffgridai/system/alerts";
+
+    /** MQTT topic for notification push events */
+    public static final String MQTT_TOPIC_NOTIFICATIONS = "myoffgridai/notifications";
+
+    /** MQTT topic for insight generation events */
+    public static final String MQTT_TOPIC_INSIGHTS = "myoffgridai/insights";
+
+    /** Default MQTT broker port */
+    public static final int MQTT_DEFAULT_PORT = 1883;
+
+    /** Default MQTT WebSocket port */
+    public static final int MQTT_WEBSOCKET_PORT = 9001;
 }
