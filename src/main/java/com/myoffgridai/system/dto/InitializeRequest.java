@@ -3,6 +3,12 @@ package com.myoffgridai.system.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Request body for first-time system initialization including instance name and owner account creation.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public record InitializeRequest(
         @NotBlank(message = "Instance name is required")
         @Size(min = 1, max = 100, message = "Instance name must be between 1 and 100 characters")

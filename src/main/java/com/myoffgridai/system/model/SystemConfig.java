@@ -8,6 +8,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity storing global system configuration including AI settings and network state.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "system_config")
 @EntityListeners(AuditingEntityListener.class)

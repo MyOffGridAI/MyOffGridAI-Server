@@ -9,6 +9,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity storing a vector embedding alongside its source content for semantic search.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "vector_document", indexes = {
         @Index(name = "idx_vector_doc_user_source_type", columnList = "user_id, source_type")

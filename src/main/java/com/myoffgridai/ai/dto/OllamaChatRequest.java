@@ -5,6 +5,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Request object sent to the Ollama chat API containing the model, messages, and options.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record OllamaChatRequest(
         String model,

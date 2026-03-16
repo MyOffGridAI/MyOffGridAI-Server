@@ -5,6 +5,12 @@ import com.myoffgridai.memory.model.MemoryImportance;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Data transfer object representing a user memory with metadata and access statistics.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public record MemoryDto(
         UUID id,
         String content,

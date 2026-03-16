@@ -8,6 +8,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity representing a registered hardware sensor connected via serial port.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "sensors", indexes = {
         @Index(name = "idx_sensor_user_id", columnList = "user_id"),

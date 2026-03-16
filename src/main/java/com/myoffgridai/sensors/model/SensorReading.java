@@ -5,6 +5,12 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity representing a single data reading from a hardware sensor.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "sensor_readings", indexes = {
         @Index(name = "idx_sensor_reading_sensor_recorded",

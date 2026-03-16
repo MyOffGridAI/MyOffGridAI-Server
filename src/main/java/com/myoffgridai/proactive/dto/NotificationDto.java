@@ -6,6 +6,12 @@ import com.myoffgridai.proactive.model.NotificationType;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Data transfer object representing a user notification from the proactive engine.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public record NotificationDto(
         UUID id,
         String title,

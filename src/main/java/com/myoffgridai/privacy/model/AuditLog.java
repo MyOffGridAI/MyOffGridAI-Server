@@ -5,6 +5,12 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity representing an immutable audit trail entry for privacy and security tracking.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "audit_logs", indexes = {
         @Index(name = "idx_audit_user_timestamp", columnList = "user_id, timestamp DESC"),

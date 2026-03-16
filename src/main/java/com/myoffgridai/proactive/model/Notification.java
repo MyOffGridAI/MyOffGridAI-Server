@@ -6,6 +6,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity representing a notification delivered to a user by the proactive engine.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "notifications", indexes = {
         @Index(name = "idx_notification_user_id", columnList = "user_id")

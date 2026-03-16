@@ -7,6 +7,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Persistent entity representing a single message within an AI conversation.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "messages")
 @EntityListeners(AuditingEntityListener.class)

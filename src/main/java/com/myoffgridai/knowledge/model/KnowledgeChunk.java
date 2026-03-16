@@ -7,6 +7,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * JPA entity representing a chunk of extracted text from a knowledge document.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "knowledge_chunks", indexes = {
         @Index(name = "idx_knowledge_chunk_doc_id", columnList = "document_id"),

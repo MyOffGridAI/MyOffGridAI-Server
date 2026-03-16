@@ -6,6 +6,12 @@ import com.myoffgridai.proactive.model.InsightCategory;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Data transfer object representing an AI-generated proactive insight.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public record InsightDto(
         UUID id,
         String content,

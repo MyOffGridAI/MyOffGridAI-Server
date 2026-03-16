@@ -8,6 +8,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * JPA entity representing a tracked inventory item on the homestead.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "inventory_items", indexes = {
         @Index(name = "idx_inventory_user_id", columnList = "user_id"),

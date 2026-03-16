@@ -7,6 +7,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * JPA entity representing a single execution of a skill, including input, output, and timing.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "skill_executions", indexes = {
         @Index(name = "idx_skill_exec_user_id", columnList = "user_id"),

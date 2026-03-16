@@ -7,6 +7,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * JPA entity representing an uploaded knowledge document in the Knowledge Vault.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "knowledge_documents", indexes = {
         @Index(name = "idx_knowledge_doc_user_id", columnList = "user_id")

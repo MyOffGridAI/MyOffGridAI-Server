@@ -5,6 +5,12 @@ import com.myoffgridai.ai.model.MessageRole;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Data transfer object representing a single message within a conversation.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public record MessageDto(
         UUID id,
         MessageRole role,

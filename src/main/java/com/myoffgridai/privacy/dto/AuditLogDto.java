@@ -6,6 +6,12 @@ import com.myoffgridai.privacy.model.AuditOutcome;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Data transfer object representing a single audit log entry for privacy tracking.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public record AuditLogDto(
         UUID id,
         UUID userId,
