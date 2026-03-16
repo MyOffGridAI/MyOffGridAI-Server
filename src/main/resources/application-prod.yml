@@ -19,6 +19,9 @@ app:
     timeout-seconds: ${INFERENCE_TIMEOUT:120}
     max-tokens: ${INFERENCE_MAX_TOKENS:4096}
     temperature: ${INFERENCE_TEMPERATURE:0.7}
+  huggingface:
+    models-directory: ${HF_MODELS_DIR:${user.home}/.lmstudio/models}
+    lmstudio-api-url: ${LMSTUDIO_API_URL:http://localhost:1234}
   fortress:
     mock: false
   ap:

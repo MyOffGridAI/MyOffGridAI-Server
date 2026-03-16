@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Singleton entity storing external API configuration (Anthropic Claude,
- * Brave Search). API keys are stored AES-256-GCM encrypted at rest.
+ * Brave Search, HuggingFace). API keys are stored AES-256-GCM encrypted at rest.
  *
  * <p>Only one row exists in this table, enforced by the unique
  * {@link #singletonGuard} column.</p>
@@ -50,6 +50,13 @@ public class ExternalApiSettings {
 
     @Column(name = "search_result_limit", nullable = false)
     private int searchResultLimit = 5;
+
+    @Convert(converter = AesAttributeConverter.class)
+    @Column(name = "hugging_face_token")
+    private String huggingFaceToken;
+
+    @Column(name = "hugging_face_enabled", nullable = false)
+    private boolean huggingFaceEnabled = false;
 
     @CreatedDate
     @Column(name = "created_at", updatable = false)
@@ -95,6 +102,12 @@ public class ExternalApiSettings {
 
     public int getSearchResultLimit() { return searchResultLimit; }
     public void setSearchResultLimit(int searchResultLimit) { this.searchResultLimit = searchResultLimit > 0 ? searchResultLimit : 5; }
+
+    public String getHuggingFaceToken() { return huggingFaceToken; }
+    public void setHuggingFaceToken(String huggingFaceToken) { this.huggingFaceToken = huggingFaceToken; }
+
+    public boolean isHuggingFaceEnabled() { return huggingFaceEnabled; }
+    public void setHuggingFaceEnabled(boolean huggingFaceEnabled) { this.huggingFaceEnabled = huggingFaceEnabled; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

@@ -17,6 +17,8 @@ import jakarta.validation.constraints.Size;
  * @param braveEnabled        whether to enable Brave Search
  * @param maxWebFetchSizeKb   max content size per URL fetch in KB (1–10240)
  * @param searchResultLimit   max results per search query (1–20)
+ * @param huggingFaceToken    the HuggingFace token (null = no change, empty = clear)
+ * @param huggingFaceEnabled  whether to enable HuggingFace access
  */
 public record UpdateExternalApiSettingsRequest(
         String anthropicApiKey,
@@ -25,6 +27,8 @@ public record UpdateExternalApiSettingsRequest(
         String braveApiKey,
         boolean braveEnabled,
         @Min(1) @Max(10240) int maxWebFetchSizeKb,
-        @Min(1) @Max(20) int searchResultLimit
+        @Min(1) @Max(20) int searchResultLimit,
+        String huggingFaceToken,
+        boolean huggingFaceEnabled
 ) {
 }

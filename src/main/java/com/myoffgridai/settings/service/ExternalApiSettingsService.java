@@ -71,9 +71,16 @@ public class ExternalApiSettingsService {
             log.info("Brave Search API key {}", key != null ? "updated" : "cleared");
         }
 
+        if (request.huggingFaceToken() != null) {
+            String key = request.huggingFaceToken().isBlank() ? null : request.huggingFaceToken();
+            settings.setHuggingFaceToken(key);
+            log.info("HuggingFace token {}", key != null ? "updated" : "cleared");
+        }
+
         settings.setAnthropicModel(request.anthropicModel());
         settings.setAnthropicEnabled(request.anthropicEnabled());
         settings.setBraveEnabled(request.braveEnabled());
+        settings.setHuggingFaceEnabled(request.huggingFaceEnabled());
         settings.setMaxWebFetchSizeKb(request.maxWebFetchSizeKb());
         settings.setSearchResultLimit(request.searchResultLimit());
 
@@ -141,6 +148,21 @@ public class ExternalApiSettingsService {
         return getOrCreateEntity().getSearchResultLimit();
     }
 
+    /**
+     * Returns the decrypted HuggingFace token if configured and enabled.
+     * For internal service use only — never exposed via REST.
+     *
+     * @return the decrypted token, or empty if not configured or disabled
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> getHuggingFaceToken() {
+        ExternalApiSettings settings = getOrCreateEntity();
+        if (!settings.isHuggingFaceEnabled() || settings.getHuggingFaceToken() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(settings.getHuggingFaceToken());
+    }
+
     private ExternalApiSettings getOrCreateEntity() {
         return repository.findBySingletonGuard("SINGLETON")
                 .orElseGet(() -> {
@@ -157,7 +179,9 @@ public class ExternalApiSettingsService {
                 entity.isBraveEnabled(),
                 entity.getBraveApiKey() != null,
                 entity.getMaxWebFetchSizeKb(),
-                entity.getSearchResultLimit()
+                entity.getSearchResultLimit(),
+                entity.isHuggingFaceEnabled(),
+                entity.getHuggingFaceToken() != null
         );
     }
 }

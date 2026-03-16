@@ -565,4 +565,30 @@ public final class AppConstants {
 
     /** Buffer size for detecting think tags split across SSE chunks */
     public static final int THINK_TAG_PARSE_BUFFER_SIZE = 16;
+
+    // ── HuggingFace API ─────────────────────────────────────────────────────
+
+    /** HuggingFace API base URL */
+    public static final String HF_API_BASE = "https://huggingface.co/api";
+
+    /** HuggingFace models search API URL */
+    public static final String HF_API_MODELS = "https://huggingface.co/api/models";
+
+    /** HuggingFace CDN base URL for file downloads */
+    public static final String HF_CDN_BASE = "https://huggingface.co";
+
+    /** Default number of results for HuggingFace model searches */
+    public static final int HF_SEARCH_DEFAULT_LIMIT = 20;
+
+    /** Maximum number of results for HuggingFace model searches */
+    public static final int HF_SEARCH_MAX_LIMIT = 50;
+
+    /** Buffer size in bytes for download chunk writes (64KB) */
+    public static final int HF_DOWNLOAD_BUFFER_SIZE = 65536;
+
+    /** Maximum model file size allowed for download (50GB) */
+    public static final long HF_MAX_MODEL_SIZE_BYTES = 50L * 1024 * 1024 * 1024;
+
+    /** Timeout in minutes for model file downloads */
+    public static final int HF_DOWNLOAD_TIMEOUT_MINUTES = 120;
 }
