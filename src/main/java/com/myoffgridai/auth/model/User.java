@@ -13,6 +13,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * JPA entity representing a user account with Spring Security integration.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 @Entity
 @Table(name = "users")
 @EntityListeners(AuditingEntityListener.class)

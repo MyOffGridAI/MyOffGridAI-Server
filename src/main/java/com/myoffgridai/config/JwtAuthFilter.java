@@ -50,6 +50,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.authService = authService;
     }
 
+    /**
+     * Extracts the Bearer token from the Authorization header, validates it,
+     * and populates the Spring Security context if the token is valid and not blacklisted.
+     *
+     * @param request     the HTTP request
+     * @param response    the HTTP response
+     * @param filterChain the filter chain
+     * @throws ServletException if a servlet error occurs
+     * @throws IOException      if an I/O error occurs
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
