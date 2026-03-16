@@ -33,6 +33,8 @@ spring:
         format_sql: true
 
 app:
+  encryption:
+    key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   jwt:
     secret: dev-secret-key-minimum-256-bits-long-for-hmac-sha
     expiration-ms: 86400000

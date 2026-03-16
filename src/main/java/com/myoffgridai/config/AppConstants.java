@@ -456,6 +456,32 @@ public final class AppConstants {
     /** HTTP 429 error message returned when rate limit is exceeded */
     public static final String RATE_LIMIT_EXCEEDED_MESSAGE = "Rate limit exceeded. Please try again shortly.";
 
+    // ── External APIs & Enrichment ──────────────────────────────────────────
+
+    /** Base path for external API settings endpoints */
+    public static final String API_SETTINGS_EXTERNAL = "/api/settings/external-apis";
+
+    /** Base path for enrichment endpoints */
+    public static final String API_ENRICHMENT = "/api/enrichment";
+
+    /** Anthropic Messages API URL */
+    public static final String ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+
+    /** Anthropic API version header value */
+    public static final String ANTHROPIC_API_VERSION = "2023-06-01";
+
+    /** Maximum tokens for Anthropic API responses */
+    public static final int ANTHROPIC_MAX_TOKENS = 4096;
+
+    /** Timeout in seconds for Anthropic API calls */
+    public static final int ANTHROPIC_TIMEOUT_SECONDS = 60;
+
+    /** Brave Search API base URL */
+    public static final String BRAVE_SEARCH_API_URL = "https://api.search.brave.com/res/v1/web/search";
+
+    /** Timeout in seconds for web fetch requests */
+    public static final int WEB_FETCH_TIMEOUT_SECONDS = 30;
+
     // ── MQTT ─────────────────────────────────────────────────────────────────
 
     /** MQTT topic for sensor reading events */
