@@ -482,6 +482,14 @@ public final class AppConstants {
     /** Timeout in seconds for web fetch requests */
     public static final int WEB_FETCH_TIMEOUT_SECONDS = 30;
 
+    // ── MCP (Model Context Protocol) ────────────────────────────────────────
+
+    /** Base path for MCP token management endpoints */
+    public static final String API_MCP_TOKENS = "/api/mcp/tokens";
+
+    /** Base path for MCP discovery endpoints */
+    public static final String API_MCP = "/api/mcp";
+
     // ── MQTT ─────────────────────────────────────────────────────────────────
 
     /** MQTT topic for sensor reading events */

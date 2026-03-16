@@ -1,6 +1,8 @@
 package com.myoffgridai.config;
 
 import com.myoffgridai.auth.repository.UserRepository;
+import com.myoffgridai.mcp.config.McpAuthFilter;
+import com.myoffgridai.mcp.service.McpTokenService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +53,21 @@ public class SecurityConfig {
     }
 
     /**
+     * Creates the MCP authentication filter bean.
+     *
+     * <p>Defined as a {@code @Bean} (not {@code @Component}) to avoid
+     * component scanning issues in {@code @WebMvcTest} contexts where
+     * {@link McpTokenService} is not available.</p>
+     *
+     * @param mcpTokenService the MCP token validation service
+     * @return the MCP authentication filter
+     */
+    @Bean
+    public McpAuthFilter mcpAuthFilter(McpTokenService mcpTokenService) {
+        return new McpAuthFilter(mcpTokenService);
+    }
+
+    /**
      * Defines the HTTP security filter chain with public and protected endpoint rules.
      *
      * @param http the Spring Security HTTP configuration
@@ -58,7 +75,7 @@ public class SecurityConfig {
      * @throws Exception if configuration fails
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, McpAuthFilter mcpAuthFilter) throws Exception {
         log.info("Configuring security filter chain");
 
         http
@@ -81,10 +98,12 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
-                                "/swagger-ui.html"
+                                "/swagger-ui.html",
+                                "/mcp/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(mcpAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {

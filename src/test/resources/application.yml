@@ -1,0 +1,3 @@
+# Test defaults — override production application.yml for all test contexts
+spring.ai.mcp.server:
+  enabled: false

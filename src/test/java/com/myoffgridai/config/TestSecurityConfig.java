@@ -48,7 +48,8 @@ public class TestSecurityConfig {
                                 "/api/setup/**",
                                 "/api/models",
                                 "/api/models/health",
-                                "/setup/**"
+                                "/setup/**",
+                                "/mcp/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

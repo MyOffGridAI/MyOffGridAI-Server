@@ -13,6 +13,14 @@ spring:
 server:
   port: 8080
 
+# ── MCP (Model Context Protocol) Server ──────────────────────────────────
+spring.ai.mcp.server:
+  name: myoffgridai-mcp
+  version: 1.0.0
+  type: SYNC
+  sse-endpoint: /mcp/sse
+  sse-message-endpoint: /mcp/message
+
 ---
 spring:
   config:
