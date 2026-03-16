@@ -86,7 +86,8 @@ class ExternalApiSettingsServiceTest {
 
         UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
                 "new-anthropic-key", "claude-sonnet-4-20250514", true,
-                "new-brave-key", true, 1024, 10
+                "new-brave-key", true, 1024, 10,
+                null, false
         );
 
         service.updateSettings(request);
@@ -112,7 +113,8 @@ class ExternalApiSettingsServiceTest {
 
         UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
                 null, "claude-sonnet-4-20250514", true,
-                null, true, 512, 5
+                null, true, 512, 5,
+                null, false
         );
 
         service.updateSettings(request);
@@ -132,7 +134,8 @@ class ExternalApiSettingsServiceTest {
 
         UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
                 "", "claude-sonnet-4-20250514", false,
-                null, false, 512, 5
+                null, false, 512, 5,
+                null, false
         );
 
         service.updateSettings(request);
@@ -190,5 +193,132 @@ class ExternalApiSettingsServiceTest {
         Optional<String> key = service.getBraveKey();
         assertTrue(key.isPresent());
         assertEquals("brave-key", key.get());
+    }
+
+    // ── HuggingFace token tests ─────────────────────────────────────────────
+
+    @Test
+    void getHuggingFaceToken_returnsEmptyWhenDisabled() {
+        entity.setHuggingFaceToken("hf_token_123");
+        entity.setHuggingFaceEnabled(false);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertTrue(service.getHuggingFaceToken().isEmpty());
+    }
+
+    @Test
+    void getHuggingFaceToken_returnsEmptyWhenNoToken() {
+        entity.setHuggingFaceEnabled(true);
+        entity.setHuggingFaceToken(null);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertTrue(service.getHuggingFaceToken().isEmpty());
+    }
+
+    @Test
+    void getHuggingFaceToken_returnsTokenWhenEnabledAndSet() {
+        entity.setHuggingFaceToken("hf_my_token");
+        entity.setHuggingFaceEnabled(true);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        Optional<String> token = service.getHuggingFaceToken();
+        assertTrue(token.isPresent());
+        assertEquals("hf_my_token", token.get());
+    }
+
+    @Test
+    void updateSettings_handlesHuggingFaceTokenUpdate() {
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                "hf_new_token_456", true
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+
+        ExternalApiSettings saved = captor.getValue();
+        assertEquals("hf_new_token_456", saved.getHuggingFaceToken());
+        assertTrue(saved.isHuggingFaceEnabled());
+    }
+
+    @Test
+    void updateSettings_clearsHuggingFaceTokenOnEmptyString() {
+        entity.setHuggingFaceToken("existing-hf-token");
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                "", false
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+
+        assertNull(captor.getValue().getHuggingFaceToken());
+    }
+
+    @Test
+    void updateSettings_doesNotChangeHuggingFaceTokenWhenNull() {
+        entity.setHuggingFaceToken("existing-hf-token");
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                null, true
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+
+        assertEquals("existing-hf-token", captor.getValue().getHuggingFaceToken());
+    }
+
+    @Test
+    void getSettings_defaultsIncludeHuggingFaceFields() {
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.empty());
+        when(repository.save(any())).thenReturn(entity);
+
+        ExternalApiSettingsDto dto = service.getSettings();
+
+        assertFalse(dto.huggingFaceEnabled());
+        assertFalse(dto.huggingFaceKeyConfigured());
+    }
+
+    @Test
+    void toDto_includesHuggingFaceKeyConfiguredCorrectly() {
+        entity.setHuggingFaceEnabled(true);
+        entity.setHuggingFaceToken("hf_secret_token");
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        ExternalApiSettingsDto dto = service.getSettings();
+
+        assertTrue(dto.huggingFaceEnabled());
+        assertTrue(dto.huggingFaceKeyConfigured());
+    }
+
+    @Test
+    void toDto_huggingFaceKeyConfiguredFalseWhenNoToken() {
+        entity.setHuggingFaceEnabled(true);
+        entity.setHuggingFaceToken(null);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        ExternalApiSettingsDto dto = service.getSettings();
+
+        assertTrue(dto.huggingFaceEnabled());
+        assertFalse(dto.huggingFaceKeyConfigured());
     }
 }
