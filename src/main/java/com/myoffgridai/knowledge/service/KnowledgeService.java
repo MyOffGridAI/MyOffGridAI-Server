@@ -504,6 +504,8 @@ public class KnowledgeService {
                 return ingestionService.extractPptx(is);
             } else if (AppConstants.MIME_PPT.equals(mimeType)) {
                 return ingestionService.extractPpt(is);
+            } else if (AppConstants.MIME_RTF.equals(mimeType)) {
+                return ingestionService.extractRtf(is);
             } else {
                 return ingestionService.extractText(is);
             }

@@ -181,6 +181,18 @@ class IngestionServiceTest {
     }
 
     @Test
+    void extractRtf_extractsPlainText() throws IOException {
+        String rtfContent = "{\\rtf1 Hello RTF World}";
+        InputStream is = new ByteArrayInputStream(rtfContent.getBytes(StandardCharsets.UTF_8));
+
+        ExtractionResult result = ingestionService.extractRtf(is);
+
+        assertThat(result.fullText()).contains("Hello RTF World");
+        assertThat(result.pages()).hasSize(1);
+        assertThat(result.pages().get(0).pageNumber()).isNull();
+    }
+
+    @Test
     void extractPpt_extractsText() throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (HSLFSlideShow ppt = new HSLFSlideShow()) {

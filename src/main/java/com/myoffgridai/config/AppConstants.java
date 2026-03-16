@@ -319,11 +319,14 @@ public final class AppConstants {
     /** MIME type for legacy PPT files */
     public static final String MIME_PPT = "application/vnd.ms-powerpoint";
 
+    /** MIME type for RTF files */
+    public static final String MIME_RTF = "application/rtf";
+
     /** MIME type for Quill Delta JSON documents created in the editor */
     public static final String MIME_QUILL_DELTA = "application/x-quill-delta";
 
-    /** Word-processing MIME types (DOC, DOCX) */
-    public static final java.util.List<String> WORD_MIME_TYPES = java.util.List.of(MIME_DOCX, MIME_DOC);
+    /** Word-processing MIME types (DOC, DOCX, RTF) */
+    public static final java.util.List<String> WORD_MIME_TYPES = java.util.List.of(MIME_DOCX, MIME_DOC, MIME_RTF);
 
     /** Spreadsheet MIME types (XLSX, XLS) */
     public static final java.util.List<String> SPREADSHEET_MIME_TYPES = java.util.List.of(MIME_XLSX, MIME_XLS);
@@ -334,7 +337,7 @@ public final class AppConstants {
     /** MIME types that support in-app editing via the rich text editor */
     public static final java.util.List<String> EDITABLE_MIME_TYPES = java.util.List.of(
             "text/plain", "text/markdown", "text/x-markdown",
-            MIME_DOCX, MIME_DOC, MIME_QUILL_DELTA
+            MIME_DOCX, MIME_DOC, MIME_RTF, MIME_QUILL_DELTA
     );
 
     /** Supported MIME types for knowledge document upload */
@@ -349,6 +352,7 @@ public final class AppConstants {
             "image/webp",
             MIME_DOCX,
             MIME_DOC,
+            MIME_RTF,
             MIME_XLSX,
             MIME_XLS,
             MIME_PPTX,

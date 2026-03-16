@@ -24,6 +24,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import javax.swing.text.rtf.RTFEditorKit;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -131,6 +134,32 @@ public class IngestionService {
                 ? List.of() : List.of(new PageContent(null, text));
         log.info("Extracted {} characters from DOC", text.length());
         return new ExtractionResult(pages, text);
+    }
+
+    /**
+     * Extracts text from an RTF (Rich Text Format) document.
+     *
+     * <p>Uses Java's built-in {@link RTFEditorKit} to parse the RTF stream
+     * and extract plain text. The entire content is returned as a single page.</p>
+     *
+     * @param inputStream the RTF file input stream
+     * @return an extraction result with the full text as a single page
+     * @throws IOException if the document cannot be read
+     */
+    public ExtractionResult extractRtf(InputStream inputStream) throws IOException {
+        log.debug("Extracting text from RTF");
+        RTFEditorKit rtfKit = new RTFEditorKit();
+        Document doc = rtfKit.createDefaultDocument();
+        try {
+            rtfKit.read(inputStream, doc, 0);
+            String text = doc.getText(0, doc.getLength()).trim();
+            List<PageContent> pages = text.isEmpty()
+                    ? List.of() : List.of(new PageContent(null, text));
+            log.info("Extracted {} characters from RTF", text.length());
+            return new ExtractionResult(pages, text);
+        } catch (BadLocationException e) {
+            throw new IOException("Failed to extract text from RTF document", e);
+        }
     }
 
     /**
