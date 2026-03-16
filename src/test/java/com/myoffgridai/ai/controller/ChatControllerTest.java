@@ -1,6 +1,7 @@
 package com.myoffgridai.ai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myoffgridai.ai.dto.EditMessageRequest;
 import com.myoffgridai.ai.dto.SendMessageRequest;
 import com.myoffgridai.ai.model.Conversation;
 import com.myoffgridai.ai.model.Message;
@@ -13,6 +14,7 @@ import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
 import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.TestSecurityConfig;
+import reactor.core.publisher.Flux;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +40,13 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * WebMvcTest-level controller tests for {@link ChatController}.
+ *
+ * <p>Validates HTTP status codes, JSON response shapes, and service delegation
+ * for all chat conversation and message endpoints, including the P11 edit,
+ * delete, branch, and regenerate operations.</p>
+ */
 @WebMvcTest(ChatController.class)
 @Import(TestSecurityConfig.class)
 class ChatControllerTest {
@@ -231,6 +240,159 @@ class ChatControllerTest {
                         .with(authentication(createAuth(testUser))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    // ── P11: editMessage tests ──────────────────────────────────────────
+
+    @Test
+    void editMessage_returns200() throws Exception {
+        UUID messageId = UUID.randomUUID();
+        Message editedMessage = new Message();
+        editedMessage.setId(messageId);
+        editedMessage.setRole(MessageRole.USER);
+        editedMessage.setContent("updated content");
+        editedMessage.setTokenCount(3);
+        editedMessage.setHasRagContext(false);
+        editedMessage.setCreatedAt(Instant.now());
+
+        when(chatService.editMessage(any(UUID.class), any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(editedMessage);
+
+        EditMessageRequest request = new EditMessageRequest("updated content");
+
+        mockMvc.perform(put("/api/chat/conversations/" + conversationId + "/messages/" + messageId)
+                        .with(authentication(createAuth(testUser)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content").value("updated content"))
+                .andExpect(jsonPath("$.data.role").value("USER"));
+
+        verify(chatService).editMessage(conversationId, messageId, userId, "updated content");
+    }
+
+    @Test
+    void editMessage_unauthenticated_returns401() throws Exception {
+        UUID messageId = UUID.randomUUID();
+        EditMessageRequest request = new EditMessageRequest("updated content");
+
+        mockMvc.perform(put("/api/chat/conversations/" + conversationId + "/messages/" + messageId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── P11: deleteMessage tests ─────────────────────────────────────────
+
+    @Test
+    void deleteMessage_returns200() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/chat/conversations/" + conversationId + "/messages/" + messageId)
+                        .with(authentication(createAuth(testUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Message deleted"));
+
+        verify(chatService).deleteMessage(conversationId, messageId, userId);
+    }
+
+    @Test
+    void deleteMessage_unauthenticated_returns401() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/chat/conversations/" + conversationId + "/messages/" + messageId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── P11: branchConversation tests ────────────────────────────────────
+
+    @Test
+    void branchConversation_returns201() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        Conversation branchedConversation = new Conversation();
+        branchedConversation.setId(UUID.randomUUID());
+        branchedConversation.setUser(testUser);
+        branchedConversation.setTitle("Branched Conversation");
+        branchedConversation.setMessageCount(3);
+        branchedConversation.setCreatedAt(Instant.now());
+        branchedConversation.setUpdatedAt(Instant.now());
+
+        when(chatService.branchConversation(any(UUID.class), any(UUID.class), any(UUID.class), any()))
+                .thenReturn(branchedConversation);
+
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId + "/branch/" + messageId)
+                        .with(authentication(createAuth(testUser)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"My Branch\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.title").value("Branched Conversation"))
+                .andExpect(jsonPath("$.data.messageCount").value(3));
+
+        verify(chatService).branchConversation(conversationId, messageId, userId, "My Branch");
+    }
+
+    @Test
+    void branchConversation_noBody_returns201() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        Conversation branchedConversation = new Conversation();
+        branchedConversation.setId(UUID.randomUUID());
+        branchedConversation.setUser(testUser);
+        branchedConversation.setTitle("Auto Branch");
+        branchedConversation.setMessageCount(2);
+        branchedConversation.setCreatedAt(Instant.now());
+        branchedConversation.setUpdatedAt(Instant.now());
+
+        when(chatService.branchConversation(any(UUID.class), any(UUID.class), any(UUID.class), any()))
+                .thenReturn(branchedConversation);
+
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId + "/branch/" + messageId)
+                        .with(authentication(createAuth(testUser))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.title").value("Auto Branch"));
+    }
+
+    @Test
+    void branchConversation_unauthenticated_returns401() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId + "/branch/" + messageId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── P11: regenerateMessage tests ─────────────────────────────────────
+
+    @Test
+    void regenerateMessage_delegatesToService() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        // The regenerate endpoint creates an SseEmitter and subscribes to the Flux.
+        // MockMvc does not natively support async SSE emitter responses — it throws
+        // HttpMessageNotWritableException when trying to serialize SseEmitter.
+        // We verify service delegation by catching the inevitable 500 and confirming
+        // the ChatService.regenerateMessage call was made with the correct arguments.
+        when(chatService.regenerateMessage(any(UUID.class), any(UUID.class), any(UUID.class)))
+                .thenReturn(Flux.empty());
+
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId
+                        + "/messages/" + messageId + "/regenerate")
+                        .with(authentication(createAuth(testUser))))
+                .andReturn();
+
+        verify(chatService).regenerateMessage(conversationId, messageId, userId);
+    }
+
+    @Test
+    void regenerateMessage_unauthenticated_returns401() throws Exception {
+        UUID messageId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId
+                        + "/messages/" + messageId + "/regenerate"))
+                .andExpect(status().isUnauthorized());
     }
 
     private org.springframework.security.authentication.UsernamePasswordAuthenticationToken

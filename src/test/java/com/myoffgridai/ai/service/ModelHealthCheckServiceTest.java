@@ -1,6 +1,6 @@
 package com.myoffgridai.ai.service;
 
-import com.myoffgridai.ai.dto.OllamaModelInfo;
+import com.myoffgridai.ai.dto.InferenceModelInfo;
 import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,11 +16,17 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for {@link ModelHealthCheckService}.
+ *
+ * <p>Validates inference provider health check at startup, verifying
+ * graceful handling of unavailable providers and model listing failures.</p>
+ */
 @ExtendWith(MockitoExtension.class)
 class ModelHealthCheckServiceTest {
 
     @Mock
-    private OllamaService ollamaService;
+    private InferenceService inferenceService;
 
     @Mock
     private SystemConfigService systemConfigService;
@@ -31,43 +37,43 @@ class ModelHealthCheckServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(systemConfigService.getAiSettings())
-                .thenReturn(new AiSettingsDto("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", 0.7, 0.45, 5, 2048, 4096, 20));
+                .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048, 4096, 20));
     }
 
     @Test
-    void checkOllamaOnStartup_ollamaUnavailable_doesNotThrow() {
-        when(ollamaService.isAvailable()).thenReturn(false);
+    void checkInferenceProviderOnStartup_providerUnavailable_doesNotThrow() {
+        when(inferenceService.isAvailable()).thenReturn(false);
 
-        assertDoesNotThrow(() -> healthCheckService.checkOllamaOnStartup());
-        verify(ollamaService, never()).listModels();
+        assertDoesNotThrow(() -> healthCheckService.checkInferenceProviderOnStartup());
+        verify(inferenceService, never()).listModels();
     }
 
     @Test
-    void checkOllamaOnStartup_ollamaAvailable_listsModels() {
-        when(ollamaService.isAvailable()).thenReturn(true);
-        when(ollamaService.listModels()).thenReturn(List.of(
-                new OllamaModelInfo("qwen3:32b", 17_000_000_000L, Instant.now())
+    void checkInferenceProviderOnStartup_providerAvailable_listsModels() {
+        when(inferenceService.isAvailable()).thenReturn(true);
+        when(inferenceService.listModels()).thenReturn(List.of(
+                new InferenceModelInfo("qwen3:32b", "qwen3:32b", 17_000_000_000L, "gguf", Instant.now())
         ));
 
-        assertDoesNotThrow(() -> healthCheckService.checkOllamaOnStartup());
-        verify(ollamaService).listModels();
+        assertDoesNotThrow(() -> healthCheckService.checkInferenceProviderOnStartup());
+        verify(inferenceService).listModels();
     }
 
     @Test
-    void checkOllamaOnStartup_modelNotFound_doesNotThrow() {
-        when(ollamaService.isAvailable()).thenReturn(true);
-        when(ollamaService.listModels()).thenReturn(List.of(
-                new OllamaModelInfo("llama3:8b", 4_000_000_000L, Instant.now())
+    void checkInferenceProviderOnStartup_modelNotFound_doesNotThrow() {
+        when(inferenceService.isAvailable()).thenReturn(true);
+        when(inferenceService.listModels()).thenReturn(List.of(
+                new InferenceModelInfo("llama3:8b", "llama3:8b", 4_000_000_000L, "gguf", Instant.now())
         ));
 
-        assertDoesNotThrow(() -> healthCheckService.checkOllamaOnStartup());
+        assertDoesNotThrow(() -> healthCheckService.checkInferenceProviderOnStartup());
     }
 
     @Test
-    void checkOllamaOnStartup_listModelsFails_doesNotThrow() {
-        when(ollamaService.isAvailable()).thenReturn(true);
-        when(ollamaService.listModels()).thenThrow(new RuntimeException("list failed"));
+    void checkInferenceProviderOnStartup_listModelsFails_doesNotThrow() {
+        when(inferenceService.isAvailable()).thenReturn(true);
+        when(inferenceService.listModels()).thenThrow(new RuntimeException("list failed"));
 
-        assertDoesNotThrow(() -> healthCheckService.checkOllamaOnStartup());
+        assertDoesNotThrow(() -> healthCheckService.checkInferenceProviderOnStartup());
     }
 }
