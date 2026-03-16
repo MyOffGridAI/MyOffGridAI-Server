@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.stream.Collectors;
@@ -263,6 +264,20 @@ public class GlobalExceptionHandler {
         log.warn("Upload exceeded max size: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ApiResponse.error("File too large. Maximum upload size is 100 MB"));
+    }
+
+    /**
+     * Handles client disconnect (broken pipe) during response writing.
+     *
+     * <p>This occurs when the client closes the connection before the server
+     * finishes writing the response. Logged at DEBUG since it is benign
+     * and not actionable.</p>
+     *
+     * @param ex the exception
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientDisconnect(AsyncRequestNotUsableException ex) {
+        log.debug("Client disconnected before response completed: {}", ex.getMessage());
     }
 
     /**
