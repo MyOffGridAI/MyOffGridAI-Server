@@ -20,7 +20,7 @@ import java.util.List;
  *
  * <p>In Phase 3, the prompt includes user context and RAG-injected memory
  * and knowledge snippets. The {@code <!-- MEMORY_CONTEXT -->} and
- * {@code <!-- RAG_CONTEXT -->} placeholders are replaced with actual context
+ * {@code <!-- RAG_CONTEXT -->} comment markers are replaced with actual context
  * when available.</p>
  */
 @Service
@@ -53,7 +53,7 @@ public class SystemPromptBuilder {
     /**
      * Assembles a system prompt with optional RAG context injection.
      *
-     * <p>When {@code ragContext} has context, the placeholder comments are replaced
+     * <p>When {@code ragContext} has context, the comment markers are replaced
      * with formatted memory and knowledge snippets. The injected context is kept
      * under {@link AppConstants#RAG_MAX_CONTEXT_TOKENS} — knowledge snippets are
      * truncated first, then memories.</p>

@@ -71,7 +71,7 @@ class SystemPromptBuilderTest {
     }
 
     @Test
-    void build_withNullRagContext_noPlaceholders() {
+    void build_withNullRagContext_noCommentMarkers() {
         String prompt = builder.build(testUser, "Homestead", null);
         assertFalse(prompt.contains("<!-- MEMORY_CONTEXT -->"));
         assertFalse(prompt.contains("<!-- RAG_CONTEXT -->"));

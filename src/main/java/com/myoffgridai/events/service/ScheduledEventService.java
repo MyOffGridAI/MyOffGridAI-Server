@@ -34,12 +34,22 @@ public class ScheduledEventService {
 
     private final ScheduledEventRepository eventRepository;
 
+    /**
+     * Constructs the scheduled event service.
+     *
+     * @param eventRepository the scheduled event repository
+     */
     public ScheduledEventService(ScheduledEventRepository eventRepository) {
         this.eventRepository = eventRepository;
     }
 
     /**
      * Lists events for a user with pagination.
+     *
+     * @param userId the user ID
+     * @param page   the page number (0-based)
+     * @param size   the page size
+     * @return paginated scheduled events
      */
     public Page<ScheduledEvent> listEvents(UUID userId, int page, int size) {
         size = Math.min(size, AppConstants.MAX_PAGE_SIZE);
@@ -50,6 +60,9 @@ public class ScheduledEventService {
     /**
      * Gets a single event by ID, scoped to the given user.
      *
+     * @param eventId the event ID
+     * @param userId  the user ID
+     * @return the scheduled event
      * @throws EntityNotFoundException if no matching event is found
      */
     public ScheduledEvent getEvent(UUID eventId, UUID userId) {
@@ -58,6 +71,10 @@ public class ScheduledEventService {
 
     /**
      * Creates a new scheduled event for the given user.
+     *
+     * @param userId  the user ID
+     * @param request the creation request
+     * @return the created scheduled event
      */
     public ScheduledEvent createEvent(UUID userId, CreateEventRequest request) {
         ScheduledEvent event = new ScheduledEvent();
@@ -88,6 +105,10 @@ public class ScheduledEventService {
     /**
      * Updates an existing scheduled event.
      *
+     * @param eventId the event ID
+     * @param userId  the user ID
+     * @param request the update request
+     * @return the updated scheduled event
      * @throws EntityNotFoundException if no matching event is found
      */
     public ScheduledEvent updateEvent(UUID eventId, UUID userId, UpdateEventRequest request) {
@@ -120,6 +141,8 @@ public class ScheduledEventService {
     /**
      * Deletes an event by ID, scoped to the given user.
      *
+     * @param eventId the event ID
+     * @param userId  the user ID
      * @throws EntityNotFoundException if no matching event is found
      */
     @Transactional
@@ -132,6 +155,9 @@ public class ScheduledEventService {
     /**
      * Toggles the enabled state of an event.
      *
+     * @param eventId the event ID
+     * @param userId  the user ID
+     * @return the updated scheduled event
      * @throws EntityNotFoundException if no matching event is found
      */
     public ScheduledEvent toggleEvent(UUID eventId, UUID userId) {
@@ -145,6 +171,8 @@ public class ScheduledEventService {
 
     /**
      * Deletes all events for a user (used during user deletion).
+     *
+     * @param userId the user ID
      */
     @Transactional
     public void deleteAllForUser(UUID userId) {

@@ -10,18 +10,64 @@ import org.springframework.data.jpa.repository.Modifying;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Spring Data JPA repository for {@link Memory} entities.
+ *
+ * @author MyOffGridAI
+ * @since 0.1.0
+ */
 public interface MemoryRepository extends JpaRepository<Memory, UUID> {
 
+    /**
+     * Returns paginated memories for a user, ordered by most recently created.
+     *
+     * @param userId   the owning user's ID
+     * @param pageable pagination parameters
+     * @return a page of memories
+     */
     Page<Memory> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    /**
+     * Returns paginated memories for a user filtered by importance level.
+     *
+     * @param userId     the owning user's ID
+     * @param importance the importance filter
+     * @param pageable   pagination parameters
+     * @return a page of memories matching the importance level
+     */
     Page<Memory> findByUserIdAndImportance(UUID userId, MemoryImportance importance, Pageable pageable);
 
+    /**
+     * Returns paginated memories for a user whose tags contain the specified value.
+     *
+     * @param userId   the owning user's ID
+     * @param tag      the tag substring to match
+     * @param pageable pagination parameters
+     * @return a page of memories whose tags contain the given tag
+     */
     Page<Memory> findByUserIdAndTagsContaining(UUID userId, String tag, Pageable pageable);
 
+    /**
+     * Finds all memories belonging to a user without pagination.
+     *
+     * @param userId the owning user's ID
+     * @return all memories for the user
+     */
     List<Memory> findByUserId(UUID userId);
 
+    /**
+     * Deletes all memories belonging to a user.
+     *
+     * @param userId the owning user's ID
+     */
     @Modifying
     void deleteByUserId(UUID userId);
 
+    /**
+     * Counts all memories belonging to a user.
+     *
+     * @param userId the owning user's ID
+     * @return the memory count
+     */
     long countByUserId(UUID userId);
 }

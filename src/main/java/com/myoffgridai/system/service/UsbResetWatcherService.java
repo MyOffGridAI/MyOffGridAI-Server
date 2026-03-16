@@ -79,8 +79,11 @@ public class UsbResetWatcherService {
     }
 
     /**
-     * Checks for the update zip file and invokes the update service if found.
-     * Update application is deferred to MI-002 — this is a stub.
+     * Checks for the update zip file on the USB mount path.
+     *
+     * <p>Firmware update via USB is not yet supported in this version. When the file
+     * is detected, a log entry is recorded for operator visibility. The actual update
+     * mechanism will be introduced in milestone MI-002.</p>
      *
      * @param usbPath the USB mount directory path
      */
@@ -88,9 +91,7 @@ public class UsbResetWatcherService {
         Path updateFile = usbPath.resolve(AppConstants.UPDATE_ZIP_FILENAME);
 
         if (Files.exists(updateFile)) {
-            log.info("Update zip detected on USB: {} — update application deferred to MI-002",
-                    updateFile);
-            // TODO: UpdateService.applyUpdate() — deferred to MI-002
+            log.info("Firmware update file detected at {}. Update via USB not yet supported in this version.", updateFile);
         }
     }
 }

@@ -31,12 +31,22 @@ public class ScheduledEventController {
 
     private final ScheduledEventService eventService;
 
+    /**
+     * Constructs the scheduled event controller.
+     *
+     * @param eventService the scheduled event service
+     */
     public ScheduledEventController(ScheduledEventService eventService) {
         this.eventService = eventService;
     }
 
     /**
      * Lists all events for the authenticated user with pagination.
+     *
+     * @param principal the authenticated user
+     * @param page      the page number (0-based)
+     * @param size      the page size
+     * @return paginated list of scheduled event DTOs
      */
     @GetMapping
     public ResponseEntity<ApiResponse<List<ScheduledEventDto>>> listEvents(
@@ -52,6 +62,10 @@ public class ScheduledEventController {
 
     /**
      * Gets a single event by ID.
+     *
+     * @param principal the authenticated user
+     * @param eventId   the event ID
+     * @return the scheduled event DTO
      */
     @GetMapping("/{eventId}")
     public ResponseEntity<ApiResponse<ScheduledEventDto>> getEvent(
@@ -63,6 +77,10 @@ public class ScheduledEventController {
 
     /**
      * Creates a new scheduled event.
+     *
+     * @param principal the authenticated user
+     * @param request   the creation request
+     * @return the created scheduled event DTO
      */
     @PostMapping
     public ResponseEntity<ApiResponse<ScheduledEventDto>> createEvent(
@@ -76,6 +94,11 @@ public class ScheduledEventController {
 
     /**
      * Updates an existing event.
+     *
+     * @param principal the authenticated user
+     * @param eventId   the event ID
+     * @param request   the update request
+     * @return the updated scheduled event DTO
      */
     @PutMapping("/{eventId}")
     public ResponseEntity<ApiResponse<ScheduledEventDto>> updateEvent(
@@ -89,6 +112,10 @@ public class ScheduledEventController {
 
     /**
      * Deletes an event.
+     *
+     * @param principal the authenticated user
+     * @param eventId   the event ID
+     * @return success response
      */
     @DeleteMapping("/{eventId}")
     public ResponseEntity<ApiResponse<Void>> deleteEvent(
@@ -100,6 +127,10 @@ public class ScheduledEventController {
 
     /**
      * Toggles the enabled/disabled state of an event.
+     *
+     * @param principal the authenticated user
+     * @param eventId   the event ID
+     * @return the updated scheduled event DTO
      */
     @PutMapping("/{eventId}/toggle")
     public ResponseEntity<ApiResponse<ScheduledEventDto>> toggleEvent(
