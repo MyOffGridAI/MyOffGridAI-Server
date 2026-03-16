@@ -11,6 +11,14 @@ spring:
     baseline-on-migrate: true
 
 app:
+  inference:
+    provider: ${INFERENCE_PROVIDER:lmstudio}
+    base-url: ${INFERENCE_BASE_URL:http://localhost:1234}
+    model: ${INFERENCE_MODEL:Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF}
+    embed-model: ${INFERENCE_EMBED_MODEL:nomic-embed-text}
+    timeout-seconds: ${INFERENCE_TIMEOUT:120}
+    max-tokens: ${INFERENCE_MAX_TOKENS:4096}
+    temperature: ${INFERENCE_TEMPERATURE:0.7}
   fortress:
     mock: false
   ap:

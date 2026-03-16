@@ -542,4 +542,27 @@ public final class AppConstants {
 
     /** Timeout in seconds for Calibre ebook-convert operations */
     public static final int CALIBRE_CONVERSION_TIMEOUT_SECONDS = 120;
+
+    // ── Inference Provider ─────────────────────────────────────────────────
+
+    /** Inference provider value for LM Studio */
+    public static final String INFERENCE_PROVIDER_LMSTUDIO = "lmstudio";
+
+    /** Inference provider value for Ollama */
+    public static final String INFERENCE_PROVIDER_OLLAMA = "ollama";
+
+    /** LM Studio chat completions endpoint (OpenAI-compatible) */
+    public static final String LM_STUDIO_CHAT_ENDPOINT = "/v1/chat/completions";
+
+    /** LM Studio models listing endpoint (OpenAI-compatible) */
+    public static final String LM_STUDIO_MODELS_ENDPOINT = "/v1/models";
+
+    /** Opening tag for reasoning model thinking traces */
+    public static final String THINK_TAG_OPEN = "<think>";
+
+    /** Closing tag for reasoning model thinking traces */
+    public static final String THINK_TAG_CLOSE = "</think>";
+
+    /** Buffer size for detecting think tags split across SSE chunks */
+    public static final int THINK_TAG_PARSE_BUFFER_SIZE = 16;
 }

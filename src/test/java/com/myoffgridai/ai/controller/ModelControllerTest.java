@@ -1,14 +1,13 @@
 package com.myoffgridai.ai.controller;
 
-import com.myoffgridai.ai.dto.OllamaModelInfo;
-import com.myoffgridai.ai.service.OllamaService;
+import com.myoffgridai.ai.dto.InferenceModelInfo;
+import com.myoffgridai.ai.service.InferenceService;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
 import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.TestSecurityConfig;
-import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,13 +28,19 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Unit tests for {@link ModelController}.
+ *
+ * <p>Tests model listing, health check, and active model endpoints
+ * using the {@link InferenceService} abstraction.</p>
+ */
 @WebMvcTest(ModelController.class)
 @Import(TestSecurityConfig.class)
 class ModelControllerTest {
 
     @Autowired private MockMvc mockMvc;
 
-    @MockBean private OllamaService ollamaService;
+    @MockBean private InferenceService inferenceService;
     @MockBean private JwtService jwtService;
     @MockBean private AuthService authService;
     @MockBean private UserDetailsService userDetailsService;
@@ -46,8 +51,10 @@ class ModelControllerTest {
 
     @BeforeEach
     void setUp() {
-        when(systemConfigService.getAiSettings())
-                .thenReturn(new AiSettingsDto("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M", 0.7, 0.45, 5, 2048, 4096, 20));
+        // Default: getActiveModel returns a model
+        when(inferenceService.getActiveModel())
+                .thenReturn(new InferenceModelInfo(
+                        "qwen3-32b", "qwen3-32b", 17_000_000_000L, null, Instant.now()));
 
         testUser = new User();
         testUser.setId(UUID.randomUUID());
@@ -60,8 +67,8 @@ class ModelControllerTest {
 
     @Test
     void listModels_public_returns200() throws Exception {
-        when(ollamaService.listModels()).thenReturn(List.of(
-                new OllamaModelInfo("qwen3:32b", 17_000_000_000L, Instant.now())));
+        when(inferenceService.listModels()).thenReturn(List.of(
+                new InferenceModelInfo("qwen3-32b", "qwen3:32b", 17_000_000_000L, null, Instant.now())));
 
         mockMvc.perform(get("/api/models"))
                 .andExpect(status().isOk())
@@ -71,7 +78,7 @@ class ModelControllerTest {
 
     @Test
     void getHealth_public_returns200() throws Exception {
-        when(ollamaService.isAvailable()).thenReturn(true);
+        when(inferenceService.isAvailable()).thenReturn(true);
 
         mockMvc.perform(get("/api/models/health"))
                 .andExpect(status().isOk())
@@ -81,7 +88,7 @@ class ModelControllerTest {
 
     @Test
     void getHealth_ollamaDown_returnsAvailableFalse() throws Exception {
-        when(ollamaService.isAvailable()).thenReturn(false);
+        when(inferenceService.isAvailable()).thenReturn(false);
 
         mockMvc.perform(get("/api/models/health"))
                 .andExpect(status().isOk())
@@ -93,7 +100,7 @@ class ModelControllerTest {
         mockMvc.perform(get("/api/models/active")
                         .with(authentication(createAuth(testUser))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.modelName").value("hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M"));
+                .andExpect(jsonPath("$.data.modelName").value("qwen3-32b"));
     }
 
     @Test

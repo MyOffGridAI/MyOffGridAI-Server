@@ -77,4 +77,16 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     @Modifying
     @Query("DELETE FROM Message m WHERE m.conversation.user.id = :userId")
     void deleteByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Deletes all messages in a conversation created after a given message (exclusive).
+     *
+     * @param conversationId the conversation ID
+     * @param messageId      the message whose createdAt serves as the cutoff
+     */
+    @Modifying
+    @Query("DELETE FROM Message m WHERE m.conversation.id = :conversationId "
+            + "AND m.createdAt > (SELECT m2.createdAt FROM Message m2 WHERE m2.id = :messageId)")
+    void deleteMessagesAfter(@Param("conversationId") UUID conversationId,
+                             @Param("messageId") UUID messageId);
 }

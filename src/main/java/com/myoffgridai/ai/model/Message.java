@@ -39,6 +39,21 @@ public class Message {
     @Column(name = "has_rag_context", nullable = false)
     private boolean hasRagContext = false;
 
+    @Column(name = "thinking_content", columnDefinition = "TEXT")
+    private String thinkingContent;
+
+    @Column(name = "tokens_per_second")
+    private Double tokensPerSecond;
+
+    @Column(name = "inference_time_seconds")
+    private Double inferenceTimeSeconds;
+
+    @Column(name = "stop_reason")
+    private String stopReason;
+
+    @Column(name = "thinking_token_count")
+    private Integer thinkingTokenCount;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -109,5 +124,45 @@ public class Message {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getThinkingContent() {
+        return thinkingContent;
+    }
+
+    public void setThinkingContent(String thinkingContent) {
+        this.thinkingContent = thinkingContent;
+    }
+
+    public Double getTokensPerSecond() {
+        return tokensPerSecond;
+    }
+
+    public void setTokensPerSecond(Double tokensPerSecond) {
+        this.tokensPerSecond = tokensPerSecond;
+    }
+
+    public Double getInferenceTimeSeconds() {
+        return inferenceTimeSeconds;
+    }
+
+    public void setInferenceTimeSeconds(Double inferenceTimeSeconds) {
+        this.inferenceTimeSeconds = inferenceTimeSeconds;
+    }
+
+    public String getStopReason() {
+        return stopReason;
+    }
+
+    public void setStopReason(String stopReason) {
+        this.stopReason = stopReason;
+    }
+
+    public Integer getThinkingTokenCount() {
+        return thinkingTokenCount;
+    }
+
+    public void setThinkingTokenCount(Integer thinkingTokenCount) {
+        this.thinkingTokenCount = thinkingTokenCount;
     }
 }

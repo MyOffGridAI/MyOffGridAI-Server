@@ -222,9 +222,9 @@ public class ChatController {
 
             chatService.streamMessage(conversationId, principal.getId(), request.content())
                     .subscribe(
-                            token -> {
+                            event -> {
                                 try {
-                                    emitter.send(SseEmitter.event().data(token));
+                                    emitter.send(SseEmitter.event().data(event));
                                 } catch (Exception e) {
                                     emitter.completeWithError(e);
                                 }
@@ -232,7 +232,6 @@ public class ChatController {
                             emitter::completeWithError,
                             () -> {
                                 try {
-                                    emitter.send(SseEmitter.event().data("[DONE]"));
                                     emitter.complete();
                                 } catch (Exception e) {
                                     emitter.completeWithError(e);
@@ -296,9 +295,119 @@ public class ChatController {
                 c.getMessageCount(), c.getUpdatedAt(), null);
     }
 
+    /**
+     * Edits a user message content and triggers re-inference.
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the conversation ID
+     * @param messageId      the message ID to edit
+     * @param request        the edit request with new content
+     * @return the edited message
+     */
+    @PutMapping("/conversations/{conversationId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<MessageDto>> editMessage(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId,
+            @Valid @RequestBody EditMessageRequest request) {
+        log.info("Editing message: {} in conversation: {} for user: {}",
+                messageId, conversationId, principal.getUsername());
+        Message edited = chatService.editMessage(
+                conversationId, messageId, principal.getId(), request.content());
+        return ResponseEntity.ok(ApiResponse.success(toMessageDto(edited)));
+    }
+
+    /**
+     * Deletes a message and all subsequent messages.
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the conversation ID
+     * @param messageId      the message ID to delete
+     * @return empty success response
+     */
+    @DeleteMapping("/conversations/{conversationId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMessage(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId) {
+        log.info("Deleting message: {} in conversation: {} for user: {}",
+                messageId, conversationId, principal.getUsername());
+        chatService.deleteMessage(conversationId, messageId, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(null, "Message deleted"));
+    }
+
+    /**
+     * Branches a conversation at a specific message.
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the source conversation ID
+     * @param messageId      the message to branch at (inclusive)
+     * @param request        optional branch title
+     * @return the new branched conversation
+     */
+    @PostMapping("/conversations/{conversationId}/branch/{messageId}")
+    public ResponseEntity<ApiResponse<ConversationDto>> branchConversation(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId,
+            @RequestBody(required = false) BranchConversationRequest request) {
+        log.info("Branching conversation: {} at message: {} for user: {}",
+                conversationId, messageId, principal.getUsername());
+        String title = request != null ? request.title() : null;
+        Conversation branched = chatService.branchConversation(
+                conversationId, messageId, principal.getId(), title);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(toConversationDto(branched)));
+    }
+
+    /**
+     * Regenerates the last assistant message by re-running inference.
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the conversation ID
+     * @param messageId      the assistant message to regenerate
+     * @return an SSE stream of typed JSON events
+     */
+    @PostMapping("/conversations/{conversationId}/messages/{messageId}/regenerate")
+    public ResponseEntity<?> regenerateMessage(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId) {
+        log.info("Regenerating message: {} in conversation: {} for user: {}",
+                messageId, conversationId, principal.getUsername());
+
+        SseEmitter emitter = new SseEmitter(AppConstants.OLLAMA_READ_TIMEOUT_SECONDS * 1000L);
+
+        chatService.regenerateMessage(conversationId, messageId, principal.getId())
+                .subscribe(
+                        event -> {
+                            try {
+                                emitter.send(SseEmitter.event().data(event));
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        },
+                        emitter::completeWithError,
+                        () -> {
+                            try {
+                                emitter.complete();
+                            } catch (Exception e) {
+                                emitter.completeWithError(e);
+                            }
+                        }
+                );
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(emitter);
+    }
+
     private MessageDto toMessageDto(Message m) {
         return new MessageDto(
                 m.getId(), m.getRole(), m.getContent(),
-                m.getTokenCount(), m.getHasRagContext(), m.getCreatedAt());
+                m.getTokenCount(), m.getHasRagContext(),
+                m.getThinkingContent(), m.getTokensPerSecond(),
+                m.getInferenceTimeSeconds(), m.getStopReason(),
+                m.getThinkingTokenCount(), m.getCreatedAt());
     }
 }

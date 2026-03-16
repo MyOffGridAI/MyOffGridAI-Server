@@ -1,6 +1,7 @@
 package com.myoffgridai.ai.service;
 
-import com.myoffgridai.ai.dto.OllamaChatChunk;
+import com.myoffgridai.ai.dto.ChunkType;
+import com.myoffgridai.ai.dto.InferenceChunk;
 import com.myoffgridai.ai.dto.OllamaChatRequest;
 import com.myoffgridai.ai.dto.OllamaChatResponse;
 import com.myoffgridai.ai.dto.OllamaMessage;
@@ -49,6 +50,7 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final OllamaService ollamaService;
+    private final InferenceService inferenceService;
     private final SystemPromptBuilder systemPromptBuilder;
     private final ContextWindowService contextWindowService;
     private final RagService ragService;
@@ -62,6 +64,7 @@ public class ChatService {
      * @param messageRepository       the message data access layer
      * @param userRepository          the user data access layer
      * @param ollamaService           the Ollama integration service
+     * @param inferenceService        the inference abstraction service
      * @param systemPromptBuilder     the system prompt builder
      * @param contextWindowService    the context window manager
      * @param ragService              the RAG pipeline service
@@ -72,6 +75,7 @@ public class ChatService {
                        MessageRepository messageRepository,
                        UserRepository userRepository,
                        OllamaService ollamaService,
+                       InferenceService inferenceService,
                        SystemPromptBuilder systemPromptBuilder,
                        ContextWindowService contextWindowService,
                        RagService ragService,
@@ -81,6 +85,7 @@ public class ChatService {
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
         this.ollamaService = ollamaService;
+        this.inferenceService = inferenceService;
         this.systemPromptBuilder = systemPromptBuilder;
         this.contextWindowService = contextWindowService;
         this.ragService = ragService;
@@ -238,16 +243,16 @@ public class ChatService {
     }
 
     /**
-     * Sends a message and returns a streaming response as a Flux of token strings.
+     * Sends a message and returns a streaming response as a Flux of typed JSON events.
      *
-     * <p>Persists the user message, builds RAG context, builds the context window,
-     * calls Ollama in streaming mode, and persists the complete response after the
-     * stream ends. Triggers async memory extraction after completion.</p>
+     * <p>Uses {@link InferenceService#streamChatWithThinking(List, UUID)} to emit
+     * thinking and content chunks separately. Each chunk is serialized as a JSON
+     * event with a {@code type} field: "thinking", "content", "done", or "error".</p>
      *
      * @param conversationId the conversation ID
      * @param userId         the user's ID
      * @param userContent    the user's message content
-     * @return a Flux emitting token strings as they arrive
+     * @return a Flux emitting JSON event strings
      */
     public Flux<String> streamMessage(UUID conversationId, UUID userId, String userContent) {
         log.info("Starting streaming message in conversation: {} for user: {}", conversationId, userId);
@@ -272,45 +277,301 @@ public class ChatService {
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
 
-        // Call Ollama streaming with dynamic model, temperature, and context size
-        AiSettingsDto streamSettings = systemConfigService.getAiSettings();
-        OllamaChatRequest request = new OllamaChatRequest(
-                streamSettings.modelName(), messages, true,
-                Map.of("temperature", streamSettings.temperature(), "num_ctx", streamSettings.contextSize()));
-
         final boolean hasRag = ragContext != null && ragContext.hasContext();
 
-        return ollamaService.chatStream(request)
-                .map(chunk -> chunk.message() != null ? chunk.message().content() : "")
-                .collectList()
-                .flatMapMany(tokens -> {
-                    String fullResponse = String.join("", tokens);
+        StringBuilder contentAccumulator = new StringBuilder();
+        StringBuilder thinkingAccumulator = new StringBuilder();
 
-                    // Persist assistant message
-                    Message assistantMessage = new Message();
-                    assistantMessage.setConversation(conversation);
-                    assistantMessage.setRole(MessageRole.ASSISTANT);
-                    assistantMessage.setContent(fullResponse);
-                    assistantMessage.setTokenCount(TokenCounter.estimateTokens(fullResponse));
-                    assistantMessage.setHasRagContext(hasRag);
-                    messageRepository.save(assistantMessage);
+        return inferenceService.streamChatWithThinking(messages, userId)
+                .map(chunk -> {
+                    if (chunk.type() == ChunkType.THINKING) {
+                        thinkingAccumulator.append(chunk.text());
+                        return "{\"type\":\"thinking\",\"content\":" + jsonEscape(chunk.text()) + "}";
+                    } else if (chunk.type() == ChunkType.CONTENT) {
+                        contentAccumulator.append(chunk.text());
+                        return "{\"type\":\"content\",\"content\":" + jsonEscape(chunk.text()) + "}";
+                    } else {
+                        // DONE chunk — persist and emit metadata
+                        String fullResponse = contentAccumulator.toString();
+                        String thinkingContent = thinkingAccumulator.length() > 0
+                                ? thinkingAccumulator.toString() : null;
 
-                    // Update conversation message count
-                    conversation.setMessageCount(conversation.getMessageCount() + 2);
-                    conversationRepository.save(conversation);
+                        Message assistantMessage = new Message();
+                        assistantMessage.setConversation(conversation);
+                        assistantMessage.setRole(MessageRole.ASSISTANT);
+                        assistantMessage.setContent(fullResponse);
+                        assistantMessage.setHasRagContext(hasRag);
+                        assistantMessage.setThinkingContent(thinkingContent);
 
-                    // Trigger async title generation on first exchange
-                    if (isFirstExchange) {
-                        generateTitle(conversationId, userContent);
+                        if (chunk.metadata() != null) {
+                            assistantMessage.setTokenCount(chunk.metadata().tokensGenerated());
+                            assistantMessage.setTokensPerSecond(chunk.metadata().tokensPerSecond());
+                            assistantMessage.setInferenceTimeSeconds(chunk.metadata().inferenceTimeSeconds());
+                            assistantMessage.setStopReason(chunk.metadata().stopReason());
+                            assistantMessage.setThinkingTokenCount(
+                                    thinkingContent != null ? TokenCounter.estimateTokens(thinkingContent) : null);
+                        }
+
+                        messageRepository.save(assistantMessage);
+
+                        conversation.setMessageCount(conversation.getMessageCount() + 2);
+                        conversationRepository.save(conversation);
+
+                        if (isFirstExchange) {
+                            generateTitle(conversationId, userContent);
+                        }
+
+                        memoryExtractionService.extractAndStore(
+                                userId, conversationId, userContent, fullResponse);
+
+                        log.info("Streaming complete in conversation: {}", conversationId);
+
+                        double thinkingTime = chunk.metadata() != null ? chunk.metadata().inferenceTimeSeconds() : 0;
+                        double tokPerSec = chunk.metadata() != null ? chunk.metadata().tokensPerSecond() : 0;
+                        int totalTokens = chunk.metadata() != null ? chunk.metadata().tokensGenerated() : 0;
+                        String stopReason = chunk.metadata() != null ? chunk.metadata().stopReason() : "stop";
+
+                        return "{\"type\":\"done\",\"thinkingTime\":" + thinkingTime
+                                + ",\"tokensPerSecond\":" + tokPerSec
+                                + ",\"totalTokens\":" + totalTokens
+                                + ",\"stopReason\":" + jsonEscape(stopReason) + "}";
                     }
-
-                    // Trigger async memory extraction
-                    memoryExtractionService.extractAndStore(
-                            userId, conversationId, userContent, fullResponse);
-
-                    log.info("Streaming complete in conversation: {}", conversationId);
-                    return Flux.fromIterable(tokens);
                 });
+    }
+
+    /**
+     * Edits a user message and triggers a new AI response.
+     *
+     * <p>Only USER role messages can be edited. Editing deletes all subsequent
+     * messages and then re-triggers inference from the edited conversation history.</p>
+     *
+     * @param conversationId the conversation ID
+     * @param messageId      the message to edit
+     * @param userId         the user's ID
+     * @param newContent     the updated message content
+     * @return the edited message
+     */
+    @Transactional
+    public Message editMessage(UUID conversationId, UUID messageId, UUID userId, String newContent) {
+        log.info("Editing message: {} in conversation: {} for user: {}", messageId, conversationId, userId);
+
+        Conversation conversation = getConversation(conversationId, userId);
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new EntityNotFoundException("Message not found: " + messageId));
+
+        if (!message.getConversation().getId().equals(conversationId)) {
+            throw new EntityNotFoundException("Message does not belong to this conversation");
+        }
+
+        if (message.getRole() != MessageRole.USER) {
+            throw new IllegalArgumentException("Only user messages can be edited");
+        }
+
+        // Delete all messages after this one
+        messageRepository.deleteMessagesAfter(conversationId, messageId);
+
+        // Update the message content
+        message.setContent(newContent);
+        message.setTokenCount(TokenCounter.estimateTokens(newContent));
+        messageRepository.save(message);
+
+        // Recalculate message count
+        long count = messageRepository.countByConversationId(conversationId);
+        conversation.setMessageCount((int) count);
+        conversationRepository.save(conversation);
+
+        return message;
+    }
+
+    /**
+     * Deletes a message and all subsequent messages in the conversation.
+     *
+     * @param conversationId the conversation ID
+     * @param messageId      the message to delete (and all after it)
+     * @param userId         the user's ID
+     */
+    @Transactional
+    public void deleteMessage(UUID conversationId, UUID messageId, UUID userId) {
+        log.info("Deleting message: {} in conversation: {} for user: {}", messageId, conversationId, userId);
+
+        Conversation conversation = getConversation(conversationId, userId);
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new EntityNotFoundException("Message not found: " + messageId));
+
+        if (!message.getConversation().getId().equals(conversationId)) {
+            throw new EntityNotFoundException("Message does not belong to this conversation");
+        }
+
+        // Delete all messages after this one, then delete this one
+        messageRepository.deleteMessagesAfter(conversationId, messageId);
+        messageRepository.delete(message);
+
+        // Recalculate message count
+        long count = messageRepository.countByConversationId(conversationId);
+        conversation.setMessageCount((int) count);
+        conversationRepository.save(conversation);
+    }
+
+    /**
+     * Branches a conversation at a specific message, creating a new independent conversation.
+     *
+     * <p>Copies all messages up to and including the specified message into a new
+     * conversation. The new conversation is completely independent — future changes
+     * do not affect the original.</p>
+     *
+     * @param conversationId the source conversation ID
+     * @param messageId      the message to branch at (inclusive)
+     * @param userId         the user's ID
+     * @param title          optional title for the new conversation
+     * @return the newly created branched conversation
+     */
+    @Transactional
+    public Conversation branchConversation(UUID conversationId, UUID messageId, UUID userId, String title) {
+        log.info("Branching conversation: {} at message: {} for user: {}", conversationId, messageId, userId);
+
+        Conversation sourceConversation = getConversation(conversationId, userId);
+        Message branchPoint = messageRepository.findById(messageId)
+                .orElseThrow(() -> new EntityNotFoundException("Message not found: " + messageId));
+
+        if (!branchPoint.getConversation().getId().equals(conversationId)) {
+            throw new EntityNotFoundException("Message does not belong to this conversation");
+        }
+
+        // Create new conversation
+        String branchTitle = title != null ? title
+                : (sourceConversation.getTitle() != null ? sourceConversation.getTitle() + " (branch)" : "Branch");
+        Conversation newConversation = createConversation(userId, branchTitle);
+
+        // Copy messages up to and including the branch point
+        List<Message> allMessages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
+        int messageCount = 0;
+        for (Message srcMsg : allMessages) {
+            Message copy = new Message();
+            copy.setConversation(newConversation);
+            copy.setRole(srcMsg.getRole());
+            copy.setContent(srcMsg.getContent());
+            copy.setTokenCount(srcMsg.getTokenCount());
+            copy.setHasRagContext(srcMsg.getHasRagContext());
+            copy.setThinkingContent(srcMsg.getThinkingContent());
+            copy.setTokensPerSecond(srcMsg.getTokensPerSecond());
+            copy.setInferenceTimeSeconds(srcMsg.getInferenceTimeSeconds());
+            copy.setStopReason(srcMsg.getStopReason());
+            copy.setThinkingTokenCount(srcMsg.getThinkingTokenCount());
+            messageRepository.save(copy);
+            messageCount++;
+
+            if (srcMsg.getId().equals(messageId)) {
+                break;
+            }
+        }
+
+        newConversation.setMessageCount(messageCount);
+        return conversationRepository.save(newConversation);
+    }
+
+    /**
+     * Regenerates the last assistant message by deleting it and re-running inference.
+     *
+     * @param conversationId the conversation ID
+     * @param messageId      the assistant message to regenerate (must be the last assistant message)
+     * @param userId         the user's ID
+     * @return a Flux of typed JSON events (same format as streamMessage)
+     */
+    public Flux<String> regenerateMessage(UUID conversationId, UUID messageId, UUID userId) {
+        log.info("Regenerating message: {} in conversation: {} for user: {}", messageId, conversationId, userId);
+
+        Conversation conversation = getConversation(conversationId, userId);
+        User user = conversation.getUser();
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new EntityNotFoundException("Message not found: " + messageId));
+
+        if (!message.getConversation().getId().equals(conversationId)) {
+            throw new EntityNotFoundException("Message does not belong to this conversation");
+        }
+
+        if (message.getRole() != MessageRole.ASSISTANT) {
+            throw new IllegalArgumentException("Only assistant messages can be regenerated");
+        }
+
+        // Delete the assistant message
+        messageRepository.delete(message);
+        conversation.setMessageCount(conversation.getMessageCount() - 1);
+        conversationRepository.save(conversation);
+
+        // Find the last user message to use as context
+        List<Message> remainingMessages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
+        String lastUserContent = remainingMessages.stream()
+                .filter(m -> m.getRole() == MessageRole.USER)
+                .reduce((a, b) -> b)
+                .map(Message::getContent)
+                .orElse("");
+
+        // Build context and stream new response
+        RagContext ragContext = buildRagContextSafely(userId, lastUserContent);
+        String systemPrompt = systemPromptBuilder.build(user, "MyOffGridAI", ragContext);
+        List<OllamaMessage> contextMessages = contextWindowService.prepareMessages(
+                conversationId, systemPrompt, lastUserContent);
+
+        final boolean hasRag = ragContext != null && ragContext.hasContext();
+        StringBuilder contentAccumulator = new StringBuilder();
+        StringBuilder thinkingAccumulator = new StringBuilder();
+
+        return inferenceService.streamChatWithThinking(contextMessages, userId)
+                .map(chunk -> {
+                    if (chunk.type() == ChunkType.THINKING) {
+                        thinkingAccumulator.append(chunk.text());
+                        return "{\"type\":\"thinking\",\"content\":" + jsonEscape(chunk.text()) + "}";
+                    } else if (chunk.type() == ChunkType.CONTENT) {
+                        contentAccumulator.append(chunk.text());
+                        return "{\"type\":\"content\",\"content\":" + jsonEscape(chunk.text()) + "}";
+                    } else {
+                        String fullResponse = contentAccumulator.toString();
+                        String thinkingContent = thinkingAccumulator.length() > 0
+                                ? thinkingAccumulator.toString() : null;
+
+                        Message assistantMessage = new Message();
+                        assistantMessage.setConversation(conversation);
+                        assistantMessage.setRole(MessageRole.ASSISTANT);
+                        assistantMessage.setContent(fullResponse);
+                        assistantMessage.setHasRagContext(hasRag);
+                        assistantMessage.setThinkingContent(thinkingContent);
+
+                        if (chunk.metadata() != null) {
+                            assistantMessage.setTokenCount(chunk.metadata().tokensGenerated());
+                            assistantMessage.setTokensPerSecond(chunk.metadata().tokensPerSecond());
+                            assistantMessage.setInferenceTimeSeconds(chunk.metadata().inferenceTimeSeconds());
+                            assistantMessage.setStopReason(chunk.metadata().stopReason());
+                        }
+
+                        messageRepository.save(assistantMessage);
+                        conversation.setMessageCount(conversation.getMessageCount() + 1);
+                        conversationRepository.save(conversation);
+
+                        double thinkingTime = chunk.metadata() != null ? chunk.metadata().inferenceTimeSeconds() : 0;
+                        double tokPerSec = chunk.metadata() != null ? chunk.metadata().tokensPerSecond() : 0;
+                        int totalTokens = chunk.metadata() != null ? chunk.metadata().tokensGenerated() : 0;
+                        String stopReason = chunk.metadata() != null ? chunk.metadata().stopReason() : "stop";
+
+                        return "{\"type\":\"done\",\"thinkingTime\":" + thinkingTime
+                                + ",\"tokensPerSecond\":" + tokPerSec
+                                + ",\"totalTokens\":" + totalTokens
+                                + ",\"stopReason\":" + jsonEscape(stopReason) + "}";
+                    }
+                });
+    }
+
+    /**
+     * Returns paginated messages for a conversation.
+     *
+     * @param userId         the user's ID
+     * @param conversationId the conversation ID
+     * @param pageable       pagination parameters
+     * @return a page of messages
+     */
+    public Page<Message> getMessages(UUID userId, UUID conversationId, Pageable pageable) {
+        getConversation(conversationId, userId); // ownership check
+        return messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId, pageable);
     }
 
     /**
@@ -387,5 +648,19 @@ public class ChatService {
             log.warn("Failed to build RAG context: {}. Proceeding without context.", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Escapes a string for safe inclusion in a JSON value.
+     */
+    private String jsonEscape(String value) {
+        if (value == null) return "null";
+        return "\"" + value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t")
+                + "\"";
     }
 }

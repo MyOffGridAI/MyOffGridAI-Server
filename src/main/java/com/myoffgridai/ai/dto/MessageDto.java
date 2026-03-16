@@ -17,6 +17,11 @@ public record MessageDto(
         String content,
         Integer tokenCount,
         boolean hasRagContext,
+        String thinkingContent,
+        Double tokensPerSecond,
+        Double inferenceTimeSeconds,
+        String stopReason,
+        Integer thinkingTokenCount,
         Instant createdAt
 ) {
 }
