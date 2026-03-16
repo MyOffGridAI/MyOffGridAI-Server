@@ -521,4 +521,25 @@ public final class AppConstants {
 
     /** MQTT QoS level: at-least-once delivery */
     public static final int MQTT_QOS = 1;
+
+    // ── Library ──────────────────────────────────────────────────────────────
+
+    /** Base path for library endpoints */
+    public static final String LIBRARY_API_PATH = "/api/library";
+
+    /** Gutendex API base URL */
+    public static final String GUTENBERG_API_BASE = "https://gutendex.com";
+
+    /** Default search result limit for Gutenberg searches */
+    public static final int GUTENBERG_SEARCH_LIMIT = 20;
+
+    /** Maximum eBook upload size in bytes (2 GB) */
+    public static final long MAX_EBOOK_UPLOAD_BYTES = 2L * 1024 * 1024 * 1024;
+
+    /** Supported eBook file extensions */
+    public static final java.util.List<String> SUPPORTED_EBOOK_EXTENSIONS =
+            java.util.List.of("epub", "pdf", "mobi", "azw", "txt", "html");
+
+    /** Timeout in seconds for Calibre ebook-convert operations */
+    public static final int CALIBRE_CONVERSION_TIMEOUT_SECONDS = 120;
 }

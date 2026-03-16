@@ -195,6 +195,13 @@
             <version>${paho.version}</version>
         </dependency>
 
+        <!-- Commons IO (file utilities) -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.17.0</version>
+        </dependency>
+
         <!-- Structured JSON Logging -->
         <dependency>
             <groupId>net.logstash.logback</groupId>

@@ -7,8 +7,8 @@ spring:
     enabled: false
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
+      max-file-size: 2048MB
+      max-request-size: 2048MB
 
 server:
   port: 8080
@@ -62,6 +62,13 @@ app:
     enabled: false
     broker-url: tcp://localhost:1883
     client-id: myoffgridai-server
+  library:
+    zim-directory: ./library/zim
+    ebook-directory: ./library/ebooks
+    kiwix-url: http://localhost:8888
+    calibre-content-server-url: http://localhost:8081
+    gutenberg-api-url: https://gutendex.com
+    max-upload-size-mb: 2048
 
 ---
 spring:
