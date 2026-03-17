@@ -11,6 +11,7 @@ import com.myoffgridai.config.TestSecurityConfig;
 import com.myoffgridai.proactive.model.Insight;
 import com.myoffgridai.proactive.model.InsightCategory;
 import com.myoffgridai.proactive.model.Notification;
+import com.myoffgridai.proactive.model.NotificationSeverity;
 import com.myoffgridai.proactive.model.NotificationType;
 import com.myoffgridai.proactive.service.InsightGeneratorService;
 import com.myoffgridai.proactive.service.InsightService;
@@ -158,6 +159,7 @@ class ProactiveControllerTest {
         mockMvc.perform(get("/api/notifications").with(user(testUser)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].title").value("Test Title"))
+                .andExpect(jsonPath("$.data[0].severity").value("WARNING"))
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
 
@@ -253,6 +255,7 @@ class ProactiveControllerTest {
         n.setTitle("Test Title");
         n.setBody("Test body");
         n.setType(NotificationType.GENERAL);
+        n.setSeverity(NotificationSeverity.WARNING);
         n.setCreatedAt(Instant.now());
         return n;
     }

@@ -13,7 +13,6 @@ import com.myoffgridai.notification.service.DeviceRegistrationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -43,10 +42,10 @@ class DeviceRegistrationControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private DeviceRegistrationService deviceRegistrationService;
-    @MockBean private JwtService jwtService;
-    @MockBean private AuthService authService;
-    @MockBean private UserDetailsService userDetailsService;
+    @MockitoBean private DeviceRegistrationService deviceRegistrationService;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private AuthService authService;
+    @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User createUser() {

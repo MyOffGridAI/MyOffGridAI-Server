@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
@@ -48,11 +48,11 @@ class SystemInitializationIntegrationTest extends BaseIntegrationTest {
     @Autowired private SystemConfigRepository systemConfigRepository;
     @Autowired private com.myoffgridai.auth.repository.UserRepository userRepository;
 
-    @MockBean private OllamaService ollamaService;
-    @MockBean private EmbeddingService embeddingService;
-    @MockBean private FileStorageService fileStorageService;
-    @MockBean private OcrService ocrService;
-    @MockBean private SerialPortService serialPortService;
+    @MockitoBean private OllamaService ollamaService;
+    @MockitoBean private EmbeddingService embeddingService;
+    @MockitoBean private FileStorageService fileStorageService;
+    @MockitoBean private OcrService ocrService;
+    @MockitoBean private SerialPortService serialPortService;
 
     private static final String INSTANCE_NAME = "TestGrid_" + System.nanoTime();
     private static final String OWNER_USERNAME = "owner_" + System.nanoTime();

@@ -330,10 +330,15 @@ public class ChatService {
                         double tokPerSec = chunk.metadata() != null ? chunk.metadata().tokensPerSecond() : 0;
                         int totalTokens = chunk.metadata() != null ? chunk.metadata().tokensGenerated() : 0;
                         String stopReason = chunk.metadata() != null ? chunk.metadata().stopReason() : "stop";
+                        Integer thinkTokenCount = thinkingContent != null
+                                ? TokenCounter.estimateTokens(thinkingContent) : null;
 
+                        String thinkTokenField = thinkTokenCount != null
+                                ? ",\"thinkingTokenCount\":" + thinkTokenCount : "";
                         return "{\"type\":\"done\",\"thinkingTime\":" + thinkingTime
                                 + ",\"tokensPerSecond\":" + tokPerSec
                                 + ",\"totalTokens\":" + totalTokens
+                                + thinkTokenField
                                 + ",\"stopReason\":" + jsonEscape(stopReason) + "}";
                     }
                 });
@@ -542,6 +547,8 @@ public class ChatService {
                             assistantMessage.setTokensPerSecond(chunk.metadata().tokensPerSecond());
                             assistantMessage.setInferenceTimeSeconds(chunk.metadata().inferenceTimeSeconds());
                             assistantMessage.setStopReason(chunk.metadata().stopReason());
+                            assistantMessage.setThinkingTokenCount(
+                                    thinkingContent != null ? TokenCounter.estimateTokens(thinkingContent) : null);
                         }
 
                         messageRepository.save(assistantMessage);
@@ -552,10 +559,15 @@ public class ChatService {
                         double tokPerSec = chunk.metadata() != null ? chunk.metadata().tokensPerSecond() : 0;
                         int totalTokens = chunk.metadata() != null ? chunk.metadata().tokensGenerated() : 0;
                         String stopReason = chunk.metadata() != null ? chunk.metadata().stopReason() : "stop";
+                        Integer thinkTokenCount = thinkingContent != null
+                                ? TokenCounter.estimateTokens(thinkingContent) : null;
 
+                        String thinkTokenField = thinkTokenCount != null
+                                ? ",\"thinkingTokenCount\":" + thinkTokenCount : "";
                         return "{\"type\":\"done\",\"thinkingTime\":" + thinkingTime
                                 + ",\"tokensPerSecond\":" + tokPerSec
                                 + ",\"totalTokens\":" + totalTokens
+                                + thinkTokenField
                                 + ",\"stopReason\":" + jsonEscape(stopReason) + "}";
                     }
                 });

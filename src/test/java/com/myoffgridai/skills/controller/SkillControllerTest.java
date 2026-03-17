@@ -20,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.domain.PageImpl;
@@ -44,13 +43,13 @@ class SkillControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private SkillRepository skillRepository;
-    @MockBean private SkillExecutionRepository executionRepository;
-    @MockBean private InventoryItemRepository inventoryItemRepository;
-    @MockBean private SkillExecutorService skillExecutorService;
-    @MockBean private JwtService jwtService;
-    @MockBean private JwtAuthFilter jwtAuthFilter;
-    @MockBean private AuthService authService;
+    @MockitoBean private SkillRepository skillRepository;
+    @MockitoBean private SkillExecutionRepository executionRepository;
+    @MockitoBean private InventoryItemRepository inventoryItemRepository;
+    @MockitoBean private SkillExecutorService skillExecutorService;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private JwtAuthFilter jwtAuthFilter;
+    @MockitoBean private AuthService authService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User testUser;

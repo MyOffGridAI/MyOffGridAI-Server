@@ -2,6 +2,10 @@ spring:
   config:
     activate:
       on-profile: prod
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/myoffgridai}
+    username: ${DB_USERNAME:myoffgridai}
+    password: ${DB_PASSWORD:myoffgridai}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -11,6 +15,12 @@ spring:
     baseline-on-migrate: true
 
 app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  encryption:
+    key: ${ENCRYPTION_KEY}
   inference:
     provider: ${INFERENCE_PROVIDER:lmstudio}
     base-url: ${INFERENCE_BASE_URL:http://localhost:1234}

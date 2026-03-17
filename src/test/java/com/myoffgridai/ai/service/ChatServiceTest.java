@@ -223,6 +223,45 @@ class ChatServiceTest {
         assertTrue(events.get(2).contains("\"type\":\"done\""));
     }
 
+    @Test
+    void streamMessage_setsThinkingTokenCount_whenThinkingPresent() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "hello")));
+
+        InferenceChunk thinkChunk = new InferenceChunk(ChunkType.THINKING, "Let me reason about this", null);
+        InferenceChunk contentChunk = new InferenceChunk(ChunkType.CONTENT, "response", null);
+        InferenceChunk doneChunk = new InferenceChunk(ChunkType.DONE, null,
+                new InferenceMetadata(10, 5.0, 2.0, "stop"));
+        when(inferenceService.streamChatWithThinking(any(), any()))
+                .thenReturn(Flux.just(thinkChunk, contentChunk, doneChunk));
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        Flux<String> result = chatService.streamMessage(conversationId, userId, "hello");
+
+        List<String> events = new java.util.ArrayList<>();
+        StepVerifier.create(result)
+                .recordWith(() -> events)
+                .thenConsumeWhile(e -> true)
+                .verifyComplete();
+
+        // Verify thinking token count is in the done event
+        assertTrue(events.get(2).contains("\"thinkingTokenCount\":"));
+
+        // Verify message saved with thinkingTokenCount set
+        ArgumentCaptor<Message> msgCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository, atLeast(2)).save(msgCaptor.capture());
+        Message assistantMsg = msgCaptor.getAllValues().stream()
+                .filter(m -> m.getRole() == MessageRole.ASSISTANT)
+                .findFirst().orElseThrow();
+        assertNotNull(assistantMsg.getThinkingTokenCount());
+        assertTrue(assistantMsg.getThinkingTokenCount() > 0);
+        assertEquals("Let me reason about this", assistantMsg.getThinkingContent());
+    }
+
     // ── deleteConversation tests ─────────────────────────────────────────
 
     @Test

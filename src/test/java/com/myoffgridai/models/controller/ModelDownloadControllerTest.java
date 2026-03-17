@@ -16,7 +16,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -51,12 +50,12 @@ class ModelDownloadControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private ModelCatalogService catalogService;
-    @MockBean private ModelDownloadService downloadService;
-    @MockBean private ModelDownloadProgressRegistry progressRegistry;
-    @MockBean private JwtService jwtService;
-    @MockBean private AuthService authService;
-    @MockBean private UserDetailsService userDetailsService;
+    @MockitoBean private ModelCatalogService catalogService;
+    @MockitoBean private ModelDownloadService downloadService;
+    @MockitoBean private ModelDownloadProgressRegistry progressRegistry;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private AuthService authService;
+    @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
     @MockitoBean private SystemConfigService systemConfigService;
 

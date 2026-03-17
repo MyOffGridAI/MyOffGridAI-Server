@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -48,25 +47,25 @@ class EnrichmentControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private WebFetchService webFetchService;
 
-    @MockBean
+    @MockitoBean
     private WebSearchService webSearchService;
 
-    @MockBean
+    @MockitoBean
     private ClaudeApiService claudeApiService;
 
-    @MockBean
+    @MockitoBean
     private ExternalApiSettingsService settingsService;
 
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
     private JwtAuthFilter jwtAuthFilter;
 
-    @MockBean
+    @MockitoBean
     private AuthService authService;
 
     @MockitoBean

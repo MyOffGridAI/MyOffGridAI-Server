@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.domain.PageImpl;
@@ -44,11 +43,11 @@ class SensorControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private SensorService sensorService;
-    @MockBean private SseEmitterRegistry sseEmitterRegistry;
-    @MockBean private JwtService jwtService;
-    @MockBean private JwtAuthFilter jwtAuthFilter;
-    @MockBean private AuthService authService;
+    @MockitoBean private SensorService sensorService;
+    @MockitoBean private SseEmitterRegistry sseEmitterRegistry;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private JwtAuthFilter jwtAuthFilter;
+    @MockitoBean private AuthService authService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User testUser;

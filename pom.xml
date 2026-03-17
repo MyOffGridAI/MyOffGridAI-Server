@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.6</version>
+        <version>3.4.13</version>
         <relativePath/>
     </parent>
 
@@ -22,7 +22,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <pgvector.version>0.1.6</pgvector.version>
         <pdfbox.version>3.0.4</pdfbox.version>
-        <poi.version>5.3.0</poi.version>
+        <poi.version>5.4.0</poi.version>
         <tess4j.version>5.13.0</tess4j.version>
         <jserialcomm.version>2.11.0</jserialcomm.version>
         <springdoc.version>2.8.4</springdoc.version>
@@ -53,12 +53,12 @@
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-codec-http2</artifactId>
-                <version>4.1.125.Final</version>
+                <version>4.1.129.Final</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-codec-http</artifactId>
-                <version>4.1.125.Final</version>
+                <version>4.1.129.Final</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -69,6 +69,22 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>42.7.7</version>
+            </dependency>
+            <!-- poi improper input validation — fix: 5.4.0 -->
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-scratchpad</artifactId>
+                <version>${poi.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -317,14 +333,12 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- Unit tests only: 0.80. Raise to 1.00 once Testcontainers/Docker API compatibility is resolved. -->
-                                            <minimum>0.80</minimum>
+                                            <minimum>1.00</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- Unit tests only: 0.60. Raise to 1.00 once integration tests can run. -->
-                                            <minimum>0.60</minimum>
+                                            <minimum>1.00</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

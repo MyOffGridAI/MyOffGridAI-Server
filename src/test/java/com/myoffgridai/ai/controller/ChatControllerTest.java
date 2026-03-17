@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.domain.Page;
@@ -54,11 +53,11 @@ class ChatControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private ChatService chatService;
-    @MockBean private MessageRepository messageRepository;
-    @MockBean private JwtService jwtService;
-    @MockBean private AuthService authService;
-    @MockBean private UserDetailsService userDetailsService;
+    @MockitoBean private ChatService chatService;
+    @MockitoBean private MessageRepository messageRepository;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private AuthService authService;
+    @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User testUser;

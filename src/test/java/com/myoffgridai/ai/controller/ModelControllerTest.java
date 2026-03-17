@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -40,10 +39,10 @@ class ModelControllerTest {
 
     @Autowired private MockMvc mockMvc;
 
-    @MockBean private InferenceService inferenceService;
-    @MockBean private JwtService jwtService;
-    @MockBean private AuthService authService;
-    @MockBean private UserDetailsService userDetailsService;
+    @MockitoBean private InferenceService inferenceService;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private AuthService authService;
+    @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
     @MockitoBean private SystemConfigService systemConfigService;
 

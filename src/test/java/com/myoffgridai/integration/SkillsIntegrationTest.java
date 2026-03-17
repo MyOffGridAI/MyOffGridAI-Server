@@ -13,7 +13,7 @@ import com.myoffgridai.skills.repository.SkillRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -31,10 +31,10 @@ class SkillsIntegrationTest extends BaseIntegrationTest {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private SkillRepository skillRepository;
 
-    @MockBean private OllamaService ollamaService;
-    @MockBean private EmbeddingService embeddingService;
-    @MockBean private FileStorageService fileStorageService;
-    @MockBean private OcrService ocrService;
+    @MockitoBean private OllamaService ollamaService;
+    @MockitoBean private EmbeddingService embeddingService;
+    @MockitoBean private FileStorageService fileStorageService;
+    @MockitoBean private OcrService ocrService;
 
     private String accessToken;
 

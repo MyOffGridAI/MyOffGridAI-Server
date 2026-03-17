@@ -22,7 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.domain.PageImpl;
@@ -48,13 +47,13 @@ class KnowledgeControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private KnowledgeService knowledgeService;
-    @MockBean private SemanticSearchService semanticSearchService;
-    @MockBean private SystemConfigService systemConfigService;
-    @MockBean private FileStorageService fileStorageService;
-    @MockBean private JwtService jwtService;
-    @MockBean private JwtAuthFilter jwtAuthFilter;
-    @MockBean private AuthService authService;
+    @MockitoBean private KnowledgeService knowledgeService;
+    @MockitoBean private SemanticSearchService semanticSearchService;
+    @MockitoBean private SystemConfigService systemConfigService;
+    @MockitoBean private FileStorageService fileStorageService;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private JwtAuthFilter jwtAuthFilter;
+    @MockitoBean private AuthService authService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User testUser;

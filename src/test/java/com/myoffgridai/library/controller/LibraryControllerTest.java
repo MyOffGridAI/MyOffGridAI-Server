@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.mock.web.MockMultipartFile;
@@ -47,13 +46,13 @@ class LibraryControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private ZimFileService zimFileService;
-    @MockBean private EbookService ebookService;
-    @MockBean private GutenbergService gutenbergService;
-    @MockBean private LibraryProperties libraryProperties;
-    @MockBean private JwtService jwtService;
-    @MockBean private JwtAuthFilter jwtAuthFilter;
-    @MockBean private AuthService authService;
+    @MockitoBean private ZimFileService zimFileService;
+    @MockitoBean private EbookService ebookService;
+    @MockitoBean private GutenbergService gutenbergService;
+    @MockitoBean private LibraryProperties libraryProperties;
+    @MockitoBean private JwtService jwtService;
+    @MockitoBean private JwtAuthFilter jwtAuthFilter;
+    @MockitoBean private AuthService authService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
 
     private User ownerUser;

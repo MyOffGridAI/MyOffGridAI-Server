@@ -1,6 +1,7 @@
 package com.myoffgridai.proactive.dto;
 
 import com.myoffgridai.proactive.model.Notification;
+import com.myoffgridai.proactive.model.NotificationSeverity;
 import com.myoffgridai.proactive.model.NotificationType;
 
 import java.time.Instant;
@@ -17,6 +18,7 @@ public record NotificationDto(
         String title,
         String body,
         NotificationType type,
+        NotificationSeverity severity,
         boolean isRead,
         Instant createdAt,
         Instant readAt,
@@ -29,6 +31,7 @@ public record NotificationDto(
                 notification.getTitle(),
                 notification.getBody(),
                 notification.getType(),
+                notification.getSeverity(),
                 notification.getIsRead(),
                 notification.getCreatedAt(),
                 notification.getReadAt(),
