@@ -9,10 +9,14 @@ import com.myoffgridai.models.dto.HfSearchResultDto;
 import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.util.DefaultUriBuilderFactory;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,20 +41,36 @@ public class ModelCatalogService {
     private final WebClient webClient;
     private final ExternalApiSettingsService settingsService;
     private final ObjectMapper objectMapper;
+    private final QuantizationRecommendationService recommendationService;
 
     /**
      * Constructs the service.
      *
-     * @param webClientBuilder the WebClient builder
-     * @param settingsService  the external API settings service for HuggingFace token
-     * @param objectMapper     the Jackson object mapper
+     * @param webClientBuilder      the WebClient builder
+     * @param settingsService       the external API settings service for HuggingFace token
+     * @param objectMapper          the Jackson object mapper
+     * @param recommendationService the quantization recommendation service
      */
     public ModelCatalogService(WebClient.Builder webClientBuilder,
                                ExternalApiSettingsService settingsService,
-                               ObjectMapper objectMapper) {
-        this.webClient = webClientBuilder.baseUrl(AppConstants.HF_API_BASE).build();
+                               ObjectMapper objectMapper,
+                               QuantizationRecommendationService recommendationService) {
+        // Use JDK HttpClient instead of Reactor Netty to avoid Netty 4.1.129 bug
+        // in HttpUtil.isEncodingSafeStartLineToken() where chars >= 64 (e.g. 'J')
+        // collide with control chars via 1L<<char modular wrapping, falsely rejecting
+        // valid URIs containing uppercase letters like 'J' or 'M'.
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+        DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory(AppConstants.HF_API_BASE);
+        factory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.URI_COMPONENT);
+        this.webClient = webClientBuilder
+                .uriBuilderFactory(factory)
+                .clientConnector(new JdkClientHttpConnector(httpClient))
+                .build();
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
+        this.recommendationService = recommendationService;
     }
 
     /**
@@ -229,7 +249,7 @@ public class ModelCatalogService {
             }
             files.add(new HfModelFileDto(rfilename, size, blobId));
         }
-        return files;
+        return recommendationService.enrichFiles(files);
     }
 
     /**

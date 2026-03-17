@@ -49,7 +49,7 @@ public class Notification {
     @Column(length = 20)
     private NotificationSeverity severity;
 
-    @Column(name = "mqtt_delivered", nullable = false)
+    @Column(name = "mqtt_delivered", nullable = false, columnDefinition = "boolean not null default false")
     private boolean mqttDelivered = false;
 
     @Column(columnDefinition = "TEXT")

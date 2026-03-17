@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.mockito.AdditionalAnswers.returnsFirstArg;
 
 /**
  * Unit tests for {@link ModelCatalogService}.
@@ -39,6 +40,7 @@ class ModelCatalogServiceTest {
     @Mock private WebClient.Builder webClientBuilder;
     @Mock private WebClient webClient;
     @Mock private ExternalApiSettingsService settingsService;
+    @Mock private QuantizationRecommendationService recommendationService;
     @Mock private WebClient.RequestHeadersUriSpec<?> requestHeadersUriSpec;
     @Mock private WebClient.RequestHeadersSpec<?> requestHeadersSpec;
     @Mock private WebClient.ResponseSpec responseSpec;
@@ -49,14 +51,19 @@ class ModelCatalogServiceTest {
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
-        when(webClientBuilder.baseUrl(anyString())).thenReturn(webClientBuilder);
+        when(webClientBuilder.uriBuilderFactory(any())).thenReturn(webClientBuilder);
+        when(webClientBuilder.clientConnector(any())).thenReturn(webClientBuilder);
         when(webClientBuilder.build()).thenReturn(webClient);
 
         // Default: get() returns the chain
         WebClient.RequestHeadersUriSpec rawSpec = requestHeadersUriSpec;
         when(webClient.get()).thenReturn(rawSpec);
 
-        service = new ModelCatalogService(webClientBuilder, settingsService, objectMapper);
+        // Stub enrichFiles to pass through input unchanged (unit test isolation).
+        // Lenient because error-path tests throw before parseSiblings is reached.
+        lenient().when(recommendationService.enrichFiles(any())).thenAnswer(returnsFirstArg());
+
+        service = new ModelCatalogService(webClientBuilder, settingsService, objectMapper, recommendationService);
     }
 
     // ── searchModels ────────────────────────────────────────────────────────
