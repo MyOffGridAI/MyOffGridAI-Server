@@ -48,12 +48,12 @@ app:
     expiration-ms: 86400000
     refresh-expiration-ms: 604800000
   inference:
-    provider: native
+    provider: llama-server
     base-url: http://localhost:1234
     model: Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
-    embed-model: nomic-embed-text
-    llama-server-binary: /usr/local/bin/llama-server
-    models-dir: ./models
+    embed-model: local
+    llama-server-binary: /opt/homebrew/bin/llama-server
+    models-dir: /Users/adamallard/.lmstudio/models
     active-model: ""
     port: 1234
     context-size: 32768
@@ -66,10 +66,21 @@ app:
     restart-delay-seconds: 5
     startup-timeout-seconds: 120
     native:
+      # Kept for future use when de.kherud:llama updates to support Qwen3.5
       context-size: 32768
-      gpu-layers: 99
+      gpu-layers: 0
       threads: 8
       enable-embedding: false
+  llama-server:
+    binary: /opt/homebrew/bin/llama-server
+    models-dir: /Users/adamallard/.lmstudio/models
+    active-model: Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF/Qwen3.5-27B.Q4_K_S.gguf
+    port: 1234
+    context-size: 32768
+    gpu-layers: 99
+    threads: 8
+    startup-timeout-seconds: 120
+    health-check-interval-seconds: 30
   ollama:
     base-url: http://localhost:11434
     model: hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M

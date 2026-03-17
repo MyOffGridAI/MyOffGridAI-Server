@@ -1,5 +1,8 @@
 package com.myoffgridai.system.controller;
 
+import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.ai.dto.SetActiveModelRequest;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
 import com.myoffgridai.ai.service.NativeLlamaInferenceService;
 import com.myoffgridai.ai.service.NativeLlamaStatus;
 import com.myoffgridai.auth.dto.AuthResponse;
@@ -48,29 +51,33 @@ public class SystemController {
     private final NetworkTransitionService networkTransitionService;
     private final FactoryResetService factoryResetService;
     private final NativeLlamaInferenceService nativeInferenceService;
+    private final LlamaServerProcessService llamaServerProcessService;
     private final String inferenceProvider;
 
     /**
      * Constructs the system controller.
      *
-     * @param systemConfigService      the system config service
-     * @param authService              the auth service for creating the owner account
-     * @param networkTransitionService the network transition service
-     * @param factoryResetService      the factory reset service
-     * @param nativeInferenceService   the native inference service (nullable)
-     * @param inferenceProvider        the configured inference provider name
+     * @param systemConfigService        the system config service
+     * @param authService                the auth service for creating the owner account
+     * @param networkTransitionService   the network transition service
+     * @param factoryResetService        the factory reset service
+     * @param nativeInferenceService     the native inference service (nullable)
+     * @param llamaServerProcessService  the llama-server process service (nullable)
+     * @param inferenceProvider          the configured inference provider name
      */
     public SystemController(SystemConfigService systemConfigService,
                             AuthService authService,
                             NetworkTransitionService networkTransitionService,
                             FactoryResetService factoryResetService,
                             @Autowired(required = false) NativeLlamaInferenceService nativeInferenceService,
+                            @Autowired(required = false) LlamaServerProcessService llamaServerProcessService,
                             @Value("${app.inference.provider}") String inferenceProvider) {
         this.systemConfigService = systemConfigService;
         this.authService = authService;
         this.networkTransitionService = networkTransitionService;
         this.factoryResetService = factoryResetService;
         this.nativeInferenceService = nativeInferenceService;
+        this.llamaServerProcessService = llamaServerProcessService;
         this.inferenceProvider = inferenceProvider;
     }
 
@@ -85,7 +92,14 @@ public class SystemController {
 
         String providerStatus = "UNKNOWN";
         String activeModel = config.getActiveModelFilename();
-        if (nativeInferenceService != null) {
+
+        if (llamaServerProcessService != null) {
+            var serverStatus = llamaServerProcessService.getStatus();
+            providerStatus = serverStatus.status();
+            if (serverStatus.activeModelPath() != null) {
+                activeModel = serverStatus.activeModelPath();
+            }
+        } else if (nativeInferenceService != null) {
             var nativeStatus = nativeInferenceService.getStatus();
             providerStatus = nativeStatus.status().name();
             if (nativeStatus.activeModel() != null) {
@@ -249,5 +263,39 @@ public class SystemController {
         factoryResetService.performReset();
         return ResponseEntity.ok(
                 ApiResponse.success(null, "Factory reset in progress — device returning to setup mode"));
+    }
+
+    // ── llama-server management endpoints ─────────────────────────────────
+
+    /**
+     * Returns the current llama-server process status.
+     *
+     * @return the llama-server status DTO
+     */
+    @GetMapping("/models/server/status")
+    public ResponseEntity<ApiResponse<LlamaServerStatusDto>> getLlamaServerStatus() {
+        if (llamaServerProcessService == null) {
+            return ResponseEntity.ok(ApiResponse.error("llama-server provider is not active"));
+        }
+        return ResponseEntity.ok(ApiResponse.success(llamaServerProcessService.getStatus()));
+    }
+
+    /**
+     * Switches the active model on the llama-server by stopping the current
+     * process and restarting with the new model file.
+     *
+     * @param request the set active model request with the GGUF filename
+     * @return the llama-server status after the switch
+     */
+    @PostMapping("/models/server/switch")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<ApiResponse<LlamaServerStatusDto>> switchLlamaServerModel(
+            @Valid @RequestBody SetActiveModelRequest request) {
+        if (llamaServerProcessService == null) {
+            return ResponseEntity.ok(ApiResponse.error("llama-server provider is not active"));
+        }
+        log.info("Switching llama-server model to: {}", request.filename());
+        LlamaServerStatusDto status = llamaServerProcessService.switchModel(request.filename());
+        return ResponseEntity.ok(ApiResponse.success(status));
     }
 }

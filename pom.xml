@@ -229,7 +229,7 @@
         <dependency>
             <groupId>de.kherud</groupId>
             <artifactId>llama</artifactId>
-            <version>4.1.0</version>
+            <version>4.2.0</version>
         </dependency>
 
         <!-- API Documentation -->

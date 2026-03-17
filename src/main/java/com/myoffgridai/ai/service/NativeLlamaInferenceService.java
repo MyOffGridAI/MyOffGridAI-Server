@@ -20,6 +20,8 @@ import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -98,6 +100,25 @@ public class NativeLlamaInferenceService implements InferenceService, Disposable
         this.nativeProperties = nativeProperties;
         this.systemConfigService = systemConfigService;
         this.ollamaEmbedRestClient = ollamaEmbedRestClient;
+    }
+
+    /**
+     * Auto-loads the active model on application startup if one is configured
+     * in the system config.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        String filename = systemConfigService.getConfig().getActiveModelFilename();
+        if (filename != null && !filename.isBlank()) {
+            log.info("Auto-loading model on startup: {}", filename);
+            try {
+                loadModel(filename);
+            } catch (Exception e) {
+                log.error("Failed to auto-load model on startup: {}", e.getMessage());
+            }
+        } else {
+            log.info("No active model configured — skipping auto-load");
+        }
     }
 
     /** {@inheritDoc} */
