@@ -1,16 +1,16 @@
 # MyOffGridAI-Server — Codebase Audit
 
-**Audit Date:** 2026-03-16T23:24:33Z
+**Audit Date:** 2026-03-17T12:29:53Z
 **Branch:** main
-**Commit:** 072217065a39eb2d63e12baccde26f8eddc3e5df P12-Server: Add HuggingFace model catalog and LM Studio download manager
+**Commit:** 5305618cb32297d02fa5451c5995f7735a465ca7 P14-Server: Replace LM Studio with native llama-server process management
 **Auditor:** Claude Code (Automated)
 **Purpose:** Zero-context reference for AI-assisted development
 **Audit File:** MyOffGridAI-Server-Audit.md
 **Scorecard:** MyOffGridAI-Server-Scorecard.md
-**OpenAPI Spec:** Generated separately
+**OpenAPI Spec:** MyOffGridAI-Server-OpenAPI.yaml (generated separately)
 
 > This audit is the source of truth for the MyOffGridAI-Server codebase structure, entities, services, and configuration.
-> The OpenAPI spec is the source of truth for all endpoints, DTOs, and API contracts.
+> The OpenAPI spec (MyOffGridAI-Server-OpenAPI.yaml) is the source of truth for all endpoints, DTOs, and API contracts.
 > An AI reading this audit + the OpenAPI spec should be able to generate accurate code
 > changes, new features, tests, and fixes without filesystem access.
 
@@ -20,59 +20,46 @@
 
 ```
 Project Name: MyOffGridAI Server
-Repository URL: https://github.com/aallard/MyOffGridAI-Server.git
-Primary Language / Framework: Java 21 / Spring Boot 3.4.6
-Build Tool + Version: Maven (wrapper included, apache-maven-3.9.9)
+Repository URL: (local repository)
+Primary Language / Framework: Java 21 / Spring Boot 3.4.13
+Java Version: 21
+Build Tool + Version: Maven 3.9.9
 Current Branch: main
-Latest Commit Hash: 072217065a39eb2d63e12baccde26f8eddc3e5df
-Latest Commit Message: P12-Server: Add HuggingFace model catalog and LM Studio download manager
-Audit Timestamp: 2026-03-16T23:24:33Z
+Latest Commit Hash: 5305618cb32297d02fa5451c5995f7735a465ca7
+Latest Commit Message: P14-Server: Replace LM Studio with native llama-server process management
+Audit Timestamp: 2026-03-17T12:29:53Z
 ```
 
 ---
 
 ## 2. Directory Structure
 
-Single-module Maven project. Source root: `src/main/java/com/myoffgridai/`. Organized into 15 feature packages: `ai`, `auth`, `common`, `config`, `enrichment`, `events`, `knowledge`, `library`, `mcp`, `memory`, `models`, `notification`, `privacy`, `proactive`, `sensors`, `settings`, `skills`, `system`. Tests mirror the source structure under `src/test/java/com/myoffgridai/` with integration tests in `integration/`.
+Single-module Maven project. Source in `src/main/java/com/myoffgridai/`. 16 feature packages:
 
 ```
-MyOffGridAI-Server/
-├── pom.xml
-├── Dockerfile
-├── CONVENTIONS.md
-├── MyOffGridAI-Server-Architecture.md
-├── README.md
-├── .gitignore
-├── src/main/java/com/myoffgridai/
-│   ├── MyOffGridAiApplication.java
-│   ├── ai/          (controller, dto, model, repository, service)
-│   ├── auth/        (controller, dto, model, repository, service)
-│   ├── common/      (exception, response, util)
-│   ├── config/      (security, JPA, Ollama, LmStudio, rate limiting, filters)
-│   ├── enrichment/  (controller, dto, service)
-│   ├── events/      (controller, dto, model, repository, service)
-│   ├── knowledge/   (controller, dto, model, repository, service, util)
-│   ├── library/     (config, controller, dto, model, repository, service)
-│   ├── mcp/         (config, controller, dto, model, repository, service)
-│   ├── memory/      (controller, dto, model, repository, service)
-│   ├── models/      (controller, dto, service)
-│   ├── notification/ (config, controller, dto, model, repository, service)
-│   ├── privacy/     (aspect, controller, dto, model, repository, service)
-│   ├── proactive/   (controller, dto, model, repository, service)
-│   ├── sensors/     (controller, dto, model, repository, service)
-│   ├── settings/    (controller, dto, model, repository, service)
-│   ├── skills/      (builtin, controller, dto, model, repository, service)
-│   └── system/      (controller, dto, model, repository, service)
-├── src/main/resources/
-│   ├── application.yml
-│   ├── application-prod.yml
-│   ├── logback-spring.xml
-│   ├── META-INF/native-image/ (GraalVM configs)
-│   └── static/setup/setup.js
-└── src/test/
-    ├── java/com/myoffgridai/ (100 unit test + 23 integration test files)
-    └── resources/ (application.yml, application-test.yml)
+com.myoffgridai/
+├── ai/          — Chat, inference (Ollama + llama-server), context window, agents
+├── auth/        — JWT authentication, user management
+├── common/      — Exceptions, ApiResponse, utilities (AES encryption, token counter)
+├── config/      — Security, rate limiting, JPA, Ollama, llama-server configs
+├── enrichment/  — Web fetch, web search (Brave), Claude API integration
+├── events/      — Scheduled/sensor-triggered events
+├── knowledge/   — Document upload, chunking, OCR, semantic search
+├── library/     — eBooks, ZIM files (Kiwix), Project Gutenberg
+├── mcp/         — Model Context Protocol server (SSE transport)
+├── memory/      — Memories, embeddings, RAG, summarization
+├── models/      — HuggingFace model catalog, GGUF download manager
+├── notification/ — MQTT push notifications, device registration
+├── privacy/     — Audit logging, data export/wipe, Fortress mode, sovereignty reports
+├── proactive/   — AI insights, notifications, pattern analysis, system health
+├── sensors/     — Serial sensor management, polling, SSE streaming
+├── settings/    — External API settings (Anthropic, Brave, HuggingFace)
+├── skills/      — Built-in skills (6), skill execution framework
+├── system/      — Captive portal, AP mode, factory reset, system config
+└── MyOffGridAiApplication.java — Entry point (@SpringBootApplication, @EnableAsync, @EnableScheduling)
 ```
+
+Source files: ~317 Java files (203 main, 114 test). Config: `application.yml`, `application-prod.yml`, `logback-spring.xml`, `Dockerfile`.
 
 ---
 
@@ -82,69 +69,62 @@ MyOffGridAI-Server/
 
 | Dependency | Version | Purpose |
 |---|---|---|
-| spring-boot-starter-web | 3.4.6 (parent) | REST API framework |
-| spring-boot-starter-data-jpa | 3.4.6 | JPA / Hibernate ORM |
-| spring-boot-starter-security | 3.4.6 | Authentication & authorization |
-| spring-boot-starter-validation | 3.4.6 | Bean validation (Jakarta) |
-| spring-boot-starter-actuator | 3.4.6 | Health/metrics endpoints |
-| spring-boot-starter-webflux | 3.4.6 | WebClient for async HTTP |
-| spring-boot-starter-aop | 3.4.6 | AOP for audit aspect |
-| spring-ai-starter-mcp-server-webmvc | 1.1.2 | MCP Server (SSE transport) |
+| spring-boot-starter-web | 3.4.13 | REST API |
+| spring-boot-starter-data-jpa | 3.4.13 | JPA/Hibernate |
+| spring-boot-starter-security | 3.4.13 | Authentication/authorization |
+| spring-boot-starter-validation | 3.4.13 | Bean validation |
+| spring-boot-starter-actuator | 3.4.13 | Health/metrics |
+| spring-boot-starter-webflux | 3.4.13 | Reactive WebClient for SSE streaming |
+| spring-boot-starter-aop | 3.4.13 | Audit aspect |
+| spring-ai-starter-mcp-server-webmvc | 1.1.2 | MCP server (SSE transport) |
 | jjwt-api/impl/jackson | 0.12.6 | JWT token generation/validation |
-| postgresql | 42.7.7 | PostgreSQL JDBC driver |
-| pgvector | 0.1.6 | pgvector extension support |
+| postgresql | 42.7.7 | Database driver |
+| pgvector | 0.1.6 | Vector similarity search |
 | pdfbox | 3.0.4 | PDF text extraction |
-| poi / poi-ooxml / poi-scratchpad | 5.3.0 | Office document processing |
-| tess4j | 5.13.0 | OCR via Tesseract |
-| jSerialComm | 2.11.0 | Serial port communication (sensors) |
+| poi/poi-ooxml/poi-scratchpad | 5.4.0 | Office document extraction |
+| tess4j | 5.13.0 | OCR (Tesseract) |
+| jSerialComm | 2.11.0 | Serial port communication |
 | bucket4j-core | 8.10.1 | Rate limiting |
-| paho.client.mqttv3 | 1.2.5 | MQTT client (Mosquitto) |
+| paho.client.mqttv3 | 1.2.5 | MQTT push notifications |
+| jsoup | 1.18.3 | HTML parsing |
 | commons-io | 2.17.0 | File utilities |
 | logstash-logback-encoder | 8.0 | Structured JSON logging |
-| springdoc-openapi-starter-webmvc-ui | 2.8.4 | Swagger UI / OpenAPI |
-| jsoup | 1.18.3 | HTML parsing (web fetch) |
+| springdoc-openapi-starter-webmvc-ui | 2.8.4 | Swagger UI |
 | lombok | 1.18.42 | Boilerplate reduction |
-| jackson-core | 2.18.6 | JSON processing (BOM override) |
-| netty-codec-http/http2 | 4.1.125.Final | Netty (BOM override) |
-| commons-lang3 | 3.18.0 | String utilities |
 
 **Test dependencies:** spring-boot-starter-test, reactor-test, spring-security-test, testcontainers-postgresql (1.20.6), testcontainers-junit-jupiter (1.20.6)
 
-**Build plugins:** spring-boot-maven-plugin, maven-compiler-plugin (Java 21), jacoco-maven-plugin (0.8.12), maven-surefire-plugin (with JVM add-opens for Mockito). GraalVM native-maven-plugin available via `native` profile.
+**Build plugins:** spring-boot-maven-plugin, maven-compiler-plugin (Java 21 + Lombok), jacoco-maven-plugin (0.8.12, 100% LINE+BRANCH enforcement excluding dto/model/Application), maven-surefire-plugin (with Testcontainers Docker env vars). GraalVM native-image profile available.
 
+**Build commands:**
 ```
-Build:   ./mvnw clean compile -DskipTests
-Test:    ./mvnw test
-Run:     ./mvnw spring-boot:run
-Package: ./mvnw clean package -DskipTests
-Native:  ./mvnw clean package -Pnative -DskipTests
+Build: mvn clean compile -DskipTests
+Test: mvn test
+Run: mvn spring-boot:run
+Package: mvn clean package -DskipTests
 ```
 
 ---
 
 ## 4. Configuration & Infrastructure Summary
 
-- **`application.yml`** — Default profile `dev`, server port 8080. MCP server config (SSE endpoint `/mcp/sse`). Dev profile: PostgreSQL at `localhost:5432/myoffgridai`, Hibernate DDL `update`, Flyway disabled. Inference provider defaults to `lmstudio` at `localhost:1234`. Ollama at `localhost:11434`. Fortress and AP mode: mock=true. Rate limiting enabled. MQTT disabled in dev. Multipart max 2048MB.
-- **`application-prod.yml`** — Hibernate DDL `validate`, Flyway enabled. All inference settings from env vars (`INFERENCE_PROVIDER`, `INFERENCE_BASE_URL`, `INFERENCE_MODEL`, etc.). HuggingFace models dir from `HF_MODELS_DIR`. Fortress/AP mock=false.
-- **`application-test.yml`** — Flyway disabled, Hibernate DDL `create-drop`. Rate limiting disabled. MQTT disabled. Library dirs use `java.io.tmpdir`.
-- **`logback-spring.xml`** — Dev: human-readable console (`HH:mm:ss.SSS [thread] level logger [requestId] — msg`). Prod/Test: structured JSON via LogstashEncoder with MDC keys (requestId, username, userId).
-- **`Dockerfile`** — Multi-stage build. Build: `eclipse-temurin:21-jdk-alpine`. Runtime: `eclipse-temurin:21-jre-alpine`. Non-root user `myoffgridai`. HEALTHCHECK on `/api/system/status`. Exposes port 8080.
+**`src/main/resources/application.yml`** — Dev profile default. Server port 8080. PostgreSQL localhost:5432/myoffgridai. Hibernate DDL: `update`. Inference provider: `llama-server` (native process at port 1234). Default model: Qwen3.5-27B. Embed model: nomic-embed-text. JWT: 24h access, 7d refresh with dev-only secrets. Rate limiting enabled. MQTT disabled in dev. AP/Fortress modes mocked.
+
+**`src/main/resources/application-prod.yml`** — All secrets via env vars (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `ENCRYPTION_KEY`, `INFERENCE_*`). Hibernate DDL: `validate`. Flyway enabled. 24 env var references total.
+
+**`src/main/resources/logback-spring.xml`** — Dev: console pattern with requestId. Prod: JSON (LogstashEncoder) with MDC fields (requestId, username, userId). Test: JSON, WARN level.
+
+**`src/test/resources/application.yml`** — DDL: `create-drop`. Flyway disabled. JWT 1h/24h. Rate limiting disabled. MQTT disabled. AP/Fortress mocked. Library paths use temp dirs.
+
+**`Dockerfile`** — Multi-stage build. Base: eclipse-temurin:21-jdk-alpine (build) / 21-jre-alpine (runtime). Non-root user `myoffgridai`. Port 8080. Health check: `wget http://localhost:8080/api/system/status` every 30s. Knowledge storage: `/var/myoffgridai/knowledge`.
 
 **Connection map:**
 ```
-Database: PostgreSQL, localhost:5432, database: myoffgridai
+Database: PostgreSQL, localhost, 5432, myoffgridai (with pgvector extension)
 Cache: None
-Message Broker: MQTT (Mosquitto) via Eclipse Paho, localhost:1883 (disabled in dev)
-External APIs:
-  - Ollama LLM: localhost:11434 (embeddings + chat)
-  - LM Studio: localhost:1234 (OpenAI-compatible inference)
-  - HuggingFace Hub API: https://huggingface.co/api (model catalog)
-  - Brave Search API: https://api.search.brave.com (web enrichment, optional)
-  - Anthropic Claude API: https://api.anthropic.com (summarization, optional)
-  - Project Gutenberg: https://gutendex.com (ebook search)
-  - Kiwix: localhost:8888 (ZIM file serving)
-  - Calibre Content Server: localhost:8081 (ebook metadata)
-Cloud Services: None (fully offline-capable)
+Message Broker: MQTT (Paho, conditional on app.mqtt.enabled, disabled in dev)
+External APIs: Ollama (localhost:11434), llama-server (localhost:1234), Anthropic Claude API, Brave Search API, Gutendex (gutendex.com), HuggingFace API
+Cloud Services: None
 ```
 
 **CI/CD:** None detected.
@@ -153,1647 +133,976 @@ Cloud Services: None (fully offline-capable)
 
 ## 5. Startup & Runtime Behavior
 
-- **Entry point:** `com.myoffgridai.MyOffGridAiApplication` — `@SpringBootApplication`, `@EnableAsync`, `@EnableScheduling`
-- **Startup initialization:**
-  - `VectorStoreConfig` — verifies pgvector extension is installed
-  - `JpaConfig` — enables JPA auditing (`@EnableJpaAuditing`)
-  - `SkillSeederService` — seeds 6 built-in skill definitions into the database
-  - `SensorStartupService` — resumes polling for all sensors marked active
-  - `ApModeStartupService` — checks system initialization, starts AP mode if not initialized
-  - `ModelHealthCheckService` — checks inference provider availability on startup
-- **Scheduled tasks:**
-  - `NightlyInsightJob` — `0 0 3 * * *` (3am daily) — generates proactive insights for all active users
-  - `SummarizationService` — `0 0 2 * * *` (2am daily) — auto-summarizes old conversations into memories
-  - `SystemHealthMonitor` — every 5 minutes (configurable) — checks disk space, Ollama availability, heap usage
-  - `UsbResetWatcherService` — every 30 seconds — monitors USB mount for factory reset trigger
-- **Health check:** `GET /api/system/status` returns `SystemStatusDto` with initialization state, inference provider status, user counts, and version info
+**Entry point:** `com.myoffgridai.MyOffGridAiApplication` (`@SpringBootApplication`, `@EnableAsync`, `@EnableScheduling`)
+
+**Startup initialization:**
+- `VectorStoreConfig.checkPgvectorExtension()` — Verifies pgvector extension on `ApplicationReadyEvent`
+- `StorageHealthService.checkStorageDirectory()` — Creates/verifies knowledge storage dir
+- `ModelHealthCheckService.checkInferenceProviderOnStartup()` — Checks inference provider and lists models
+- `LlamaServerProcessService.run()` — Auto-starts llama-server binary (ApplicationRunner)
+- `SkillSeederService.seedBuiltInSkills()` — Seeds 6 built-in skills
+- `SensorStartupService.resumeActiveSensors()` — Resumes active sensor polling
+- `ApModeStartupService.onApplicationReady()` — Starts/stops AP mode based on initialization state
+
+**Scheduled tasks:**
+- `SummarizationService.scheduledNightlySummarization()` — Cron `0 0 2 * * *` (2 AM daily)
+- `NightlyInsightJob.generateNightlyInsights()` — Cron `0 0 3 * * *` (3 AM daily)
+- `SystemHealthMonitor.checkSystemHealth()` — Every 300s (configurable)
+- `UsbResetWatcherService.checkForTriggerFiles()` — Every 30s (USB factory reset trigger)
+- `LlamaServerProcessService.monitorHealth()` — Every 30s (crash detection/auto-restart)
+
+**Health check:** `GET /actuator/health` (Spring Actuator) + `GET /api/system/status` (custom)
 
 ---
 
 ## 6. Entity / Data Model Layer
 
-### === Conversation.java ===
-Table: `conversations`
-Primary Key: `id` UUID (GenerationType.UUID)
+### ai Module
 
+=== Conversation.java ===
+Table: conversations
+Primary Key: id (UUID, GenerationType.UUID)
 Fields:
-  - user: User @ManyToOne(fetch=LAZY) @JoinColumn("user_id", nullable=false)
-  - title: String (255)
+  - user: User [@ManyToOne LAZY] (not nullable)
+  - title: String (nullable)
   - isArchived: boolean (default false)
   - messageCount: int (default 0)
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+  - createdAt: Instant [@CreatedDate] (not nullable, not updatable)
+  - updatedAt: Instant [@LastModifiedDate] (nullable)
+Relationships: @ManyToOne → User (LAZY)
+Audit Fields: createdAt, updatedAt ✓
 
-Relationships:
-  - @ManyToOne → User (JoinColumn = "user_id")
-
-### === Message.java ===
-Table: `messages`
-Primary Key: `id` UUID (GenerationType.UUID)
-
+=== Message.java ===
+Table: messages
+Primary Key: id (UUID, GenerationType.UUID)
 Fields:
-  - conversation: Conversation @ManyToOne(fetch=LAZY) @JoinColumn("conversation_id", nullable=false)
-  - role: MessageRole @Enumerated(STRING)
-  - content: String @Column(columnDefinition="TEXT")
-  - promptTokens: Integer
-  - completionTokens: Integer
-  - ragContextUsed: boolean (default false)
-  - thinkingContent: String @Column(columnDefinition="TEXT")
-  - modelName: String
-  - generationTimeMs: Long
-  - createdAt: Instant @CreatedDate
+  - conversation: Conversation [@ManyToOne LAZY] (not nullable)
+  - role: MessageRole (Enum, not nullable)
+  - content: String (TEXT, not nullable)
+  - tokenCount: Integer (nullable)
+  - hasRagContext: boolean (default false)
+  - thinkingContent: String (TEXT, nullable)
+  - tokensPerSecond: Double (nullable)
+  - inferenceTimeSeconds: Double (nullable)
+  - stopReason: String (nullable)
+  - thinkingTokenCount: Integer (nullable)
+  - createdAt: Instant [@CreatedDate] (not nullable, not updatable)
+Relationships: @ManyToOne → Conversation (LAZY)
+Audit Fields: createdAt ✓ (no updatedAt)
 
-Relationships:
-  - @ManyToOne → Conversation (JoinColumn = "conversation_id")
+### auth Module
 
-### === User.java ===
-Table: `users`
-Primary Key: `id` UUID (GenerationType.UUID)
-Implements: UserDetails
-
+=== User.java ===
+Table: users
+Primary Key: id (UUID, GenerationType.UUID)
 Fields:
-  - username: String @Column(unique=true, nullable=false, length=50)
-  - email: String (255)
-  - displayName: String (100)
-  - passwordHash: String @Column(nullable=false)
-  - role: Role @Enumerated(STRING) @Column(nullable=false)
+  - username: String (not nullable, unique)
+  - email: String (nullable, unique)
+  - displayName: String (not nullable)
+  - passwordHash: String (not nullable)
+  - role: Role (Enum, not nullable)
   - isActive: boolean (default true)
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
-  - lastLoginAt: Instant
+  - lastLoginAt: Instant (nullable)
+  - createdAt: Instant [@CreatedDate] (not nullable, not updatable)
+  - updatedAt: Instant [@LastModifiedDate] (nullable)
+Implements: UserDetails (Spring Security)
+Audit Fields: createdAt, updatedAt ✓
 
-### === ScheduledEvent.java ===
-Table: `scheduled_events`
-Primary Key: `id` UUID (GenerationType.UUID)
+### events Module
 
+=== ScheduledEvent.java ===
+Table: scheduled_events
+Indexes: idx_event_user_id (user_id), idx_event_enabled_type (is_enabled, event_type)
+Primary Key: id (UUID, GenerationType.UUID)
 Fields:
-  - userId: UUID @Column(nullable=false)
-  - name: String @Column(nullable=false, length=200)
-  - description: String @Column(columnDefinition="TEXT")
-  - eventType: EventType @Enumerated(STRING) @Column(nullable=false)
+  - userId: UUID (not nullable)
+  - name: String (not nullable)
+  - description: String (TEXT, nullable)
+  - eventType: EventType (Enum, not nullable)
   - isEnabled: boolean (default true)
-  - cronExpression: String (100)
-  - recurringIntervalMinutes: Integer
-  - sensorId: UUID
-  - thresholdOperator: ThresholdOperator @Enumerated(STRING)
-  - thresholdValue: Double
-  - actionType: ActionType @Enumerated(STRING)
-  - actionPayload: String @Column(columnDefinition="TEXT")
-  - nextFireAt: Instant
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+  - cronExpression: String (nullable)
+  - recurringIntervalMinutes: Integer (nullable)
+  - sensorId: UUID (nullable)
+  - thresholdOperator: ThresholdOperator (Enum, nullable)
+  - thresholdValue: Double (nullable)
+  - actionType: ActionType (Enum, not nullable)
+  - actionPayload: String (TEXT, not nullable)
+  - lastTriggeredAt: Instant (nullable)
+  - nextFireAt: Instant (nullable)
+  - createdAt: Instant [@CreatedDate], updatedAt: Instant [@LastModifiedDate]
+Audit Fields: createdAt, updatedAt ✓
 
-### === KnowledgeDocument.java ===
-Table: `knowledge_documents`
-Primary Key: `id` UUID (GenerationType.UUID)
+### knowledge Module
 
+=== KnowledgeDocument.java ===
+Table: knowledge_documents
+Indexes: idx_knowledge_doc_user_id (user_id)
+Primary Key: id (UUID, GenerationType.UUID)
 Fields:
-  - userId: UUID @Column(nullable=false)
-  - filename: String @Column(nullable=false)
-  - displayName: String
-  - mimeType: String
-  - storagePath: String
-  - fileSizeBytes: Long
-  - status: DocumentStatus @Enumerated(STRING)
-  - errorMessage: String @Column(columnDefinition="TEXT")
-  - chunkCount: int (default 0)
-  - content: String @Column(columnDefinition="TEXT")
-  - uploadedAt: Instant @CreatedDate
-  - processedAt: Instant
+  - userId: UUID (not nullable)
+  - filename: String (not nullable)
+  - displayName: String (nullable)
+  - mimeType: String (not nullable)
+  - storagePath: String (not nullable)
+  - fileSizeBytes: long (nullable)
+  - status: DocumentStatus (Enum, default PENDING)
+  - errorMessage: String (TEXT, nullable)
+  - chunkCount: int (nullable)
+  - content: String (TEXT, nullable)
+  - uploadedAt: Instant [@CreatedDate] (not nullable, not updatable)
+  - processedAt: Instant (nullable)
+Audit Fields: uploadedAt ✓
 
-### === KnowledgeChunk.java ===
-Table: `knowledge_chunks`
-Primary Key: `id` UUID (GenerationType.UUID)
-
+=== KnowledgeChunk.java ===
+Table: knowledge_chunks
+Indexes: idx_knowledge_chunk_doc_id (document_id), idx_knowledge_chunk_user_id (user_id)
+Primary Key: id (UUID, GenerationType.UUID)
 Fields:
-  - document: KnowledgeDocument @ManyToOne(fetch=LAZY) @JoinColumn("document_id", nullable=false)
-  - userId: UUID @Column(nullable=false)
-  - chunkIndex: int
-  - content: String @Column(columnDefinition="TEXT", nullable=false)
-  - pageNumber: Integer
-  - createdAt: Instant @CreatedDate
+  - document: KnowledgeDocument [@ManyToOne LAZY] (not nullable)
+  - userId: UUID (not nullable)
+  - chunkIndex: int (not nullable)
+  - content: String (TEXT, not nullable)
+  - pageNumber: Integer (nullable)
+  - createdAt: Instant [@CreatedDate]
+Audit Fields: createdAt ✓
 
-Relationships:
-  - @ManyToOne → KnowledgeDocument (JoinColumn = "document_id")
+### library Module
 
-### === Ebook.java ===
-Table: `ebooks`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== Ebook.java ===
+Table: ebooks
+Indexes: idx_ebooks_gutenberg_id (gutenberg_id)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: title, author, description (TEXT 2000), isbn, publisher, publishedYear, language, format (EbookFormat Enum), fileSizeBytes, filePath, coverImagePath, gutenbergId, downloadCount, uploadedAt [@CreatedDate], uploadedBy (UUID)
+Audit Fields: uploadedAt ✓
 
-Fields:
-  - title: String @Column(nullable=false)
-  - author: String
-  - description: String @Column(columnDefinition="TEXT")
-  - isbn: String
-  - publisher: String
-  - publishedYear: Integer
-  - language: String (default "en")
-  - format: EbookFormat @Enumerated(STRING) @Column(nullable=false)
-  - filePath: String @Column(nullable=false)
-  - fileSizeBytes: Long
-  - coverImagePath: String
-  - gutenbergId: String @Column(unique=true)
-  - downloadCount: int (default 0)
-  - uploadedBy: UUID
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+=== ZimFile.java ===
+Table: zim_files
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: filename (unique), displayName, description (1000), language, category, fileSizeBytes, articleCount, mediaCount, createdDate, filePath, kiwixBookId, uploadedAt [@CreatedDate], uploadedBy (UUID)
+Audit Fields: uploadedAt ✓
 
-### === ZimFile.java ===
-Table: `zim_files`
-Primary Key: `id` UUID (GenerationType.UUID)
+### mcp Module
 
-Fields:
-  - filename: String @Column(unique=true, nullable=false)
-  - displayName: String @Column(nullable=false)
-  - description: String @Column(columnDefinition="TEXT")
-  - language: String (default "en")
-  - category: String
-  - fileSizeBytes: Long
-  - articleCount: Long
-  - mediaCount: Long
-  - creationDate: String
-  - filePath: String @Column(nullable=false)
-  - kiwixBookId: String
-  - uploadedBy: UUID
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+=== McpApiToken.java ===
+Table: mcp_api_tokens
+Indexes: idx_mcp_token_created_by (created_by)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: tokenHash (500 chars, not nullable), name (not nullable), createdBy (UUID, not nullable), lastUsedAt (nullable), isActive (default true), createdAt [@CreatedDate]
+Audit Fields: createdAt ✓
 
-### === McpApiToken.java ===
-Table: `mcp_api_tokens`
-Primary Key: `id` UUID (GenerationType.UUID)
+### memory Module
 
-Fields:
-  - tokenHash: String @Column(nullable=false)
-  - name: String @Column(nullable=false, length=100)
-  - createdBy: UUID @Column(nullable=false)
-  - lastUsedAt: Instant
-  - isActive: boolean (default true)
-  - createdAt: Instant @CreatedDate
+=== Memory.java ===
+Table: memories
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId (not nullable), content (TEXT, not nullable), importance (MemoryImportance Enum), tags (nullable), sourceConversationId (nullable), accessCount (default 0), lastAccessedAt (nullable), createdAt [@CreatedDate], updatedAt [@LastModifiedDate]
+Audit Fields: createdAt, updatedAt ✓
 
-### === Memory.java ===
-Table: `memories`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== VectorDocument.java ===
+Table: vector_document
+Indexes: idx_vector_doc_user_source_type (user_id, source_type)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId (not nullable), content (TEXT), embedding (float[] vector(768), custom VectorType), sourceType (VectorSourceType Enum), sourceId (UUID, nullable), metadata (TEXT, nullable), createdAt [@CreatedDate]
+Custom: Uses pgvector cosine distance operator `<=>` in native queries
+Audit Fields: createdAt ✓
 
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - content: String @Column(columnDefinition="TEXT", nullable=false)
-  - importance: MemoryImportance @Enumerated(STRING) (default MEDIUM)
-  - tags: String
-  - sourceConversationId: UUID
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
-  - lastAccessedAt: Instant
-  - accessCount: int (default 0)
+### notification Module
 
-### === VectorDocument.java ===
-Table: `vector_document`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== DeviceRegistration.java ===
+Table: device_registrations
+Unique: uk_device_registration_user_device (user_id, device_id)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId, deviceId, deviceName, platform, mqttClientId, lastSeenAt, createdAt, updatedAt
+Audit Fields: createdAt, updatedAt (manual @PrePersist/@PreUpdate)
 
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - content: String @Column(columnDefinition="TEXT")
-  - embedding: float[] @Column(columnDefinition="vector(768)")
-  - sourceType: VectorSourceType @Enumerated(STRING)
-  - sourceId: UUID
-  - metadata: String @Column(columnDefinition="TEXT")
-  - createdAt: Instant @CreatedDate
+### privacy Module
 
-### === DeviceRegistration.java ===
-Table: `device_registrations`
-Primary Key: `id` UUID (GenerationType.UUID)
-Unique constraint: (userId, deviceId)
+=== AuditLog.java ===
+Table: audit_logs
+Indexes: idx_audit_user_timestamp (user_id, timestamp DESC), idx_audit_timestamp (timestamp DESC)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId, username, action, resourceType, resourceId, httpMethod, requestPath, ipAddress, userAgent, responseStatus, outcome (AuditOutcome Enum), durationMs, timestamp
+Audit Fields: Manual timestamp only
 
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - deviceId: String @Column(nullable=false, length=100)
-  - deviceName: String (100)
-  - platform: String (50)
-  - mqttClientId: String (100)
-  - lastSeenAt: Instant
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+### proactive Module
 
-### === AuditLog.java ===
-Table: `audit_logs`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== Insight.java ===
+Table: insights
+Indexes: idx_insight_user_id (user_id)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId, content (TEXT), category (InsightCategory Enum), isRead (default false), isDismissed (default false), generatedAt, readAt
+Audit Fields: generatedAt (manual @PrePersist)
 
-Fields:
-  - userId: UUID
-  - username: String
-  - action: String @Column(nullable=false)
-  - resourceType: String
-  - resourceId: String
-  - httpMethod: String
-  - requestPath: String
-  - ipAddress: String
-  - userAgent: String
-  - responseStatus: Integer
-  - outcome: AuditOutcome @Enumerated(STRING) @Column(nullable=false)
-  - durationMs: Long
-  - timestamp: Instant @CreatedDate
+=== Notification.java ===
+Table: notifications
+Indexes: idx_notification_user_id (user_id)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId, title, body (TEXT), type (NotificationType Enum), isRead (default false), severity (NotificationSeverity Enum, nullable, 20 chars), mqttDelivered (default false), metadata (TEXT, nullable), createdAt, readAt
+Audit Fields: createdAt (manual @PrePersist)
 
-### === Insight.java ===
-Table: `insights`
-Primary Key: `id` UUID (GenerationType.UUID)
+### sensors Module
 
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - content: String @Column(columnDefinition="TEXT", nullable=false)
-  - category: InsightCategory @Enumerated(STRING)
-  - isRead: boolean (default false)
-  - isDismissed: boolean (default false)
-  - generatedAt: Instant @CreatedDate
-  - readAt: Instant
+=== Sensor.java ===
+Table: sensors
+Indexes: idx_sensor_user_id (user_id), idx_sensor_port_path (port_path, unique)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: userId, name, type (SensorType Enum), portPath (unique), baudRate (default 9600), dataFormat (DataFormat Enum, default CSV_LINE), valueField, unit, isActive (default false), pollIntervalSeconds (default 30), lowThreshold, highThreshold, createdAt [@CreatedDate], updatedAt [@LastModifiedDate]
+Audit Fields: createdAt, updatedAt ✓
 
-### === Notification.java ===
-Table: `notifications`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== SensorReading.java ===
+Table: sensor_readings
+Indexes: idx_sensor_reading_sensor_recorded (sensor_id, recorded_at DESC)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: sensor [@ManyToOne LAZY], value (double), rawData, recordedAt
+Audit Fields: None
 
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - title: String @Column(nullable=false)
-  - body: String @Column(columnDefinition="TEXT")
-  - type: NotificationType @Enumerated(STRING) @Column(nullable=false)
-  - severity: NotificationSeverity @Enumerated(STRING) (default INFO)
-  - isRead: boolean (default false)
-  - createdAt: Instant @CreatedDate
-  - readAt: Instant
-  - mqttDelivered: boolean (default false)
-  - metadata: String @Column(columnDefinition="TEXT")
+### settings Module
 
-### === Sensor.java ===
-Table: `sensors`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== ExternalApiSettings.java ===
+Table: external_api_settings
+Primary Key: id (UUID, GenerationType.UUID)
+Singleton pattern via `singletonGuard` unique column
+Fields: anthropicApiKey [@AesAttributeConverter encrypted], anthropicModel (default "claude-sonnet-4-20250514"), anthropicEnabled, braveApiKey [@AesAttributeConverter encrypted], braveEnabled, maxWebFetchSizeKb (default 512), searchResultLimit (default 5), huggingFaceToken [@AesAttributeConverter encrypted], huggingFaceEnabled, createdAt [@CreatedDate], updatedAt [@LastModifiedDate]
+Audit Fields: createdAt, updatedAt ✓
 
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - name: String @Column(nullable=false, length=100)
-  - type: SensorType @Enumerated(STRING) @Column(nullable=false)
-  - portPath: String @Column(unique=true, nullable=false)
-  - baudRate: int (default 9600)
-  - dataFormat: DataFormat @Enumerated(STRING) (default CSV_LINE)
-  - valueField: String (50)
-  - unit: String (20)
-  - isActive: boolean (default false)
-  - pollIntervalSeconds: int (default 30)
-  - lowThreshold: Double
-  - highThreshold: Double
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+### skills Module
 
-### === SensorReading.java ===
-Table: `sensor_readings`
-Primary Key: `id` UUID (GenerationType.UUID)
+=== Skill.java ===
+Table: skills
+Indexes: idx_skill_name (name, unique), idx_skill_category (category)
+Primary Key: id (UUID, GenerationType.UUID)
+Fields: name (unique), displayName, description (TEXT), version, author, category (SkillCategory Enum), isEnabled (default true), isBuiltIn (default false), parametersSchema (TEXT, nullable), createdAt, updatedAt
+Audit Fields: createdAt, updatedAt ✓
 
-Fields:
-  - sensor: Sensor @ManyToOne(fetch=LAZY) @JoinColumn("sensor_id", nullable=false)
-  - value: double
-  - rawData: String
-  - recordedAt: Instant @CreatedDate
+=== SkillExecution.java ===
+Table: skill_executions
+Indexes: idx_skill_exec_user_id, idx_skill_exec_skill_id
+Fields: skill [@ManyToOne LAZY], userId, status (ExecutionStatus Enum), inputParams (TEXT), outputResult (TEXT), errorMessage (TEXT), startedAt, completedAt, durationMs
 
-Relationships:
-  - @ManyToOne → Sensor (JoinColumn = "sensor_id")
+=== InventoryItem.java ===
+Table: inventory_items
+Indexes: idx_inventory_user_id, idx_inventory_category
+Fields: userId, name, category (InventoryCategory Enum), quantity (double), unit, notes (TEXT), lowStockThreshold, createdAt, updatedAt
 
-### === ExternalApiSettings.java ===
-Table: `external_api_settings`
-Primary Key: `id` UUID (GenerationType.UUID)
-Singleton pattern via `singletonGuard` @Column(unique=true)
+=== PlannedTask.java ===
+Table: planned_tasks
+Indexes: idx_planned_task_user_id
+Fields: userId, goalDescription (TEXT), title, steps (TEXT), estimatedResources (TEXT), status (TaskStatus Enum, default ACTIVE), createdAt, updatedAt
 
-Fields:
-  - singletonGuard: String (default "SINGLETON")
-  - anthropicApiKey: String (encrypted via AES-256-GCM)
-  - anthropicModel: String (default "claude-sonnet-4-20250514")
-  - anthropicMaxTokens: int (default 1024)
-  - braveApiKey: String (encrypted)
-  - braveMaxResults: int (default 5)
-  - huggingFaceToken: String (encrypted)
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+### system Module
 
-### === InventoryItem.java ===
-Table: `inventory_items`
-Primary Key: `id` UUID (GenerationType.UUID)
-
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - name: String @Column(nullable=false)
-  - category: InventoryCategory @Enumerated(STRING) @Column(nullable=false)
-  - quantity: double
-  - unit: String
-  - notes: String @Column(columnDefinition="TEXT")
-  - lowStockThreshold: Double
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
-
-### === PlannedTask.java ===
-Table: `planned_tasks`
-Primary Key: `id` UUID (GenerationType.UUID)
-
-Fields:
-  - userId: UUID @Column(nullable=false)
-  - goalDescription: String @Column(columnDefinition="TEXT")
-  - title: String @Column(nullable=false)
-  - steps: String @Column(columnDefinition="TEXT")
-  - estimatedResources: String @Column(columnDefinition="TEXT")
-  - status: TaskStatus @Enumerated(STRING) (default ACTIVE)
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
-
-### === Skill.java ===
-Table: `skills`
-Primary Key: `id` UUID (GenerationType.UUID)
-
-Fields:
-  - name: String @Column(unique=true, nullable=false)
-  - displayName: String @Column(nullable=false)
-  - description: String @Column(columnDefinition="TEXT")
-  - version: String
-  - author: String
-  - category: SkillCategory @Enumerated(STRING)
-  - isEnabled: boolean (default true)
-  - isBuiltIn: boolean (default false)
-  - parametersSchema: String @Column(columnDefinition="TEXT")
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
-
-### === SkillExecution.java ===
-Table: `skill_executions`
-Primary Key: `id` UUID (GenerationType.UUID)
-
-Fields:
-  - skill: Skill @ManyToOne(fetch=LAZY) @JoinColumn("skill_id", nullable=false)
-  - userId: UUID @Column(nullable=false)
-  - status: ExecutionStatus @Enumerated(STRING) @Column(nullable=false)
-  - inputParams: String @Column(columnDefinition="TEXT")
-  - outputResult: String @Column(columnDefinition="TEXT")
-  - errorMessage: String @Column(columnDefinition="TEXT")
-  - startedAt: Instant @CreatedDate
-  - completedAt: Instant
-  - durationMs: Long
-
-Relationships:
-  - @ManyToOne → Skill (JoinColumn = "skill_id")
-
-### === SystemConfig.java ===
-Table: `system_config`
-Primary Key: `id` UUID (GenerationType.UUID)
-Singleton (single row)
-
-Fields:
-  - initialized: boolean (default false)
-  - instanceName: String (default "MyOffGridAI")
-  - fortressEnabled: boolean (default false)
-  - fortressEnabledByUserId: UUID
-  - fortressEnabledAt: Instant
-  - apModeActive: boolean (default true)
-  - wifiSsid: String
-  - wifiConfigured: boolean (default false)
-  - aiModelName: String
-  - aiTemperature: Double (default 0.7)
-  - aiSimilarityThreshold: Double (default 0.3)
-  - aiMemoryTopK: Integer (default 5)
-  - aiMaxContextTokens: Integer (default 4096)
-  - knowledgeStoragePath: String (default "/var/myoffgridai/knowledge")
-  - maxUploadSizeMb: Integer (default 2048)
-  - createdAt: Instant @CreatedDate
-  - updatedAt: Instant @LastModifiedDate
+=== SystemConfig.java ===
+Table: system_config (singleton)
+Fields: initialized (default false), instanceName, fortressEnabled (default false), fortressEnabledAt, fortressEnabledByUserId, apModeEnabled (default false), wifiConfigured (default false), aiModel, aiTemperature (default 0.7), aiSimilarityThreshold (default 0.45), aiMemoryTopK (default 5), aiRagMaxContextTokens (default 2048), aiContextSize (default 4096), aiContextMessageLimit (default 20), activeModelFilename, knowledgeStoragePath (default "/var/myoffgridai/knowledge"), maxUploadSizeMb (default 25), createdAt, updatedAt
 
 ---
 
 ## 7. Enum Inventory
 
-```
-=== MessageRole.java ===
-Values: USER, ASSISTANT, SYSTEM
-Used in: Message
-
-=== Role.java ===
-Values: ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_VIEWER, ROLE_CHILD
-Used in: User
-Has display label: NO
-
-=== ActionType.java ===
-Values: PUSH_NOTIFICATION, AI_PROMPT, AI_SUMMARY
-Used in: ScheduledEvent
-
-=== EventType.java ===
-Values: SCHEDULED, SENSOR_THRESHOLD, RECURRING
-Used in: ScheduledEvent
-
-=== ThresholdOperator.java ===
-Values: ABOVE, BELOW, EQUALS
-Used in: ScheduledEvent
-
-=== DocumentStatus.java ===
-Values: PENDING, PROCESSING, READY, FAILED
-Used in: KnowledgeDocument
-
-=== EbookFormat.java ===
-Values: EPUB, PDF, MOBI, AZW, TXT, HTML
-Used in: Ebook
-
-=== MemoryImportance.java ===
-Values: LOW, MEDIUM, HIGH, CRITICAL
-Used in: Memory
-
-=== VectorSourceType.java ===
-Values: MEMORY, CONVERSATION, KNOWLEDGE_CHUNK
-Used in: VectorDocument
-
-=== AuditOutcome.java ===
-Values: SUCCESS, FAILURE, DENIED
-Used in: AuditLog
-
-=== InsightCategory.java ===
-Values: HOMESTEAD, HEALTH, RESOURCE, GENERAL
-Used in: Insight
-
-=== NotificationSeverity.java ===
-Values: INFO, WARNING, CRITICAL
-Used in: Notification
-
-=== NotificationType.java ===
-Values: SENSOR_ALERT, SYSTEM_HEALTH, INSIGHT_READY, MODEL_UPDATE, GENERAL
-Used in: Notification
-
-=== DataFormat.java ===
-Values: CSV_LINE, JSON_LINE
-Used in: Sensor
-
-=== SensorType.java ===
-Values: TEMPERATURE, HUMIDITY, SOIL_MOISTURE, POWER, VOLTAGE, CUSTOM
-Used in: Sensor
-
-=== ExecutionStatus.java ===
-Values: RUNNING, COMPLETED, FAILED
-Used in: SkillExecution
-
-=== InventoryCategory.java ===
-Values: FOOD, TOOLS, MEDICAL, SUPPLIES, SEEDS, EQUIPMENT, OTHER
-Used in: InventoryItem
-
-=== SkillCategory.java ===
-Values: HOMESTEAD, RESOURCE, PLANNING, KNOWLEDGE, WEATHER, CUSTOM
-Used in: Skill
-
-=== TaskStatus.java ===
-Values: ACTIVE, COMPLETED, CANCELLED
-Used in: PlannedTask
-
-=== VectorType.java (config) ===
-Purpose: Hibernate UserType for pgvector float[] mapping
-Used in: VectorDocument.embedding column
-
-=== ChunkType.java (dto) ===
-Values: TEXT, THINKING, DONE, ERROR, METADATA
-Used in: InferenceChunk SSE streaming
-```
+| Enum | Values | Used In |
+|------|--------|---------|
+| MessageRole | USER, ASSISTANT, SYSTEM | Message.role |
+| Role | ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_VIEWER, ROLE_CHILD | User.role |
+| EventType | SCHEDULED, SENSOR_THRESHOLD, RECURRING | ScheduledEvent.eventType |
+| ActionType | PUSH_NOTIFICATION, AI_PROMPT, AI_SUMMARY | ScheduledEvent.actionType |
+| ThresholdOperator | ABOVE, BELOW, EQUALS | ScheduledEvent.thresholdOperator |
+| DocumentStatus | PENDING, PROCESSING, READY, FAILED | KnowledgeDocument.status |
+| EbookFormat | EPUB, PDF, MOBI, AZW, TXT, HTML | Ebook.format |
+| MemoryImportance | LOW, MEDIUM, HIGH, CRITICAL | Memory.importance |
+| VectorSourceType | MEMORY, CONVERSATION, KNOWLEDGE_CHUNK | VectorDocument.sourceType |
+| AuditOutcome | SUCCESS, FAILURE, DENIED | AuditLog.outcome |
+| InsightCategory | HOMESTEAD, HEALTH, RESOURCE, GENERAL | Insight.category |
+| NotificationType | SENSOR_ALERT, SYSTEM_HEALTH, INSIGHT_READY, MODEL_UPDATE, GENERAL | Notification.type |
+| NotificationSeverity | INFO, WARNING, CRITICAL | Notification.severity |
+| SensorType | TEMPERATURE, HUMIDITY, SOIL_MOISTURE, POWER, VOLTAGE, CUSTOM | Sensor.type |
+| DataFormat | CSV_LINE, JSON_LINE | Sensor.dataFormat |
+| ExecutionStatus | RUNNING, COMPLETED, FAILED | SkillExecution.status |
+| InventoryCategory | FOOD, TOOLS, MEDICAL, SUPPLIES, SEEDS, EQUIPMENT, OTHER | InventoryItem.category |
+| SkillCategory | HOMESTEAD, RESOURCE, PLANNING, KNOWLEDGE, WEATHER, CUSTOM | Skill.category |
+| TaskStatus | ACTIVE, COMPLETED, CANCELLED | PlannedTask.status |
+| LlamaServerStatus | STOPPED, STARTING, RUNNING, RESTARTING, ERROR | LlamaServerProcessService |
+| QuantizationType | Q2_K, Q3_K_S, Q3_K_M, Q3_K_L, Q4_0, Q4_K_S, Q4_K_M, Q5_0, Q5_K_S, Q5_K_M, Q6_K, Q8_0, F16, F32, IQ2_XXS, IQ2_XS, IQ2_S, IQ3_XXS, IQ3_XS, IQ3_S, IQ4_XS, IQ4_NL, UNKNOWN | HfModelFileDto.quantizationType |
+| ChunkType | THINKING, CONTENT | InferenceChunk.type |
 
 ---
 
 ## 8. Repository Layer
 
-### === ConversationRepository.java ===
-Entity: Conversation | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdOrderByUpdatedAtDesc(UUID, Pageable): Page<Conversation>
-  - findByUserIdAndIsArchivedOrderByUpdatedAtDesc(UUID, boolean, Pageable): Page<Conversation>
-  - findByIdAndUserId(UUID, UUID): Optional<Conversation>
-  - countByUserId(UUID): long
-  - findByUserId(UUID): List<Conversation>
-  - findByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(UUID, String, Pageable): Page<Conversation>
-  - @Modifying @Query deleteByUserId(UUID): void
+=== ConversationRepository === Entity: Conversation, Extends: JpaRepository
+Custom: findByUserIdOrderByUpdatedAtDesc(Pageable), findByUserIdAndIsArchivedOrderByUpdatedAtDesc(Pageable), findByIdAndUserId, countByUserId, findByUserId, findByUserIdAndTitleContainingIgnoreCaseOrderByUpdatedAtDesc(Pageable), @Modifying deleteByUserId
 
-### === MessageRepository.java ===
-Entity: Message | Extends: JpaRepository
-Custom Methods:
-  - findByConversationIdOrderByCreatedAtAsc(UUID): List<Message>
-  - findByConversationIdOrderByCreatedAtAsc(UUID, Pageable): Page<Message>
-  - findTopNByConversationIdOrderByCreatedAtDesc(UUID, Pageable): List<Message>
-  - countByConversationId(UUID): long
-  - deleteByConversationId(UUID): void
-  - @Query countByUserId(UUID): long
-  - @Modifying @Query deleteByUserId(UUID): void
-  - @Modifying @Query deleteMessagesAfter(UUID, UUID): void
+=== MessageRepository === Entity: Message, Extends: JpaRepository
+Custom: findByConversationIdOrderByCreatedAtAsc, findByConversationIdOrderByCreatedAtAsc(Pageable), findTopNByConversationIdOrderByCreatedAtDesc(Pageable), countByConversationId, deleteByConversationId, @Query countByUserId, @Modifying deleteByUserId, @Modifying deleteMessagesAfter
 
-### === UserRepository.java ===
-Entity: User | Extends: JpaRepository
-Custom Methods:
-  - findByUsername(String): Optional<User>
-  - findByEmail(String): Optional<User>
-  - existsByUsername(String): boolean
-  - existsByEmail(String): boolean
-  - findAllByRole(Role): List<User>
-  - countByIsActiveTrue(): long
-  - findByIsActiveTrue(): List<User>
+=== UserRepository === Entity: User, Extends: JpaRepository
+Custom: findByUsername, findByEmail, existsByUsername, existsByEmail, findAllByRole, countByIsActiveTrue, findByIsActiveTrue
 
-### === ScheduledEventRepository.java ===
-Entity: ScheduledEvent | Extends: JpaRepository
-Custom Methods:
-  - findAllByUserId(UUID, Pageable): Page<ScheduledEvent>
-  - findByIdAndUserId(UUID, UUID): Optional<ScheduledEvent>
-  - findByIsEnabledTrueAndEventType(EventType): List<ScheduledEvent>
-  - findAllByUserIdOrderByCreatedAtDesc(UUID): List<ScheduledEvent>
-  - deleteByUserId(UUID): void
-  - countByUserId(UUID): long
+=== ScheduledEventRepository === Entity: ScheduledEvent, Extends: JpaRepository
+Custom: findAllByUserId(Pageable), findByIdAndUserId, findByIsEnabledTrueAndEventType, findAllByUserIdOrderByCreatedAtDesc, deleteByUserId, countByUserId
 
-### === KnowledgeChunkRepository.java ===
-Entity: KnowledgeChunk | Extends: JpaRepository
-Custom Methods:
-  - findByDocumentIdOrderByChunkIndexAsc(UUID): List<KnowledgeChunk>
-  - @Modifying deleteByDocumentId(UUID): void
-  - @Modifying deleteByUserId(UUID): void
-  - countByDocumentId(UUID): long
+=== KnowledgeDocumentRepository === Entity: KnowledgeDocument, Extends: JpaRepository
+Custom: findByUserIdOrderByUploadedAtDesc(Pageable), findByIdAndUserId, findByUserIdAndStatus, @Modifying deleteByUserId, countByUserId
 
-### === KnowledgeDocumentRepository.java ===
-Entity: KnowledgeDocument | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdOrderByUploadedAtDesc(UUID, Pageable): Page<KnowledgeDocument>
-  - findByIdAndUserId(UUID, UUID): Optional<KnowledgeDocument>
-  - findByUserIdAndStatus(UUID, DocumentStatus): List<KnowledgeDocument>
-  - @Modifying deleteByUserId(UUID): void
-  - countByUserId(UUID): long
+=== KnowledgeChunkRepository === Entity: KnowledgeChunk, Extends: JpaRepository
+Custom: findByDocumentIdOrderByChunkIndexAsc, @Modifying deleteByDocumentId, @Modifying deleteByUserId, countByDocumentId
 
-### === EbookRepository.java ===
-Entity: Ebook | Extends: JpaRepository
-Custom Methods:
-  - @Query searchByTitleOrAuthor(String, EbookFormat, Pageable): Page<Ebook>
-  - findByGutenbergId(String): Optional<Ebook>
-  - existsByGutenbergId(String): boolean
+=== EbookRepository === Entity: Ebook, Extends: JpaRepository
+Custom: @Query searchByTitleOrAuthor(search, format, Pageable), findByGutenbergId, existsByGutenbergId
 
-### === ZimFileRepository.java ===
-Entity: ZimFile | Extends: JpaRepository
-Custom Methods:
-  - findByFilename(String): Optional<ZimFile>
-  - findAllByOrderByDisplayNameAsc(): List<ZimFile>
-  - existsByFilename(String): boolean
+=== ZimFileRepository === Entity: ZimFile, Extends: JpaRepository
+Custom: findByFilename, findAllByOrderByDisplayNameAsc, existsByFilename
 
-### === McpApiTokenRepository.java ===
-Entity: McpApiToken | Extends: JpaRepository
-Custom Methods:
-  - findByIsActiveTrue(): List<McpApiToken>
-  - findByCreatedByOrderByCreatedAtDesc(UUID): List<McpApiToken>
+=== McpApiTokenRepository === Entity: McpApiToken, Extends: JpaRepository
+Custom: findByIsActiveTrue, findByCreatedByOrderByCreatedAtDesc
 
-### === MemoryRepository.java ===
-Entity: Memory | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdOrderByCreatedAtDesc(UUID, Pageable): Page<Memory>
-  - findByUserIdAndImportance(UUID, MemoryImportance, Pageable): Page<Memory>
-  - findByUserIdAndTagsContaining(UUID, String, Pageable): Page<Memory>
-  - findByUserId(UUID): List<Memory>
-  - @Modifying deleteByUserId(UUID): void
-  - countByUserId(UUID): long
+=== MemoryRepository === Entity: Memory, Extends: JpaRepository
+Custom: findByUserIdOrderByCreatedAtDesc(Pageable), findByUserIdAndImportance(Pageable), findByUserIdAndTagsContaining(Pageable), findByUserId, @Modifying deleteByUserId, countByUserId
 
-### === VectorDocumentRepository.java ===
-Entity: VectorDocument | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdAndSourceType(UUID, VectorSourceType): List<VectorDocument>
-  - @Modifying deleteBySourceIdAndSourceType(UUID, VectorSourceType): void
-  - @Modifying deleteByUserId(UUID): void
-  - @Query(nativeQuery) findMostSimilar(UUID, String, String, int): List<VectorDocument> — pgvector cosine distance (`<=>`)
-  - @Query(nativeQuery) findMostSimilarAcrossTypes(UUID, String, int): List<VectorDocument>
+=== VectorDocumentRepository === Entity: VectorDocument, Extends: JpaRepository
+Custom: findByUserIdAndSourceType, @Modifying deleteBySourceIdAndSourceType, @Modifying deleteByUserId, @Query(native) findMostSimilar (pgvector `<=>` cosine distance), @Query(native) findMostSimilarAcrossTypes
 
-### === DeviceRegistrationRepository.java ===
-Entity: DeviceRegistration | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdAndDeviceId(UUID, String): Optional<DeviceRegistration>
-  - findByUserId(UUID): List<DeviceRegistration>
-  - deleteByUserIdAndDeviceId(UUID, String): void
+=== DeviceRegistrationRepository === Entity: DeviceRegistration, Extends: JpaRepository
+Custom: findByUserIdAndDeviceId, findByUserId, deleteByUserIdAndDeviceId
 
-### === AuditLogRepository.java ===
-Entity: AuditLog | Extends: JpaRepository
-Custom Methods:
-  - findAllByOrderByTimestampDesc(Pageable): Page<AuditLog>
-  - findByUserIdOrderByTimestampDesc(UUID, Pageable): Page<AuditLog>
-  - findByOutcomeOrderByTimestampDesc(AuditOutcome, Pageable): Page<AuditLog>
-  - findByTimestampBetweenOrderByTimestampDesc(Instant, Instant, Pageable): Page<AuditLog>
-  - findByUserIdAndTimestampBetween(UUID, Instant, Instant, Pageable): Page<AuditLog>
-  - countByOutcomeAndTimestampBetween(AuditOutcome, Instant, Instant): long
-  - @Modifying deleteByTimestampBefore(Instant): void
-  - @Modifying deleteByUserId(UUID): void
+=== AuditLogRepository === Entity: AuditLog, Extends: JpaRepository
+Custom: findAllByOrderByTimestampDesc(Pageable), findByUserIdOrderByTimestampDesc(Pageable), findByOutcomeOrderByTimestampDesc(Pageable), findByTimestampBetweenOrderByTimestampDesc(Pageable), findByUserIdAndTimestampBetween(Pageable), countByOutcomeAndTimestampBetween, @Modifying deleteByTimestampBefore, @Modifying deleteByUserId
 
-### === InsightRepository.java ===
-Entity: Insight | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdAndIsDismissedFalseOrderByGeneratedAtDesc(UUID, Pageable): Page<Insight>
-  - findByUserIdAndCategoryAndIsDismissedFalse(UUID, InsightCategory, Pageable): Page<Insight>
-  - findByUserIdAndIsReadFalseAndIsDismissedFalse(UUID): List<Insight>
-  - countByUserIdAndIsReadFalseAndIsDismissedFalse(UUID): long
-  - findByIdAndUserId(UUID, UUID): Optional<Insight>
-  - countByUserId(UUID): long
-  - @Modifying deleteByUserId(UUID): void
+=== InsightRepository === Entity: Insight, Extends: JpaRepository
+Custom: findByUserIdAndIsDismissedFalseOrderByGeneratedAtDesc(Pageable), findByUserIdAndCategoryAndIsDismissedFalse(Pageable), findByUserIdAndIsReadFalseAndIsDismissedFalse, countByUserIdAndIsReadFalseAndIsDismissedFalse, findByIdAndUserId, countByUserId, @Modifying deleteByUserId
 
-### === NotificationRepository.java ===
-Entity: Notification | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdAndIsReadFalseOrderByCreatedAtDesc(UUID): List<Notification>
-  - findByUserIdOrderByCreatedAtDesc(UUID, Pageable): Page<Notification>
-  - countByUserIdAndIsReadFalse(UUID): long
-  - findByIdAndUserId(UUID, UUID): Optional<Notification>
-  - @Modifying @Query markAllReadForUser(UUID, Instant): void
-  - @Modifying deleteByUserId(UUID): void
+=== NotificationRepository === Entity: Notification, Extends: JpaRepository
+Custom: findByUserIdAndIsReadFalseOrderByCreatedAtDesc, findByUserIdOrderByCreatedAtDesc(Pageable), countByUserIdAndIsReadFalse, findByIdAndUserId, @Modifying @Query markAllReadForUser, @Modifying deleteByUserId
 
-### === SensorReadingRepository.java ===
-Entity: SensorReading | Extends: JpaRepository
-Custom Methods:
-  - findBySensorIdOrderByRecordedAtDesc(UUID, Pageable): Page<SensorReading>
-  - findBySensorIdAndRecordedAtAfterOrderByRecordedAtAsc(UUID, Instant): List<SensorReading>
-  - findTopBySensorIdOrderByRecordedAtDesc(UUID): Optional<SensorReading>
-  - @Modifying deleteBySensorId(UUID): void
-  - @Modifying @Query deleteByUserId(UUID): void
-  - @Query(nativeQuery) findAverageValueSince(UUID, Instant): Double
+=== SensorRepository === Entity: Sensor, Extends: JpaRepository
+Custom: findByUserIdOrderByNameAsc, findByIdAndUserId, findByUserIdAndIsActiveTrue, findByPortPath, findByIsActiveTrue, countByUserId, deleteByUserId
 
-### === SensorRepository.java ===
-Entity: Sensor | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdOrderByNameAsc(UUID): List<Sensor>
-  - findByIdAndUserId(UUID, UUID): Optional<Sensor>
-  - findByUserIdAndIsActiveTrue(UUID): List<Sensor>
-  - findByPortPath(String): Optional<Sensor>
-  - findByIsActiveTrue(): List<Sensor>
-  - countByUserId(UUID): long
-  - deleteByUserId(UUID): void
+=== SensorReadingRepository === Entity: SensorReading, Extends: JpaRepository
+Custom: findBySensorIdOrderByRecordedAtDesc(Pageable), findBySensorIdAndRecordedAtAfterOrderByRecordedAtAsc, findTopBySensorIdOrderByRecordedAtDesc, @Modifying deleteBySensorId, @Modifying @Query deleteByUserId, @Query(native) findAverageValueSince
 
-### === ExternalApiSettingsRepository.java ===
-Entity: ExternalApiSettings | Extends: JpaRepository
-Custom Methods:
-  - findBySingletonGuard(String): Optional<ExternalApiSettings>
+=== ExternalApiSettingsRepository === Entity: ExternalApiSettings, Extends: JpaRepository
+Custom: findBySingletonGuard
 
-### === InventoryItemRepository.java ===
-Entity: InventoryItem | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdOrderByNameAsc(UUID): List<InventoryItem>
-  - findByUserIdAndCategory(UUID, InventoryCategory): List<InventoryItem>
-  - findByUserIdAndQuantityLessThanEqual(UUID, double): List<InventoryItem>
-  - findByIdAndUserId(UUID, UUID): Optional<InventoryItem>
-  - @Modifying deleteByUserId(UUID): void
+=== SkillRepository === Entity: Skill, Extends: JpaRepository
+Custom: findByIsEnabledTrue, findByIsBuiltInTrue, findByCategory, findByName, findByIsEnabledTrueOrderByDisplayNameAsc
 
-### === PlannedTaskRepository.java ===
-Entity: PlannedTask | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdAndStatusOrderByCreatedAtDesc(UUID, TaskStatus, Pageable): Page<PlannedTask>
-  - findByIdAndUserId(UUID, UUID): Optional<PlannedTask>
-  - @Modifying deleteByUserId(UUID): void
+=== SkillExecutionRepository === Entity: SkillExecution, Extends: JpaRepository
+Custom: findByUserIdOrderByStartedAtDesc(Pageable), findBySkillIdAndUserIdOrderByStartedAtDesc(Pageable), findByUserIdAndStatus
 
-### === SkillExecutionRepository.java ===
-Entity: SkillExecution | Extends: JpaRepository
-Custom Methods:
-  - findByUserIdOrderByStartedAtDesc(UUID, Pageable): Page<SkillExecution>
-  - findBySkillIdAndUserIdOrderByStartedAtDesc(UUID, UUID, Pageable): Page<SkillExecution>
-  - findByUserIdAndStatus(UUID, ExecutionStatus): List<SkillExecution>
+=== InventoryItemRepository === Entity: InventoryItem, Extends: JpaRepository
+Custom: findByUserIdOrderByNameAsc, findByUserIdAndCategory, findByUserIdAndQuantityLessThanEqual, findByIdAndUserId, @Modifying deleteByUserId
 
-### === SkillRepository.java ===
-Entity: Skill | Extends: JpaRepository
-Custom Methods:
-  - findByIsEnabledTrue(): List<Skill>
-  - findByIsBuiltInTrue(): List<Skill>
-  - findByCategory(SkillCategory): List<Skill>
-  - findByName(String): Optional<Skill>
-  - findByIsEnabledTrueOrderByDisplayNameAsc(): List<Skill>
+=== PlannedTaskRepository === Entity: PlannedTask, Extends: JpaRepository
+Custom: findByUserIdAndStatusOrderByCreatedAtDesc(Pageable), findByIdAndUserId, @Modifying deleteByUserId
 
-### === SystemConfigRepository.java ===
-Entity: SystemConfig | Extends: JpaRepository
-Custom Methods:
-  - @Query("SELECT s FROM SystemConfig s") findFirst(): Optional<SystemConfig>
+=== SystemConfigRepository === Entity: SystemConfig, Extends: JpaRepository
+Custom: @Query findFirst
+
+**Common patterns:** All repositories extend JpaRepository<Entity, UUID>. No @EntityGraph usage. No projections. Wide use of userId scoping for multi-tenant isolation. Pageable support on list endpoints.
 
 ---
 
 ## 9. Service Layer — Full Method Signatures
 
-### === InferenceService.java (Interface) ===
-```
-Public Methods:
-  - chat(OllamaChatRequest): OllamaChatResponse — synchronous chat
-  - streamChat(OllamaChatRequest): Flux<String> — SSE streaming chat
-  - embed(String): float[] — generate embedding vector
-  - listModels(): List<OllamaModelInfo> — list available models
-  - isAvailable(): boolean — health check
-  - getActiveModel(): ActiveModelDto — currently loaded model
-```
+### ai Module
 
-### === OllamaInferenceService.java ===
-Injects: OllamaService
-Implements: InferenceService — thin wrapper delegating to OllamaService
+=== InferenceService.java (Interface) ===
+- `chat(List<OllamaMessage>, UUID userId): String`
+- `streamChat(List<OllamaMessage>, UUID userId): Flux<String>`
+- `streamChatWithThinking(List<OllamaMessage>, UUID userId): Flux<InferenceChunk>`
+- `embed(String text): float[]`
+- `isAvailable(): boolean`
+- `listModels(): List<InferenceModelInfo>`
+- `getActiveModel(): InferenceModelInfo`
 
-### === LmStudioInferenceService.java ===
-Injects: WebClient (sse), RestClient (sync), modelName, embedModel, maxTokens, temperature
-Implements: InferenceService — OpenAI-compatible API with think-tag parsing for reasoning models
+Implementations: `LlamaServerInferenceService` (native llama.cpp), `OllamaInferenceService` (Ollama API). Selected by `app.inference.provider` property.
 
-### === OllamaService.java ===
-Injects: RestClient (ollamaRestClient), WebClient (ollamaWebClient), modelName, embedModel
-Public Methods:
-  - chat(OllamaChatRequest): OllamaChatResponse — sync chat via RestClient
-  - streamChat(OllamaChatRequest): Flux<String> — SSE streaming via WebClient
-  - embed(String): float[] — embedding via /api/embed
-  - listModels(): List<OllamaModelInfo> — GET /api/tags
-  - isAvailable(): boolean — GET /api/tags health probe
+=== ChatService.java ===
+Injects: ConversationRepository, MessageRepository, UserRepository, OllamaService, InferenceService, SystemPromptBuilder, ContextWindowService, RagService, MemoryExtractionService, SystemConfigService
+- `createConversation(UUID userId, String title): Conversation` @Transactional
+- `getConversations(UUID userId, boolean includeArchived, Pageable): Page<Conversation>`
+- `getConversation(UUID conversationId, UUID userId): Conversation` → EntityNotFoundException
+- `archiveConversation(UUID, UUID): void` @Transactional
+- `deleteConversation(UUID, UUID): void` @Transactional — deletes messages then conversation
+- `sendMessage(UUID conversationId, UUID userId, String content): Message` @Transactional — RAG context, system prompt, inference, memory extraction
+- `streamMessage(UUID conversationId, UUID userId, String content): Flux<String>` — SSE streaming with think-tag support
+- `editMessage(UUID conversationId, UUID messageId, UUID userId, String newContent): Message` @Transactional — deletes subsequent messages, re-runs inference
+- `deleteMessage(UUID, UUID, UUID): void` @Transactional
+- `branchConversation(UUID conversationId, UUID messageId, UUID userId, String title): Conversation` @Transactional
+- `regenerateMessage(UUID, UUID, UUID): Flux<String>` — deletes assistant message, re-streams
+- `getMessages(UUID userId, UUID conversationId, Pageable): Page<Message>`
+- `searchConversations(UUID userId, String query, Pageable): Page<Conversation>`
+- `renameConversation(UUID, UUID, String): Conversation` @Transactional
 
-### === ChatService.java ===
-Injects: ConversationRepository, MessageRepository, InferenceService, RagService, SystemPromptBuilder, ContextWindowService, MemoryExtractionService, SystemConfigService
-Public Methods:
-  - createConversation(UUID, String): Conversation
-  - getConversation(UUID, UUID): Conversation
-  - listConversations(UUID, Boolean, Pageable): Page<Conversation>
-  - searchConversations(UUID, String, Pageable): Page<Conversation>
-  - renameConversation(UUID, UUID, String): Conversation
-  - archiveConversation(UUID, UUID): Conversation
-  - deleteConversation(UUID, UUID): void
-  - sendMessage(UUID, UUID, String): Message — sync message with RAG
-  - streamMessage(UUID, UUID, String): Flux<String> — SSE streaming with RAG
-  - editMessage(UUID, UUID, UUID, String): Message — edit + regenerate
-  - branchConversation(UUID, UUID, UUID): Conversation — branch from message
-  - getMessages(UUID, UUID, Pageable): Page<Message>
-  - generateTitle(UUID, UUID): Conversation — auto-title via LLM
+=== LlamaServerProcessService.java ===
+Injects: LlamaServerProperties, SystemConfigService, ProcessBuilderFactory, InferenceService
+Implements: ApplicationRunner, DisposableBean
+- `start(): void` (synchronized) — resolves model, starts binary, waits for healthy
+- `stop(): void` (synchronized)
+- `restart(): void`
+- `switchModel(String filename): LlamaServerStatusDto` → IllegalArgumentException
+- `getStatus(): LlamaServerStatusDto`
+- `getRecentLogLines(int n): List<String>`
+- `monitorHealth(): void` @Scheduled — crash detection/auto-restart
 
-### === AgentService.java ===
-Injects: InferenceService, SkillExecutorService, SystemConfigService
-Public Methods:
-  - executeAgentTask(UUID, String, UUID): AgentTaskResult — tool-call dispatch via regex
+=== ContextWindowService.java ===
+Injects: MessageRepository, SystemConfigService
+- `prepareMessages(UUID conversationId, String systemPrompt, String newUserMessage): List<OllamaMessage>` — truncates to token limit
 
-### === ContextWindowService.java ===
-Injects: MessageRepository, TokenCounter
-Public Methods:
-  - prepareContext(UUID, int): List<OllamaMessage> — message selection with token budget
+=== AgentService.java ===
+Injects: OllamaService, SkillExecutorService, ObjectMapper, SystemConfigService
+- `executeTask(UUID userId, UUID conversationId, String taskDescription): AgentTaskResult` — step-by-step prompting with tool-call detection
 
-### === ModelHealthCheckService.java ===
-Injects: InferenceService
-Startup health check for inference provider
+=== SystemPromptBuilder.java ===
+Injects: RagService
+- `build(User user, String instanceName): String`
+- `build(User user, String instanceName, RagContext ragContext): String` — injects RAG context
 
-### === SystemPromptBuilder.java ===
-Injects: SystemConfigService
-Public Methods:
-  - buildSystemPrompt(UUID, String): String — assembles system prompt with RAG context
+### auth Module
 
-### === AuthService.java ===
-Injects: UserRepository, JwtService, PasswordEncoder, SystemConfigService
-Public Methods:
-  - register(String, String, String, String, Role): AuthResponse
-  - login(String, String): AuthResponse
-  - refreshToken(String): AuthResponse
-  - logout(String): void
-  - changePassword(UUID, String, String): void
+=== AuthService.java ===
+Injects: UserRepository, JwtService, PasswordEncoder
+- `register(RegisterRequest): AuthResponse` @Transactional → DuplicateResourceException, IllegalArgumentException
+- `login(LoginRequest): AuthResponse` @Transactional → BadCredentialsException
+- `refresh(String refreshToken): AuthResponse` → BadCredentialsException
+- `logout(String token): void` — in-memory blacklist
+- `isTokenBlacklisted(String): boolean`
+- `changePassword(UUID, ChangePasswordRequest): void` @Transactional
 
-### === JwtService.java ===
-Injects: secret, accessExpirationMs, refreshExpirationMs
-Public Methods:
-  - generateAccessToken(UUID, String, String): String
-  - generateRefreshToken(UUID, String, String): String
-  - extractUserId(String): UUID
-  - extractUsername(String): String
-  - extractRole(String): String
-  - isTokenValid(String): boolean
-  - blacklistToken(String): void
-  - isTokenBlacklisted(String): boolean
+=== JwtService.java ===
+- `generateAccessToken(UserDetails): String`
+- `generateRefreshToken(UserDetails): String`
+- `extractUsername(String token): String`
+- `isTokenValid(String token, UserDetails): boolean`
+- `isTokenExpired(String): boolean`
 
-### === UserService.java ===
-Injects: UserRepository, PasswordEncoder
-Public Methods:
-  - getAllUsers(): List<User>
-  - getUserById(UUID): User
-  - getUserByUsername(String): User
-  - updateUser(UUID, UpdateUserRequest): User
-  - deactivateUser(UUID): void
-  - activateUser(UUID): void
-  - deleteUser(UUID): void
-  - getActiveUserCount(): long
+=== UserService.java ===
+Injects: UserRepository
+- `listUsers(int page, int size): Page<UserSummaryDto>`
+- `getUserById(UUID): UserDetailDto` → EntityNotFoundException
+- `updateUser(UUID, String displayName, String email, Role role): UserDetailDto` @Transactional
+- `deactivateUser(UUID): void` @Transactional
+- `deleteUser(UUID): void` @Transactional
 
-### === ClaudeApiService.java ===
-Injects: ExternalApiSettingsService
-Public Methods:
-  - summarize(String, String): Optional<String> — Anthropic Claude API summarization
+### enrichment Module
 
-### === WebFetchService.java ===
-Injects: ClaudeApiService
-Public Methods:
-  - fetchUrl(String): FetchResult — fetch + Jsoup HTML parse + optional Claude summary
+=== ClaudeApiService.java ===
+- `isAvailable(): boolean`
+- `complete(String systemPrompt, String userPrompt): Optional<String>` — graceful fallback
+- `summarizeForKnowledgeBase(String rawContent, int maxChars): String`
 
-### === WebSearchService.java ===
-Injects: ExternalApiSettingsService, WebFetchService, KnowledgeService
-Public Methods:
-  - search(String, int): List<SearchResultDto> — Brave Search API
-  - searchAndIngestToKnowledge(UUID, String, int): SearchEnrichmentResultDto
+=== WebFetchService.java ===
+- `fetchUrl(String url): FetchResult` — Jsoup HTML→text extraction
+- `fetchAndStore(String url, UUID userId, boolean summarizeWithClaude): KnowledgeDocumentDto`
 
-### === ScheduledEventService.java ===
-Injects: ScheduledEventRepository
-Public Methods:
-  - createEvent(UUID, CreateEventRequest): ScheduledEventDto
-  - getEvents(UUID, Pageable): Page<ScheduledEventDto>
-  - getEvent(UUID, UUID): ScheduledEventDto
-  - updateEvent(UUID, UUID, UpdateEventRequest): ScheduledEventDto
-  - deleteEvent(UUID, UUID): void
-  - toggleEnabled(UUID, UUID): ScheduledEventDto
+=== WebSearchService.java ===
+- `isAvailable(): boolean`
+- `search(String query): List<SearchResultDto>` — Brave Search API
+- `searchAndStore(String query, int fetchTopN, UUID userId, boolean summarize): List<KnowledgeDocumentDto>`
 
-### === KnowledgeService.java ===
-Injects: KnowledgeDocumentRepository, KnowledgeChunkRepository, VectorDocumentRepository, FileStorageService, IngestionService, EmbeddingService, SystemConfigService
-Public Methods:
-  - uploadDocument(UUID, MultipartFile): KnowledgeDocumentDto
-  - uploadDocumentWithContent(UUID, String, String, String): KnowledgeDocumentDto
-  - getDocuments(UUID, Pageable): Page<KnowledgeDocumentDto>
-  - getDocument(UUID, UUID): KnowledgeDocumentDto
-  - getDocumentContent(UUID, UUID): DocumentContentDto
-  - updateDisplayName(UUID, UUID, String): KnowledgeDocumentDto
-  - updateContent(UUID, UUID, String): KnowledgeDocumentDto
-  - deleteDocument(UUID, UUID): void
-  - deleteAllForUser(UUID): void
+### knowledge Module
 
-### === ChunkingService.java ===
-Public Methods:
-  - chunk(String, int, int): List<String> — split text into overlapping chunks
+=== KnowledgeService.java ===
+Injects: KnowledgeDocumentRepository, KnowledgeChunkRepository, VectorDocumentRepository, FileStorageService, IngestionService, OcrService, ChunkingService, EmbeddingService
+- `upload(UUID userId, MultipartFile): KnowledgeDocumentDto` @Transactional — stores file, kicks off async processing
+- `processDocumentAsync(UUID documentId): void` @Async — extract, chunk, embed
+- `listDocuments(UUID userId, Pageable): Page<KnowledgeDocumentDto>` @Transactional(readOnly)
+- `getDocument(UUID, UUID): KnowledgeDocumentDto`
+- `updateDisplayName(UUID, UUID, String): KnowledgeDocumentDto` @Transactional
+- `deleteDocument(UUID, UUID): void` @Transactional — deletes chunks, vectors, file
+- `retryProcessing(UUID, UUID): KnowledgeDocumentDto` @Transactional
+- `getDocumentContent(UUID, UUID): DocumentContentDto`
+- `getDocumentForDownload(UUID, UUID): KnowledgeDocument`
+- `createFromEditor(UUID userId, String title, String deltaJsonContent): KnowledgeDocumentDto` @Transactional
+- `updateContent(UUID, UUID, String deltaJsonContent): KnowledgeDocumentDto` @Transactional
+- `deleteAllForUser(UUID): void` @Transactional
 
-### === FileStorageService.java ===
-Injects: SystemConfigService
-Public Methods:
-  - store(UUID, String, byte[]): String — store file, return path
-  - load(String): byte[]
-  - delete(String): void
+=== IngestionService.java === (Stateless)
+- `extractPdf(InputStream): ExtractionResult`
+- `extractText(InputStream): ExtractionResult`
+- `extractDocx/extractDoc/extractRtf/extractXlsx/extractXls/extractPptx/extractPpt(InputStream): ExtractionResult`
 
-### === IngestionService.java ===
-Injects: ChunkingService, OcrService
-Public Methods:
-  - extractText(String, byte[]): ExtractionResult — PDF/DOCX/DOC/TXT/image OCR
+=== ChunkingService.java === (Stateless)
+- `chunkText(String): List<String>` — sentence-boundary splitting with overlap
 
-### === OcrService.java ===
-Public Methods:
-  - extractText(byte[], String): String — Tesseract OCR
+=== OcrService.java ===
+- `extractFromImage(InputStream): ExtractionResult` — Tesseract OCR
 
-### === SemanticSearchService.java ===
-Injects: VectorDocumentRepository, EmbeddingService, KnowledgeChunkRepository, KnowledgeDocumentRepository
-Public Methods:
-  - search(UUID, String, int): List<KnowledgeSearchResultDto>
-  - searchForRagContext(UUID, String, int): List<String> — with source attribution
+=== SemanticSearchService.java ===
+- `search(UUID userId, String queryText, int topK): List<KnowledgeSearchResultDto>` — pgvector cosine search
+- `searchForRagContext(UUID userId, String queryText, int topK): List<String>` — with source attribution
 
-### === StorageHealthService.java ===
-Injects: SystemConfigService
-Public Methods:
-  - getStoragePath(): String
-  - getUsableSpaceMb(): long
-  - isHealthy(): boolean
+### memory Module
 
-### === EbookService.java ===
-Injects: EbookRepository, LibraryProperties, CalibreConversionService
-Public Methods:
-  - listEbooks(String, EbookFormat, Pageable): Page<EbookDto>
-  - getEbook(UUID): EbookDto
-  - uploadEbook(MultipartFile, String, String): EbookDto
-  - downloadEbook(UUID): byte[]
-  - deleteEbook(UUID): void
-  - incrementDownloadCount(UUID): void
-
-### === GutenbergService.java ===
-Injects: EbookRepository, LibraryProperties, EbookService
-Public Methods:
-  - searchGutenberg(String, int): List<GutenbergBookDto>
-  - downloadFromGutenberg(String): EbookDto
-
-### === ZimFileService.java ===
-Injects: ZimFileRepository, LibraryProperties
-Public Methods:
-  - listZimFiles(): List<ZimFileDto>
-  - uploadZimFile(MultipartFile, String, String): ZimFileDto
-  - deleteZimFile(UUID): void
-  - getKiwixStatus(): KiwixStatusDto
-
-### === CalibreConversionService.java ===
-Public Methods:
-  - convertToEpub(Path): Path — ebook-convert CLI wrapper
-
-### === McpTokenService.java ===
-Injects: McpApiTokenRepository, PasswordEncoder
-Public Methods:
-  - createToken(UUID, String): McpTokenCreateResult
-  - listTokens(UUID): List<McpTokenSummaryDto>
-  - revokeToken(UUID, UUID): void
-  - validateToken(String): Optional<McpAuthentication>
-
-### === McpToolsService.java ===
-Injects: ChatService, MemoryService, KnowledgeService, SensorService
-Public Methods:
-  - registerTools(): List<ToolCallback> — MCP tool definitions for external AI clients
-
-### === EmbeddingService.java ===
-Injects: InferenceService
-Public Methods:
-  - embed(String): float[]
-  - cosineSimilarity(float[], float[]): float
-  - static formatEmbedding(float[]): String — pgvector format
-
-### === MemoryExtractionService.java ===
-Injects: InferenceService, MemoryService, SystemConfigService
-Public Methods:
-  - extractMemoriesFromMessage(UUID, String, UUID): void — async LLM extraction
-
-### === MemoryService.java ===
+=== MemoryService.java ===
 Injects: MemoryRepository, VectorDocumentRepository, EmbeddingService, SystemConfigService
-Public Methods:
-  - createMemory(UUID, String, MemoryImportance, String, UUID): Memory
-  - findRelevantMemories(UUID, String, int): List<Memory>
-  - searchMemoriesWithScores(UUID, String, int): List<MemorySearchResultDto>
-  - getMemory(UUID, UUID): Memory
-  - updateImportance(UUID, UUID, MemoryImportance): Memory
-  - updateTags(UUID, UUID, String): Memory
-  - deleteMemory(UUID, UUID): void
-  - deleteAllMemoriesForUser(UUID): void
-  - exportMemories(UUID): List<Memory>
-  - getMemories(UUID, MemoryImportance, String, Pageable): Page<Memory>
+- `createMemory(UUID userId, String content, MemoryImportance, String tags, UUID sourceConversationId): Memory` @Transactional
+- `findRelevantMemories(UUID userId, String queryText, int topK): List<Memory>` @Transactional
+- `searchMemoriesWithScores(UUID userId, String queryText, int topK): List<MemorySearchResultDto>` @Transactional
+- `getMemory(UUID, UUID): Memory` → EntityNotFoundException, AccessDeniedException
+- `updateImportance(UUID, UUID, MemoryImportance): Memory` @Transactional
+- `updateTags(UUID, UUID, String): Memory` @Transactional
+- `deleteMemory(UUID, UUID): void` @Transactional
+- `deleteAllMemoriesForUser(UUID): void` @Transactional
+- `exportMemories(UUID): List<Memory>`
+- `getMemories(UUID, MemoryImportance, String tag, Pageable): Page<Memory>`
 
-### === RagService.java ===
-Injects: MemoryService, SemanticSearchService, SystemConfigService
-Public Methods:
-  - buildRagContext(UUID, String): RagContext
-  - formatContextBlock(RagContext): String
+=== RagService.java ===
+- `buildRagContext(UUID userId, String queryText): RagContext` — memories + knowledge
+- `formatContextBlock(RagContext): String`
 
-### === SummarizationService.java ===
-Injects: ConversationRepository, MessageRepository, OllamaService, MemoryService, MemoryRepository, SystemConfigService
-Public Methods:
-  - summarizeConversation(UUID, UUID): Memory
-  - @Scheduled scheduledNightlySummarization(): void — cron 0 0 2 * * *
+=== EmbeddingService.java ===
+- `embed(String): float[]` → EmbeddingException
+- `embedAndFormat(String): String` — pgvector format
+- `embedBatch(List<String>): List<float[]>`
+- `cosineSimilarity(float[], float[]): float`
 
-### === ModelCatalogService.java ===
-Injects: WebClient, ExternalApiSettingsService, ObjectMapper
-Public Methods:
-  - searchModels(String, String, int): HfSearchResultDto
-  - getModelDetails(String): HfModelDto
-  - getModelFiles(String): List<HfModelFileDto>
+=== MemoryExtractionService.java ===
+- `@Async extractAndStore(UUID userId, UUID conversationId, String userMessage, String assistantResponse): void`
 
-### === ModelDownloadService.java ===
-Injects: WebClient, ExternalApiSettingsService, ModelDownloadProgressRegistry, InferenceService
-Public Methods:
-  - startDownload(String, String): String — returns downloadId
-  - getProgress(String): Optional<DownloadProgress>
-  - getAllDownloads(): List<DownloadProgress>
-  - cancelDownload(String): void
-  - listLocalModels(): List<LocalModelFileDto>
-  - deleteLocalModel(String): void
-  - @Async executeDownload(String, String, String, String): void
+=== SummarizationService.java ===
+- `summarizeConversation(UUID conversationId, UUID userId): Memory`
+- `@Scheduled(cron="0 0 2 * * *") scheduledNightlySummarization(): void`
 
-### === ModelDownloadProgressRegistry.java ===
-Public Methods:
-  - subscribe(String): SseEmitter
-  - emit(String, DownloadProgress): void
-  - complete(String): void
+### models Module
 
-### === DeviceRegistrationService.java ===
-Injects: DeviceRegistrationRepository
-Public Methods:
-  - registerDevice(UUID, RegisterDeviceRequest): DeviceRegistrationDto
-  - getDevicesForUser(UUID): List<DeviceRegistrationDto>
-  - unregisterDevice(UUID, String): void
-  - getTopicsForUser(UUID): List<String>
+=== ModelCatalogService.java ===
+- `searchModels(String query, String formatFilter, int limit): HfSearchResultDto` — HuggingFace API
+- `getModelDetails(String repoId): HfModelDto`
+- `getModelFiles(String repoId): List<HfModelFileDto>` — enriched with quantization metadata
 
-### === MqttPublisherService.java ===
-Injects: MqttClient (nullable), ObjectMapper
-Public Methods:
-  - publishToTopic(String, NotificationPayload): boolean
-  - publishToUser(String, NotificationPayload): boolean
-  - publishBroadcast(NotificationPayload): boolean
+=== ModelDownloadService.java ===
+- `startDownload(String repoId, String filename): String` — returns download ID
+- `getProgress(String): Optional<DownloadProgress>`
+- `getAllDownloads(): List<DownloadProgress>`
+- `cancelDownload(String): void`
+- `listLocalModels(): List<LocalModelFileDto>`
+- `deleteLocalModel(String filename): void`
+- `@Async executeDownload(String, String, String, String): void` — SSE progress streaming
 
-### === AuditService.java ===
-Injects: AuditLogRepository
-Public Methods:
-  - logAction(AuditLog): void
-  - getAuditLogs(Pageable): Page<AuditLog>
-  - getAuditLogsForUser(UUID, Pageable): Page<AuditLog>
-  - getAuditLogsByOutcome(AuditOutcome, Pageable): Page<AuditLog>
-  - getAuditLogsBetween(Instant, Instant, Pageable): Page<AuditLog>
-  - countByOutcomeBetween(AuditOutcome, Instant, Instant): long
-  - deleteByUserId(UUID): void
+=== QuantizationRecommendationService.java ===
+- `enrichFiles(List<HfModelFileDto>): List<HfModelFileDto>` — adds quant metadata + RAM recommendation
+- `parseQuantType(String filename): QuantizationType`
+- `estimateRam(long fileSize): long`
+- `getAvailableRam(): long`
 
-### === DataExportService.java ===
-Injects: ConversationRepository, MessageRepository, MemoryRepository
-Public Methods:
-  - exportUserData(UUID, String): byte[] — AES-256-GCM encrypted ZIP
+### privacy Module
 
-### === DataWipeService.java ===
-Injects: MessageRepository, ConversationRepository, MemoryService, KnowledgeService, SensorService, InsightService, NotificationService, InventoryItemRepository, PlannedTaskRepository, AuditService
-Public Methods:
-  - @Transactional wipeUser(UUID): WipeResult — cascade delete in FK order (10 steps)
+=== AuditService.java === — CRUD for audit logs
+=== DataExportService.java === — `exportUserData(UUID, String passphrase): byte[]` — AES-256-GCM encrypted ZIP
+=== DataWipeService.java === — `wipeUser(UUID): WipeResult` @Transactional — cascade delete all user data
+=== FortressService.java === — `enable/disable(UUID): void` — iptables rules (mocked in dev)
+=== SovereigntyReportService.java === — `generateReport(UUID): SovereigntyReport`
 
-### === FortressService.java ===
-Injects: SystemConfigService, UserRepository, mockMode flag
-Public Methods:
-  - enable(UUID): void — iptables block outbound
-  - disable(UUID): void — iptables flush
-  - getFortressStatus(): FortressStatus
-  - isFortressActive(): boolean
+### proactive Module
 
-### === SovereigntyReportService.java ===
-Injects: FortressService, AuditService, multiple repositories
-Public Methods:
-  - generateReport(UUID): SovereigntyReport
+=== InsightGeneratorService.java === — `generateInsights(UUID): List<Insight>` — AI-powered pattern analysis
+=== InsightService.java === — CRUD for insights (getInsights, markRead, dismiss)
+=== NightlyInsightJob.java === — `@Scheduled(cron="0 0 3 * * *") generateNightlyInsights(): void`
+=== NotificationService.java === — CRUD + SSE broadcast + MQTT delivery
+=== NotificationSseRegistry.java === — SSE emitter registry for real-time notifications
+=== PatternAnalysisService.java === — `buildPatternSummary(UUID): PatternSummary`
+=== SystemHealthMonitor.java === — `@Scheduled checkSystemHealth(): void` — disk, Ollama, heap checks
 
-### === InsightGeneratorService.java ===
-Injects: PatternAnalysisService, OllamaService, InsightRepository, NotificationService, SystemConfigService
-Public Methods:
-  - generateInsightForUser(UUID): List<Insight>
+### sensors Module
 
-### === InsightService.java ===
-Injects: InsightRepository
-Public Methods:
-  - getInsights(UUID, Pageable): Page<Insight>
-  - getInsightsByCategory(UUID, InsightCategory, Pageable): Page<Insight>
-  - getUnreadInsights(UUID): List<Insight>
-  - markRead(UUID, UUID): Insight
-  - dismiss(UUID, UUID): Insight
-  - getUnreadCount(UUID): long
-  - deleteAllForUser(UUID): void
+=== SensorService.java === — CRUD + start/stop polling + threshold management
+=== SensorPollingService.java === — `startPolling(Sensor)/stopPolling(UUID)` — serial port read loop with SSE broadcast
+=== SerialPortService.java === — jSerialComm wrapper (open, close, readLine, test)
+=== SseEmitterRegistry.java === — SSE emitter registry for sensor readings
 
-### === NightlyInsightJob.java ===
-Injects: UserRepository, InsightGeneratorService
-@Scheduled(cron = "0 0 3 * * *") generateNightlyInsights(): void
+### skills Module
 
-### === NotificationService.java ===
-Injects: NotificationRepository, NotificationSseRegistry, MqttPublisherService, DeviceRegistrationService
-Public Methods:
-  - createNotification(UUID, String, String, NotificationType, String): Notification
-  - createNotification(UUID, String, String, NotificationType, NotificationSeverity, String): Notification
-  - getUnreadNotifications(UUID): List<Notification>
-  - getNotifications(UUID, Pageable): Page<Notification>
-  - markRead(UUID, UUID): Notification
-  - markAllRead(UUID): void
-  - getUnreadCount(UUID): long
-  - deleteNotification(UUID, UUID): void
-  - deleteAllForUser(UUID): void
+=== SkillExecutorService.java === — `execute(UUID skillId, UUID userId, Map params): SkillExecution` @Transactional
+=== SkillSeederService.java === — Seeds 6 built-in skills on ApplicationReadyEvent
+**Built-in skills:** DocumentSummarizer, InventoryTracker, RecipeGenerator, ResourceCalculator, TaskPlanner, WeatherQuery
 
-### === NotificationSseRegistry.java ===
-Public Methods:
-  - register(UUID, SseEmitter): void
-  - broadcast(UUID, Notification): void
-  - broadcastUnreadCount(UUID, long): void
+### system Module
 
-### === PatternAnalysisService.java ===
-Injects: ConversationRepository, MemoryRepository, SensorRepository, SensorReadingRepository, InventoryItemRepository, PlannedTaskRepository
-Public Methods:
-  - buildPatternSummary(UUID): PatternSummary
+=== SystemConfigService.java === — Singleton config CRUD (getConfig, save, getAiSettings, updateAiSettings, getStorageSettings, setActiveModelFilename)
+=== ApModeService.java === — AP mode management (start, stop, scan WiFi, connect WiFi)
+=== FactoryResetService.java === — `@Async performReset(): void`
+=== NetworkTransitionService.java === — `@Async finalizeSetup(): void` — AP→home network transition
+=== UsbResetWatcherService.java === — `@Scheduled checkForTriggerFiles(): void` — USB factory reset
 
-### === SystemHealthMonitor.java ===
-Injects: OllamaService, UserRepository, NotificationService, SystemConfigService
-@Scheduled(fixedDelay) checkSystemHealth(): void — disk, Ollama, heap monitoring
+### Other services
 
-### === SensorService.java ===
-Injects: SensorRepository, SensorReadingRepository, SensorPollingService, SerialPortService, SseEmitterRegistry
-Public Methods:
-  - registerSensor(UUID, CreateSensorRequest): SensorDto
-  - getSensors(UUID): List<SensorDto>
-  - getSensor(UUID, UUID): SensorDto
-  - updateThresholds(UUID, UUID, UpdateThresholdsRequest): SensorDto
-  - deleteSensor(UUID, UUID): void
-  - startPolling(UUID, UUID): SensorDto
-  - stopPolling(UUID, UUID): SensorDto
-  - testConnection(UUID, TestSensorRequest): SensorTestResult
-  - getReadings(UUID, UUID, Pageable): Page<SensorReadingDto>
-  - getRecentReadings(UUID, UUID, int): List<SensorReadingDto>
-  - subscribeToSensorUpdates(UUID): SseEmitter
-  - getAvailablePorts(): List<String>
-  - deleteAllForUser(UUID): void
-
-### === SensorPollingService.java ===
-Injects: SerialPortService, SensorReadingRepository, SseEmitterRegistry, NotificationService
-Manages per-sensor polling threads with threshold alerting
-
-### === SensorStartupService.java ===
-@PostConstruct — resumes polling for active sensors
-
-### === SerialPortService.java ===
-Public Methods:
-  - listPorts(): List<String>
-  - connect(String, int): SerialPort
-  - readLine(SerialPort): Optional<String>
-  - testPort(String, int): boolean
-
-### === SseEmitterRegistry.java ===
-Public Methods:
-  - register(UUID, SseEmitter): void
-  - emit(UUID, SensorReadingDto): void
-
-### === ExternalApiSettingsService.java ===
-Injects: ExternalApiSettingsRepository, AesEncryptionUtil
-Public Methods:
-  - getSettings(): ExternalApiSettingsDto (decrypted read)
-  - updateSettings(UpdateExternalApiSettingsRequest): ExternalApiSettingsDto
-  - getAnthropicApiKey(): Optional<String>
-  - getBraveApiKey(): Optional<String>
-  - getHuggingFaceToken(): Optional<String>
-
-### === SkillExecutorService.java ===
-Injects: SkillRepository, SkillExecutionRepository, builtInSkills (Map)
-Public Methods:
-  - executeSkill(UUID, String, Map<String,String>): SkillExecutionDto
-  - getExecutionHistory(UUID, Pageable): Page<SkillExecutionDto>
-
-### === SkillSeederService.java ===
-@PostConstruct — seeds 6 built-in skills with JSON schemas
-
-### === Built-in Skills (6) ===
-  - DocumentSummarizerSkill — LLM-powered document summarization
-  - InventoryTrackerSkill — CRUD for homestead inventory
-  - RecipeGeneratorSkill — LLM recipe generation from inventory
-  - ResourceCalculatorSkill — pure-math off-grid calculations (power/water/food)
-  - TaskPlannerSkill — LLM task decomposition + CRUD
-  - WeatherQuerySkill — sensor data aggregation for weather
-
-### === SystemConfigService.java ===
-Injects: SystemConfigRepository
-Public Methods:
-  - getConfig(): SystemConfig
-  - isInitialized(): boolean
-  - initialize(InitializeRequest, UUID): SystemConfig
-  - setFortressEnabled(boolean, UUID): void
-  - updateAiSettings(AiSettingsDto): SystemConfig
-  - updateStorageSettings(StorageSettingsDto): SystemConfig
-  - getAiSettings(): AiSettingsDto
-
-### === ApModeService.java ===
-Injects: mockMode flag
-Public Methods:
-  - startApMode(): void — hostapd/dnsmasq control
-  - stopApMode(): void
-  - scanWifiNetworks(): List<WifiNetwork>
-  - connectToWifi(WifiConnectRequest): WifiConnectionStatus
-  - getApStatus(): boolean
-
-### === ApModeStartupService.java ===
-@PostConstruct — conditional AP mode start
-
-### === FactoryResetService.java ===
-Injects: SystemConfigService, ApModeService, DataSource
-Public Methods:
-  - @Async performReset(FactoryResetRequest): void — drops all tables, restarts AP
-  - triggerUsbReset(): void
-
-### === NetworkTransitionService.java ===
-Injects: ApModeService, SystemConfigService
-Public Methods:
-  - completeSetup(UUID, String): void — AP→normal network transition
-
-### === UsbResetWatcherService.java ===
-@Scheduled(fixedDelay=30000) — checks /mnt/usb for reset trigger file
+=== McpTokenService.java === — MCP API token CRUD with BCrypt hashing
+=== McpToolsService.java === — 12 @Tool-annotated MCP tools (knowledge, memory, inventory, sensors, conversations, system)
+=== ExternalApiSettingsService.java === — External API key management (Anthropic, Brave, HuggingFace)
+=== DeviceRegistrationService.java === — MQTT device registration
+=== MqttPublisherService.java === — MQTT message publishing
 
 ---
 
 ## 10. Controller / API Layer — Method Signatures Only
 
-### === ChatController.java ===
-Base Path: /api/chat
-Injects: ChatService
-Endpoints:
-  - createConversation() → chatService.createConversation()
-  - listConversations() → chatService.listConversations()
-  - getConversation() → chatService.getConversation()
-  - searchConversations() → chatService.searchConversations()
-  - renameConversation() → chatService.renameConversation()
-  - archiveConversation() → chatService.archiveConversation()
-  - deleteConversation() → chatService.deleteConversation()
-  - sendMessage() → chatService.sendMessage()
-  - streamMessage() → chatService.streamMessage() [SSE]
-  - editMessage() → chatService.editMessage()
-  - branchConversation() → chatService.branchConversation()
-  - getMessages() → chatService.getMessages()
-  - generateTitle() → chatService.generateTitle()
+=== ChatController.java === Base Path: `/api/chat`
+Injects: ChatService, MessageRepository
+- createConversation() → chatService.createConversation()
+- listConversations() → chatService.getConversations()
+- searchConversations() → chatService.searchConversations()
+- getConversation() → chatService.getConversation()
+- deleteConversation() → chatService.deleteConversation()
+- archiveConversation() → chatService.archiveConversation()
+- renameConversation() → chatService.renameConversation()
+- sendMessage() → chatService.sendMessage() / streamMessage() (SSE)
+- listMessages() → messageRepository.findByConversationIdOrderByCreatedAtAsc()
+- editMessage() → chatService.editMessage()
+- deleteMessage() → chatService.deleteMessage()
+- branchConversation() → chatService.branchConversation()
+- regenerateMessage() → chatService.regenerateMessage() (SSE)
 
-### === ModelController.java ===
-Base Path: /api/models
-Injects: InferenceService
-Endpoints:
-  - listModels() → inferenceService.listModels()
-  - getHealth() → inferenceService.isAvailable()
-  - getActiveModel() → inferenceService.getActiveModel()
+=== ModelController.java === Base Path: `/api/models`
+Injects: InferenceService, SystemConfigService
+- listModels() → inferenceService.listModels()
+- getActiveModel() → inferenceService.getActiveModel()
+- getHealth() → inferenceService.isAvailable()
 
-### === AuthController.java ===
-Base Path: /api/auth
+=== AuthController.java === Base Path: `/api/auth`
 Injects: AuthService
-Endpoints:
-  - register() → authService.register()
-  - login() → authService.login()
-  - refreshToken() → authService.refreshToken()
-  - logout() → authService.logout()
+- register() → authService.register()
+- login() → authService.login()
+- refresh() → authService.refresh()
+- logout() → authService.logout()
 
-### === UserController.java ===
-Base Path: /api/users
+=== UserController.java === Base Path: `/api/users`
 Injects: UserService
-Endpoints:
-  - getAllUsers() → userService.getAllUsers() [OWNER/ADMIN only]
-  - getUserById() → userService.getUserById()
-  - getCurrentUser() → returns authenticated user
-  - updateUser() → userService.updateUser()
-  - deactivateUser() → userService.deactivateUser()
-  - activateUser() → userService.activateUser()
-  - deleteUser() → userService.deleteUser() [OWNER only]
+- listUsers(), getUser(), updateUser(), deactivateUser(), deleteUser()
 
-### === EnrichmentController.java ===
-Base Path: /api/enrichment
-Injects: WebFetchService, WebSearchService
-Endpoints:
-  - fetchUrl() → webFetchService.fetchUrl()
-  - searchWeb() → webSearchService.search()
-  - searchAndIngest() → webSearchService.searchAndIngestToKnowledge()
+=== EnrichmentController.java === Base Path: `/api/enrichment`
+Injects: WebFetchService, WebSearchService, ClaudeApiService, ExternalApiSettingsService
+- fetchUrl(), search(), getStatus()
 
-### === ScheduledEventController.java ===
-Base Path: /api/events
-Injects: ScheduledEventService
-Endpoints: CRUD for scheduled events (create, list, get, update, delete, toggle)
+=== ScheduledEventController.java === Base Path: `/api/events`
+- listEvents(), getEvent(), createEvent(), updateEvent(), deleteEvent(), toggleEvent()
 
-### === KnowledgeController.java ===
-Base Path: /api/knowledge
-Injects: KnowledgeService, SemanticSearchService
-Endpoints:
-  - uploadDocument() → knowledgeService.uploadDocument()
-  - listDocuments() → knowledgeService.getDocuments()
-  - getDocument() → knowledgeService.getDocument()
-  - getDocumentContent() → knowledgeService.getDocumentContent()
-  - updateDisplayName() → knowledgeService.updateDisplayName()
-  - updateContent() → knowledgeService.updateContent()
-  - deleteDocument() → knowledgeService.deleteDocument()
-  - searchKnowledge() → semanticSearchService.search()
+=== KnowledgeController.java === Base Path: `/api/knowledge`
+Injects: KnowledgeService, SemanticSearchService, SystemConfigService, FileStorageService
+- uploadDocument(), listDocuments(), getDocument(), updateDisplayName(), deleteDocument(), retryProcessing(), downloadDocument(), getDocumentContent(), createDocument(), updateDocumentContent(), searchKnowledge()
 
-### === LibraryController.java ===
-Base Path: /api/library
-Injects: EbookService, ZimFileService, GutenbergService
-Endpoints: Ebook CRUD, ZIM file management, Gutenberg search/download, Kiwix status
+=== LibraryController.java === Base Path: `/api/library`
+Injects: ZimFileService, EbookService, GutenbergService
+- uploadZim(), listZimFiles(), deleteZim(), kiwixStatus(), kiwixUrl()
+- uploadEbook(), listEbooks(), getEbook(), deleteEbook(), downloadEbook()
+- searchGutenberg(), getGutenbergBook(), importGutenberg()
 
-### === McpDiscoveryController.java ===
-Base Path: /api/mcp
-Endpoints: getClientConfig() — returns MCP server connection details
+=== McpDiscoveryController.java === Base Path: `/api/mcp`
+- getClaudeDesktopConfig() — generates Claude Desktop config snippet
 
-### === McpTokenController.java ===
-Base Path: /api/mcp/tokens
-Injects: McpTokenService
-Endpoints: createToken(), listTokens(), revokeToken()
+=== McpTokenController.java === Base Path: `/api/mcp/tokens`
+- createToken(), listTokens(), revokeToken()
 
-### === MemoryController.java ===
-Base Path: /api/memories
-Injects: MemoryService
-Endpoints: CRUD for memories, vector search, importance/tag updates
+=== MemoryController.java === Base Path: `/api/memory`
+- listMemories(), getMemory(), deleteMemory(), updateImportance(), updateTags(), searchMemories(), exportMemories()
 
-### === ModelDownloadController.java ===
-Base Path: /api/models
-Injects: ModelCatalogService, ModelDownloadService, ModelDownloadProgressRegistry
-Endpoints: HuggingFace search, model details/files, start/cancel download, progress SSE, local models, delete
+=== ModelDownloadController.java === Base Path: `/api/models`
+Injects: ModelCatalogService, ModelDownloadService, ModelDownloadProgressRegistry, LlamaServerProcessService
+- searchCatalog(), getModelDetails(), getModelFiles()
+- startDownload(), getAllDownloads(), getDownloadProgress() (SSE), cancelDownload()
+- listLocalModels(), deleteLocalModel()
+- setActiveModel(), getServerStatus(), restartServer()
 
-### === DeviceRegistrationController.java ===
-Base Path: /api/devices
-Injects: DeviceRegistrationService
-Endpoints: register, list, unregister devices
+=== DeviceRegistrationController.java === Base Path: `/api/notifications/devices`
+- registerDevice(), getDevices(), unregisterDevice()
 
-### === PrivacyController.java ===
-Base Path: /api/privacy
-Injects: FortressService, AuditService, DataExportService, DataWipeService, SovereigntyReportService
-Endpoints: fortress enable/disable/status, audit logs, data export, data wipe, sovereignty report
+=== PrivacyController.java === Base Path: `/api/privacy`
+- getFortressStatus(), enableFortress(), disableFortress()
+- getSovereigntyReport()
+- getAuditLogs() (3 filter variants)
+- exportData(), wipeData(), wipeSelfData()
 
-### === ProactiveController.java ===
-Base Path: /api/proactive
-Injects: InsightService, InsightGeneratorService, NotificationService, NotificationSseRegistry
-Endpoints: insights CRUD, notifications CRUD, SSE streams, generate insights
+=== ProactiveController.java === Base Paths: `/api/insights`, `/api/notifications`
+- getInsights(), generateInsights(), markInsightRead(), dismissInsight(), getInsightUnreadCount()
+- getNotifications(), markNotificationRead(), markAllNotificationsRead(), getNotificationUnreadCount(), deleteNotification(), streamNotifications() (SSE)
 
-### === SensorController.java ===
-Base Path: /api/sensors
-Injects: SensorService
-Endpoints: sensor CRUD, polling control, test connection, readings, SSE stream, available ports
+=== SensorController.java === Base Path: `/api/sensors`
+- listSensors(), getSensor(), registerSensor(), deleteSensor()
+- startSensor(), stopSensor()
+- getLatestReading(), getReadingHistory()
+- updateThresholds(), testConnection(), listAvailablePorts()
+- streamSensor() (SSE)
 
-### === ExternalApiSettingsController.java ===
-Base Path: /api/settings/external-apis
-Injects: ExternalApiSettingsService
-Endpoints: getSettings(), updateSettings()
+=== ExternalApiSettingsController.java === Base Path: `/api/settings/external-apis`
+- getSettings(), updateSettings()
 
-### === SkillController.java ===
-Base Path: /api/skills
-Injects: SkillExecutorService, SkillRepository, InventoryItemRepository
-Endpoints: list skills, execute, execution history, inventory CRUD
+=== SkillController.java === Base Path: `/api/skills`
+- listSkills(), getSkill(), toggleSkill()
+- executeSkill(), listExecutions()
+- listInventory(), createInventoryItem(), updateInventoryItem(), deleteInventoryItem()
 
-### === CaptivePortalController.java ===
-Base Path: /setup
-Injects: ApModeService, NetworkTransitionService, SystemConfigService, AuthService
-Endpoints: setup page, scan WiFi, connect, complete setup
+=== CaptivePortalController.java === Base Paths: `/setup`, `/api/setup/wifi`
+- setupWelcome(), setupWifi(), setupAccount(), setupConfirm() — forwards to static HTML
+- scanWifi(), connectWifi(), wifiStatus()
 
-### === SystemController.java ===
-Base Path: /api/system
-Injects: SystemConfigService, AuthService, UserService, ApModeService, FactoryResetService, InferenceService, StorageHealthService
-Endpoints: status, initialize, AI settings, storage settings, factory reset
+=== SystemController.java === Base Path: `/api/system`
+- getStatus(), initialize(), finalizeSetup()
+- getAiSettings(), updateAiSettings()
+- getStorageSettings(), updateStorageSettings()
+- factoryReset()
 
 ---
 
 ## 11. Security Configuration
 
 ```
-Authentication: JWT (stateless, HMAC-SHA256)
+Authentication: JWT (stateless, Bearer token, internal issuer)
 Token issuer/validator: Internal (JwtService)
-Password encoder: BCrypt (default rounds)
+Password encoder: BCrypt (default 10 rounds)
 
 Public endpoints (no auth required):
-  - POST /api/auth/register
-  - POST /api/auth/login
-  - POST /api/auth/refresh
+  - /api/auth/login, /api/auth/register, /api/auth/refresh
+  - /api/system/status, /api/system/initialize, /api/system/finalize-setup
+  - /api/setup/**
+  - /api/models, /api/models/health
   - /setup/**
-  - /api/system/status
-  - /api/system/initialize
-  - /mcp/** (separate auth via McpAuthFilter)
   - /actuator/health
-  - /swagger-ui/**, /v3/api-docs/**
-  - /error
+  - /v3/api-docs/**, /swagger-ui/**, /swagger-ui.html
+  - /mcp/** (uses separate McpAuthFilter with bearer token)
 
 Protected endpoints (patterns):
-  - DELETE /api/users/** → ROLE_OWNER only
-  - GET /api/users (list all) → ROLE_OWNER, ROLE_ADMIN
-  - PUT /api/users/*/activate, PUT /api/users/*/deactivate → ROLE_OWNER, ROLE_ADMIN
-  - GET /api/privacy/audit → ROLE_OWNER, ROLE_ADMIN
-  - POST /api/privacy/fortress/** → ROLE_OWNER, ROLE_ADMIN
-  - POST /api/system/factory-reset → ROLE_OWNER
-  - PUT /api/system/ai-settings → ROLE_OWNER, ROLE_ADMIN
-  - All other /api/** → authenticated (any role)
+  - /api/** → authenticated (any role)
+  - Method-level: @PreAuthorize annotations on admin endpoints
 
-CORS: Allowed origins: * (all), methods: *, headers: *
-
-CSRF: Disabled (stateless API)
-
-Rate limiting: Bucket4j per-IP, auth endpoints: 10 req/min, general API: 100 req/min
+CORS: All origins (*), all methods, all headers, credentials enabled
+CSRF: Disabled (stateless REST API)
+Rate limiting: 10 req/min auth endpoints, 200 req/min general (Bucket4j)
 ```
 
 ---
 
 ## 12. Custom Security Components
 
-```
 === JwtAuthFilter.java ===
 Extends: OncePerRequestFilter
 Extracts token from: Authorization header (Bearer scheme)
-Validates via: JwtService.isTokenValid() + blacklist check
-Sets SecurityContext: YES (UsernamePasswordAuthenticationToken with role)
+Validates via: JwtService.isTokenValid() + AuthService.isTokenBlacklisted()
+Sets SecurityContext: YES
 
 === McpAuthFilter.java ===
-Extends: OncePerRequestFilter
-Intercepts: /mcp/** paths
+Extends: OncePerRequestFilter (filters only /mcp/** paths)
 Extracts token from: Authorization header (Bearer scheme)
-Validates via: McpTokenService.validateToken() (BCrypt hash comparison)
-Sets SecurityContext: YES (McpAuthentication)
+Validates via: McpTokenService.validateToken() (BCrypt hash matching)
+Sets SecurityContext: YES (McpAuthentication with ownerUserId)
 
-=== RateLimitingFilter.java ===
-Extends: OncePerRequestFilter
-Per-IP rate limiting via Bucket4j
-Auth endpoints (/api/auth/**): 10 req/min
-General API (/api/**): 100 req/min (configurable)
-
-=== CaptivePortalRedirectFilter.java ===
-Extends: OncePerRequestFilter
-Active only during AP mode setup
-Redirects captive portal detection URLs to /setup
-
-=== MdcFilter.java ===
-Extends: OncePerRequestFilter
-Populates MDC: requestId (UUID), username, userId
-
-=== RequestResponseLoggingFilter.java ===
-Extends: OncePerRequestFilter
-Logs: method, path, status, duration, content-type, IP
-```
+=== AuditAspect.java ===
+@Aspect intercepting all controller methods
+Logs: userId, action, resourceType, httpMethod, requestPath, ipAddress, responseStatus, outcome, durationMs
 
 ---
 
 ## 13. Exception Handling & Error Responses
 
-```
 === GlobalExceptionHandler.java ===
 @ControllerAdvice: YES
 
 Exception Mappings:
-  - EntityNotFoundException → 404 (ApiResponse.error)
-  - DuplicateResourceException → 409 (ApiResponse.error)
-  - OllamaUnavailableException → 503 (ApiResponse.error)
-  - OllamaInferenceException → 502 (ApiResponse.error)
-  - FortressActiveException → 403 (ApiResponse.error)
-  - FortressOperationException → 500 (ApiResponse.error)
-  - ApModeException → 500 (ApiResponse.error)
-  - InitializationException → 409 (ApiResponse.error)
-  - EmbeddingException → 500 (ApiResponse.error)
-  - SkillDisabledException → 400 (ApiResponse.error)
-  - StorageException → 500 (ApiResponse.error)
-  - UnsupportedFileTypeException → 415 (ApiResponse.error)
-  - SensorConnectionException → 502 (ApiResponse.error)
-  - OcrException → 500 (ApiResponse.error)
-  - AccessDeniedException → 403 (ApiResponse.error)
-  - MethodArgumentNotValidException → 400 (validation errors joined)
-  - MaxUploadSizeExceededException → 413 (ApiResponse.error)
-  - ConstraintViolationException → 400 (ApiResponse.error)
-  - HttpMessageNotReadableException → 400 (ApiResponse.error)
-  - MethodArgumentTypeMismatchException → 400 (ApiResponse.error)
-  - Exception (catch-all) → 500 (ApiResponse.error)
+  - MethodArgumentNotValidException → 400 (field error details)
+  - UsernameNotFoundException → 404
+  - BadCredentialsException → 401
+  - AccessDeniedException → 403
+  - EntityNotFoundException → 404
+  - DuplicateResourceException → 409
+  - IllegalArgumentException → 400
+  - FortressActiveException → 403
+  - OllamaUnavailableException → 503
+  - OllamaInferenceException → 502
+  - EmbeddingException → 503
+  - StorageException → 500
+  - UnsupportedFileTypeException → 400
+  - OcrException → 500
+  - SkillDisabledException → 400
+  - ApModeException → 500
+  - SensorConnectionException → 502
+  - MaxUploadSizeExceededException → 413
+  - AsyncRequestNotUsableException → (no response, DEBUG logged)
+  - Exception (catch-all) → 500
 
 Standard error response format:
+```json
 {
   "success": false,
-  "message": "...",
+  "message": "error description",
   "data": null,
-  "timestamp": "2026-03-16T...",
-  "page": null,
-  "totalElements": null,
-  "totalPages": null
+  "timestamp": "2026-03-17T...",
+  "requestId": "uuid"
 }
 ```
+
+Custom exceptions (14 total): EntityNotFoundException, DuplicateResourceException, OllamaUnavailableException, OllamaInferenceException, FortressActiveException, FortressOperationException, StorageException, EmbeddingException, UnsupportedFileTypeException, OcrException, SkillDisabledException, ApModeException, SensorConnectionException, InitializationException
 
 ---
 
 ## 14. Mappers / DTOs
 
-No MapStruct or ModelMapper used. All mapping is manual, typically via static factory methods (`XxxDto.from(entity)`) or inline in services. DTO structures are documented in the OpenAPI spec.
+Framework: Manual mapping (no MapStruct/ModelMapper). DTO conversions in service methods (`toDto`, `toSummary`, `toDetail`).
 
 ---
 
 ## 15. Utility Classes & Shared Components
 
-```
+=== AppConstants.java === (608 lines)
+Centralized constants for all 16 feature packages: server ports, JWT config, API paths, pagination defaults, file upload limits, sensor config, RAG settings, MIME types, rate limiting, MQTT topics, HuggingFace config, quantization settings.
+
 === AesEncryptionUtil.java ===
-Methods:
-  - encrypt(String): String — AES-256-GCM with random IV, Base64 output
-  - decrypt(String): String — reverse of encrypt
-Used by: AesAttributeConverter, ExternalApiSettingsService
+AES-256-GCM encryption. 12-byte random IV prepended to ciphertext. Key from `app.encryption.key` (64-char hex). Used by AesAttributeConverter for encrypting API keys at rest.
 
 === AesAttributeConverter.java ===
-JPA @Converter(autoApply=false) for transparent field-level encryption
-Used by: ExternalApiSettings (API keys)
+JPA @Converter for transparent field-level encryption via AesEncryptionUtil.
 
 === TokenCounter.java ===
-Methods:
-  - static estimateTokens(String): int — chars/4 heuristic
-  - static truncateToTokenLimit(List<OllamaMessage>, int): List<OllamaMessage>
-Used by: ContextWindowService, RagService
+- `estimateTokens(String): int` — 1 token ≈ 4 chars approximation
+- `truncateToTokenLimit(List<OllamaMessage>, int maxTokens): List<OllamaMessage>` — preserves system + last user
 
 === DeltaJsonUtils.java ===
-Methods:
-  - deltaToPlainText(String): String — Quill Delta JSON → plain text
-  - plainTextToDelta(String): String — plain text → Quill Delta JSON
-Used by: KnowledgeController (content editing)
+- `textToDeltaJson(String): String` — plain text → Quill Delta JSON
+- `deltaJsonToText(String): String` — Quill Delta JSON → plain text
 
 === ApiResponse.java ===
-Generic wrapper: ApiResponse<T>
-Fields: success, message, data, timestamp, page, totalElements, totalPages
-Factory methods: success(T), success(T, String), success(Page<T>, Function), error(String)
-
-=== AppConstants.java ===
-528+ named constants across all domains (Ollama defaults, JWT, rate limits, MQTT topics, knowledge limits, sensor defaults, model download settings, etc.)
-
-=== AuditAspect.java ===
-AOP @Around aspect on all @RestController methods
-Captures: userId, action, resource, HTTP method/path, IP, user-agent, status, duration
-Persists via AuditService.logAction()
-```
+Generic response wrapper: `ApiResponse<T>` with `success`, `message`, `data`, `timestamp`, `requestId`, pagination fields. Static factories: `success()`, `error()`, `paginated()`.
 
 ---
 
 ## 16. Database Schema (Live)
 
-Database not available for live schema dump. Schema managed by Hibernate DDL `update` (dev) / `validate` (prod). All entity definitions in Section 6 represent the authoritative schema.
-
-Tables (from entity mappings):
-`conversations`, `messages`, `users`, `scheduled_events`, `knowledge_documents`, `knowledge_chunks`, `ebooks`, `zim_files`, `mcp_api_tokens`, `memories`, `vector_document`, `device_registrations`, `audit_logs`, `insights`, `notifications`, `sensors`, `sensor_readings`, `external_api_settings`, `inventory_items`, `planned_tasks`, `skills`, `skill_executions`, `system_config`
-
-pgvector extension required for `vector_document.embedding` column (vector(768)).
+Database not available for live inspection. Schema derived from JPA entities:
+- 23 tables mapped from @Entity classes
+- All primary keys: UUID with GenerationType.UUID
+- Indexes defined on frequently-queried columns (user_id, timestamps)
+- pgvector extension required for vector_document table (768-dim float arrays)
+- Singleton tables: system_config, external_api_settings (unique guard columns)
+- No Flyway migrations in dev (Hibernate DDL: update). Flyway enabled in prod.
 
 ---
 
 ## 17. MESSAGE BROKER DETECTION
 
-No RabbitMQ or Kafka detected. The project uses **MQTT (Eclipse Paho)** for push notifications:
-
+No RabbitMQ or Kafka detected. MQTT (Eclipse Paho) used for push notifications:
 ```
-Broker: Mosquitto MQTT (external service)
-Connection: localhost:1883 (configurable via app.mqtt.broker-url)
-Disabled in dev/test (app.mqtt.enabled=false)
-
+Broker: MQTT (Paho v3)
+Conditional: @ConditionalOnProperty(app.mqtt.enabled=true), disabled in dev
 Topics:
-  - myoffgridai/sensors/readings — sensor events
+  - myoffgridai/notifications/{userId} — per-user notifications
+  - myoffgridai/sensors/readings — sensor data
   - myoffgridai/system/alerts — system alerts
-  - myoffgridai/notifications — general notifications
-  - myoffgridai/insights — insight events
-  - /myoffgridai/{userId}/notifications — per-user notifications
-  - /myoffgridai/broadcast — broadcast to all devices
-
-Publishers:
-  - MqttPublisherService.publishToTopic() → any topic
-  - MqttPublisherService.publishToUser() → user topic
-  - MqttPublisherService.publishBroadcast() → broadcast topic
-
-Consumers:
-  - No MQTT consumers on the server side
-  - Flutter client subscribes to user-specific topics
-
+  - myoffgridai/insights — AI insights
+Publisher: MqttPublisherService
 QoS: 1 (at least once)
 ```
 
 ---
 
-## 18. Cache Layer
+## 18. CACHE DETECTION
 
-No Redis or caching layer detected. No `@Cacheable`, `@CacheEvict`, or `CacheManager` annotations found.
+No Redis or caching layer detected. No @Cacheable, @CacheEvict, or CacheManager usage.
 
 ---
 
 ## 19. ENVIRONMENT VARIABLE INVENTORY
 
-```
-Variable | Used In | Default | Required in Prod
----------|---------|---------|------------------
-INFERENCE_PROVIDER | application-prod.yml | lmstudio | YES
-INFERENCE_BASE_URL | application-prod.yml | http://localhost:1234 | YES
-INFERENCE_MODEL | application-prod.yml | (model name) | YES
-INFERENCE_EMBED_MODEL | application-prod.yml | nomic-embed-text | YES
-INFERENCE_TIMEOUT | application-prod.yml | 120 | NO
-INFERENCE_MAX_TOKENS | application-prod.yml | 4096 | NO
-INFERENCE_TEMPERATURE | application-prod.yml | 0.7 | NO
-HF_MODELS_DIR | application-prod.yml | ~/.lmstudio/models | YES
-LMSTUDIO_API_URL | application-prod.yml | http://localhost:1234 | YES
-```
-
-Note: Database credentials, JWT secret, and encryption key are hardcoded in dev profile and must be externalized for production (not yet configured via env vars in application-prod.yml — see Technical Debt).
+| Variable | Used In | Default | Required in Prod |
+|----------|---------|---------|-----------------|
+| DB_URL | application-prod.yml | jdbc:postgresql://localhost:5432/myoffgridai | YES |
+| DB_USERNAME | application-prod.yml | myoffgridai | YES |
+| DB_PASSWORD | application-prod.yml | myoffgridai | YES |
+| JWT_SECRET | application-prod.yml | (none) | YES |
+| JWT_EXPIRATION_MS | application-prod.yml | 86400000 | NO |
+| JWT_REFRESH_EXPIRATION_MS | application-prod.yml | 604800000 | NO |
+| ENCRYPTION_KEY | application-prod.yml | (none) | YES |
+| INFERENCE_PROVIDER | application-prod.yml | llama-server | NO |
+| INFERENCE_BASE_URL | application-prod.yml | http://localhost:1234 | NO |
+| INFERENCE_MODEL | application-prod.yml | Qwen3.5-27B... | NO |
+| INFERENCE_EMBED_MODEL | application-prod.yml | nomic-embed-text | NO |
+| LLAMA_SERVER_BINARY | application-prod.yml | /usr/local/bin/llama-server | NO |
+| MODELS_DIR | application-prod.yml | ./models | NO |
+| ACTIVE_MODEL | application-prod.yml | (empty) | NO |
+| INFERENCE_PORT | application-prod.yml | 1234 | NO |
+| INFERENCE_CONTEXT_SIZE | application-prod.yml | 32768 | NO |
+| INFERENCE_GPU_LAYERS | application-prod.yml | 99 | NO |
+| INFERENCE_THREADS | application-prod.yml | 8 | NO |
+| INFERENCE_TIMEOUT | application-prod.yml | 120 | NO |
+| INFERENCE_MAX_TOKENS | application-prod.yml | 4096 | NO |
+| INFERENCE_TEMPERATURE | application-prod.yml | 0.7 | NO |
+| HEALTH_CHECK_INTERVAL | application-prod.yml | 30 | NO |
+| RESTART_DELAY | application-prod.yml | 5 | NO |
+| STARTUP_TIMEOUT | application-prod.yml | 120 | NO |
 
 ---
 
 ## 20. SERVICE DEPENDENCY MAP
 
-```
-This Service → Depends On
---------------------------
-Ollama: localhost:11434 (local LLM inference + embeddings)
-LM Studio: localhost:1234 (alternative inference provider, OpenAI-compatible)
-PostgreSQL: localhost:5432 (primary database + pgvector)
-Mosquitto MQTT: localhost:1883 (push notifications, optional)
-Kiwix: localhost:8888 (ZIM file serving, optional)
-Calibre Content Server: localhost:8081 (ebook metadata, optional)
-
-External APIs (internet required):
-  - HuggingFace Hub API: model catalog search
-  - Brave Search API: web search enrichment (optional, API key required)
-  - Anthropic Claude API: content summarization (optional, API key required)
-  - Project Gutenberg API: ebook search/download (optional)
-
-Downstream Consumers:
-  - MyOffGridAI Flutter client (all /api/** endpoints, MQTT subscriptions, SSE streams)
-  - External AI clients (Claude Desktop, Claude Code) via MCP at /mcp/sse
-```
+Standalone service — no inter-service dependencies. All dependencies are external:
+- PostgreSQL database (required)
+- Ollama or llama-server binary (required for inference)
+- MQTT broker (optional, for push notifications)
+- Anthropic Claude API (optional, for web enrichment)
+- Brave Search API (optional, for web search)
+- HuggingFace API (optional, for model catalog)
+- Gutendex API (optional, for Project Gutenberg)
+- Kiwix server (optional, for ZIM file serving)
+- Calibre Content Server (optional, for eBook conversion)
+- Tesseract OCR (optional, for image text extraction)
 
 ---
 
 ## 21. Known Technical Debt & Issues
 
-```
-Issue | Location | Severity | Notes
-------|----------|----------|------
-Stub: USB update handler | UsbResetWatcherService.java:20,45 | Medium | "stubbed for MI-002" — update zip processing not implemented
-TEMPERATURE false positive | SensorType.java:7 | Info | Grep matched "TEMPERATURE" as containing "TEMP" — not actual TODO
-Missing prod DB credentials externalization | application-prod.yml | High | DB URL, username, password not configured via env vars
-Missing prod JWT secret externalization | application-prod.yml | High | JWT secret not in env var form
-Missing prod encryption key externalization | application-prod.yml | Critical | AES encryption key hardcoded in dev, no prod override
-No optimistic locking (@Version) | All entities | Medium | No entities use @Version for concurrent write protection
-No soft delete pattern | All entities | Low | Hard deletes throughout
-No CI/CD pipeline | Root | Medium | No GitHub Actions, Jenkins, or GitLab CI detected
-JaCoCo coverage at 82.6% | pom.xml | High | Below 100% target (threshold set to 0.80 in pom.xml)
-Snyk: 1 CRITICAL vulnerability | tomcat-embed-core@10.1.41 | CRITICAL | Improper Certificate Validation — upgrade Spring Boot
-Snyk: 10 HIGH vulnerabilities | Various | High | See Section 22 for full list
-No API versioning | All controllers | Low | No /v1/ prefix in API paths
-No HTTPS enforcement in prod | application-prod.yml | Medium | No server.ssl configuration
-CORS allows all origins | SecurityConfig.java | Medium | Should restrict in production
-SQL string concatenation detected | 1 location | Low | Single instance found — verify parameterized
-Dev encryption key hardcoded | application.yml | Critical | 64-char hex key in dev profile
-```
+### TODO/Placeholder/Stub Scan Results
+
+| Issue | Location | Severity | Notes |
+|-------|----------|----------|-------|
+| "TEMPERATURE" matches TODO scan (false positive) | SensorType.java:7 | N/A | Enum value, not a TODO |
+| "stubbed for MI-002" in Javadoc | UsbResetWatcherService.java:20,45 | Medium | Update functionality is documented as stubbed for future milestone MI-002; the code handles the case gracefully (logs and returns) |
+
+### Dependency Vulnerabilities (Snyk)
+
+| Issue | Location | Severity | Notes |
+|-------|----------|----------|-------|
+| Incorrect Authorization | tomcat-embed-core@10.1.50 | HIGH | Fix: upgrade Spring Boot (pulls tomcat 9.0.114+) |
+| External Initialization of Trusted Variables | logback-core@1.5.22 | LOW | Fix: upgrade to 1.5.25 |
+
+### Architecture Notes
+
+| Issue | Location | Severity | Notes |
+|-------|----------|----------|-------|
+| No @Version (optimistic locking) on any entity | All entities | Medium | Could cause lost-update in concurrent writes |
+| No soft-delete pattern | All entities | Low | Hard deletes only |
+| CORS allows all origins in dev | SecurityConfig.java | Low | Appropriate for local network appliance |
+| API paths not versioned (/api/ not /api/v1/) | All controllers | Low | Single-deployment appliance, acceptable |
+| No OpenAPI/Swagger annotations | All controllers | Low | springdoc-openapi auto-generates from code |
+| Token blacklist is in-memory (lost on restart) | AuthService.java | Medium | Acceptable for single-node appliance with 24h token expiry |
+| SQL string concatenation | 1 occurrence found by SEC-03 check | Medium | Needs manual verification |
 
 ---
 
 ## 22. Security Vulnerability Scan (Snyk)
 
-Scan Date: 2026-03-16T23:24:33Z
+Scan Date: 2026-03-17
 Snyk CLI Version: 1.1303.0
 
 ### Dependency Vulnerabilities (Open Source)
-Critical: 1
-High: 10
-Medium: 7
-Low: 3
+Critical: 0
+High: 1
+Medium: 0
+Low: 1
 
 | Severity | Package | Version | Vulnerability | Fix Available |
 |----------|---------|---------|---------------|---------------|
-| CRITICAL | tomcat-embed-core | 10.1.41 | Improper Certificate Validation | 9.0.113+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Allocation of Resources Without Limits or Throttling | 9.0.106+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Integer Overflow or Wraparound | 9.0.107+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Allocation of Resources Without Limits or Throttling | 9.0.107+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Improper Resource Shutdown or Release | 9.0.108+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Relative Path Traversal | 9.0.109+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Untrusted Search Path | 9.0.106+ |
-| HIGH | tomcat-embed-core | 10.1.41 | Incorrect Authorization | 9.0.114+ |
-| HIGH | spring-beans | 6.2.7 | Relative Path Traversal | 6.2.10+ |
-| HIGH | spring-core | 6.2.7 | Incorrect Authorization | 6.2.11+ |
-| HIGH | spring-security-core | 6.4.6 | Incorrect Authorization | 6.4.10+ |
-| MEDIUM | logback-core | 1.5.18 | External Initialization of Trusted Variables | 1.3.16+ |
-| MEDIUM | netty-codec-http | 4.1.125.Final | CRLF Injection | 4.1.129.Final+ |
-| MEDIUM | poi-ooxml | 5.3.0 | Improper Input Validation | 5.4.0+ |
-| MEDIUM | tomcat-embed-core | 10.1.41 | Auth Bypass Using Alternate Path | 9.0.106+ |
-| MEDIUM | tomcat-embed-core | 10.1.41 | Session Fixation | 9.0.106+ |
-| MEDIUM | tomcat-embed-core | 10.1.41 | Improper Resource Shutdown or Release | 9.0.110+ |
-| MEDIUM | spring-web | 6.2.7 | HTTP Response Splitting | 6.1.21+ |
-| LOW | logback-core | 1.5.18 | External Initialization of Trusted Variables | 1.5.25+ |
-| LOW | reactor-netty-http | 1.2.6 | Sensitive System Information Exposure | 1.2.8+ |
-| LOW | tomcat-embed-core | 10.1.41 | Improper Authorization | 9.0.113+ |
-
-**Remediation:** Most vulnerabilities are resolved by upgrading `spring-boot-starter-parent` to a newer version (3.4.7+). The `poi-ooxml` vulnerability requires upgrading to 5.4.0.
+| HIGH | tomcat-embed-core | 10.1.50 | Incorrect Authorization | Upgrade to 9.0.114+ |
+| LOW | logback-core | 1.5.22 | External Initialization of Trusted Variables | Upgrade to 1.5.25 |
 
 ### Code Vulnerabilities (SAST)
-Snyk Code scan not available (error code 2). Flag as gap.
+SNYK CODE: SKIPPED — Snyk Code not enabled for organization. Not a gap in the codebase.
 
 ### IaC Findings
-Not scanned (no docker-compose.yml, no Kubernetes manifests).
+Not applicable (no Terraform/k8s).
+
+---
+
+## Filter Chain Execution Order
+
+1. @Order(1) **CaptivePortalRedirectFilter** — Redirects unrecognized requests to /setup during AP mode
+2. @Order(2) **MdcFilter** — Populates MDC (requestId, username, userId)
+3. @Order(3) **RateLimitingFilter** — Bucket4j rate limiting (10/200 req/min tiers)
+4. @Order(4) **RequestResponseLoggingFilter** — DEBUG-level HTTP metadata logging
+5. **JwtAuthFilter** — JWT validation and SecurityContext population
+6. **McpAuthFilter** — MCP token validation (only /mcp/** paths)
