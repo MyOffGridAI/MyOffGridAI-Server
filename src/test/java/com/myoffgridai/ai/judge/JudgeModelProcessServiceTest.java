@@ -1,7 +1,7 @@
 package com.myoffgridai.ai.judge;
 
 import com.myoffgridai.ai.service.ProcessBuilderFactory;
-import com.myoffgridai.config.LlamaServerProperties;
+import com.myoffgridai.config.InferenceProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +39,7 @@ class JudgeModelProcessServiceTest {
     Path tempDir;
 
     private JudgeProperties judgeProperties;
-    private LlamaServerProperties llamaProperties;
+    private InferenceProperties llamaProperties;
     private JudgeModelProcessService service;
     private Path binaryPath;
 
@@ -52,7 +52,7 @@ class JudgeModelProcessServiceTest {
         judgeProperties.setTimeoutSeconds(2);
         judgeProperties.setContextSize(4096);
 
-        llamaProperties = new LlamaServerProperties();
+        llamaProperties = new InferenceProperties();
         llamaProperties.setModelsDir(tempDir.toString());
 
         binaryPath = tempDir.resolve("llama-server");

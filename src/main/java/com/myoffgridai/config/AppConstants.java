@@ -551,6 +551,9 @@ public final class AppConstants {
     /** Inference provider value for Ollama */
     public static final String INFERENCE_PROVIDER_OLLAMA = "ollama";
 
+    /** Inference provider value for native java-llama.cpp JNI bindings */
+    public static final String INFERENCE_PROVIDER_NATIVE = "native";
+
     /** llama-server chat completions endpoint (OpenAI-compatible) */
     public static final String LLAMA_SERVER_CHAT_ENDPOINT = "/v1/chat/completions";
 
@@ -645,4 +648,47 @@ public final class AppConstants {
 
     /** Default OpenAI model for frontier completions */
     public static final String OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
+
+    // ── Hybrid Search ────────────────────────────────────────────────────────
+
+    /** Weight applied to vector (cosine) similarity in hybrid search scoring */
+    public static final double HYBRID_SEARCH_VECTOR_WEIGHT = 0.7;
+
+    /** Weight applied to BM25 keyword relevance in hybrid search scoring */
+    public static final double HYBRID_SEARCH_BM25_WEIGHT = 0.3;
+
+    // ── Inference Retry ──────────────────────────────────────────────────────
+
+    /** Maximum number of retry attempts for transient inference errors */
+    public static final int INFERENCE_MAX_RETRIES = 3;
+
+    /** Base delay in milliseconds for exponential backoff between retries */
+    public static final long INFERENCE_BACKOFF_BASE_MS = 500L;
+
+    /** Maximum backoff delay in milliseconds (caps exponential growth) */
+    public static final long INFERENCE_BACKOFF_CAP_MS = 10_000L;
+
+    // ── Memory Compaction ────────────────────────────────────────────────────
+
+    /** Ratio of context window usage that triggers compaction (0.80 = 80%) */
+    public static final double COMPACTION_THRESHOLD_RATIO = 0.80;
+
+    /** Minimum message count before compaction is allowed */
+    public static final int COMPACTION_MIN_MESSAGES = 10;
+
+    /** Maximum tokens for compaction summary output */
+    public static final int COMPACTION_SUMMARY_MAX_TOKENS = 512;
+
+    // ── Token Usage ──────────────────────────────────────────────────────────
+
+    /** Default page size for token usage history queries */
+    public static final int TOKEN_USAGE_PAGE_SIZE_DEFAULT = 30;
+
+    // ── Heartbeat ────────────────────────────────────────────────────────────
+
+    /** Default interval in seconds between heartbeat task evaluations */
+    public static final int HEARTBEAT_DEFAULT_INTERVAL_SECONDS = 300;
+
+    /** Maximum context tokens for heartbeat prompt execution */
+    public static final int HEARTBEAT_MAX_CONTEXT_TOKENS = 2048;
 }

@@ -1,6 +1,6 @@
 package com.myoffgridai.ai.judge;
 
-import com.myoffgridai.config.LlamaServerProperties;
+import com.myoffgridai.config.InferenceProperties;
 import com.myoffgridai.ai.service.ProcessBuilderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  * Manages a second llama-server process dedicated to the AI judge model.
  *
  * <p>Runs on a separate port ({@link JudgeProperties#getPort()}) from the
- * primary inference server. Unlike {@link com.myoffgridai.ai.service.LlamaServerProcessService},
+ * primary inference engine. Unlike the primary native inference service,
  * this service does not auto-start on boot or auto-restart on crash — if the
  * judge process dies, judge evaluation is simply skipped gracefully.</p>
  *
@@ -31,7 +31,7 @@ public class JudgeModelProcessService implements DisposableBean {
     private static final Logger log = LoggerFactory.getLogger(JudgeModelProcessService.class);
 
     private final JudgeProperties judgeProperties;
-    private final LlamaServerProperties llamaProperties;
+    private final InferenceProperties llamaProperties;
     private final ProcessBuilderFactory processBuilderFactory;
 
     private volatile Process process;
@@ -40,11 +40,11 @@ public class JudgeModelProcessService implements DisposableBean {
      * Constructs the judge model process service.
      *
      * @param judgeProperties       judge-specific configuration
-     * @param llamaProperties       llama-server configuration (reuses binary path and models dir)
+     * @param llamaProperties       inference configuration (reuses binary path and models dir)
      * @param processBuilderFactory factory for creating ProcessBuilder instances
      */
     public JudgeModelProcessService(JudgeProperties judgeProperties,
-                                     LlamaServerProperties llamaProperties,
+                                     InferenceProperties llamaProperties,
                                      ProcessBuilderFactory processBuilderFactory) {
         this.judgeProperties = judgeProperties;
         this.llamaProperties = llamaProperties;

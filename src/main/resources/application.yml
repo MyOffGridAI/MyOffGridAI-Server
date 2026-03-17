@@ -48,7 +48,7 @@ app:
     expiration-ms: 86400000
     refresh-expiration-ms: 604800000
   inference:
-    provider: llama-server
+    provider: native
     base-url: http://localhost:1234
     model: Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
     embed-model: nomic-embed-text
@@ -65,6 +65,11 @@ app:
     health-check-interval-seconds: 30
     restart-delay-seconds: 5
     startup-timeout-seconds: 120
+    native:
+      context-size: 32768
+      gpu-layers: 99
+      threads: 8
+      enable-embedding: false
   ollama:
     base-url: http://localhost:11434
     model: hf.co/Qwen/Qwen3-32B-GGUF:Q4_K_M

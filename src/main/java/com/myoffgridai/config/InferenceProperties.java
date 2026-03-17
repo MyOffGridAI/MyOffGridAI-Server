@@ -4,15 +4,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Configuration properties for the llama-server process manager.
+ * Configuration properties for inference providers and shared model management.
  *
  * <p>Binds properties under the {@code app.inference} prefix including
  * the binary path, models directory, active model, server port, context
  * size, GPU layers, thread count, and health/restart settings.</p>
+ *
+ * <p>Used by both the primary inference provider and by
+ * {@link com.myoffgridai.ai.judge.JudgeModelProcessService} for the judge
+ * llama-server process (which needs the binary path and models directory).</p>
  */
 @Component
 @ConfigurationProperties(prefix = "app.inference")
-public class LlamaServerProperties {
+public class InferenceProperties {
 
     private String llamaServerBinary;
     private String modelsDir;

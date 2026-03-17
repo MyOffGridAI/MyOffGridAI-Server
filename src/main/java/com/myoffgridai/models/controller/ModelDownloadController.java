@@ -1,14 +1,15 @@
 package com.myoffgridai.models.controller;
 
-import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.ai.dto.NativeLlamaStatusDto;
 import com.myoffgridai.ai.dto.SetActiveModelRequest;
-import com.myoffgridai.ai.service.LlamaServerProcessService;
+import com.myoffgridai.ai.service.NativeLlamaInferenceService;
 import com.myoffgridai.common.response.ApiResponse;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.models.dto.*;
 import com.myoffgridai.models.service.ModelCatalogService;
 import com.myoffgridai.models.service.ModelDownloadProgressRegistry;
 import com.myoffgridai.models.service.ModelDownloadService;
+import com.myoffgridai.system.service.SystemConfigService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,24 +37,28 @@ public class ModelDownloadController {
     private final ModelCatalogService catalogService;
     private final ModelDownloadService downloadService;
     private final ModelDownloadProgressRegistry progressRegistry;
-    private final LlamaServerProcessService llamaServerProcessService;
+    private final SystemConfigService systemConfigService;
+    private final NativeLlamaInferenceService nativeInferenceService;
 
     /**
      * Constructs the controller.
      *
-     * @param catalogService            the HuggingFace catalog service
-     * @param downloadService           the model download service
-     * @param progressRegistry          the SSE progress registry
-     * @param llamaServerProcessService the llama-server process service (nullable)
+     * @param catalogService          the HuggingFace catalog service
+     * @param downloadService         the model download service
+     * @param progressRegistry        the SSE progress registry
+     * @param systemConfigService     the system config service
+     * @param nativeInferenceService  the native inference service (nullable)
      */
     public ModelDownloadController(ModelCatalogService catalogService,
                                    ModelDownloadService downloadService,
                                    ModelDownloadProgressRegistry progressRegistry,
-                                   @Autowired(required = false) LlamaServerProcessService llamaServerProcessService) {
+                                   SystemConfigService systemConfigService,
+                                   @Autowired(required = false) NativeLlamaInferenceService nativeInferenceService) {
         this.catalogService = catalogService;
         this.downloadService = downloadService;
         this.progressRegistry = progressRegistry;
-        this.llamaServerProcessService = llamaServerProcessService;
+        this.systemConfigService = systemConfigService;
+        this.nativeInferenceService = nativeInferenceService;
     }
 
     // ── Catalog endpoints (authenticated) ────────────────────────────────
@@ -195,52 +200,55 @@ public class ModelDownloadController {
         return ApiResponse.success(null);
     }
 
-    // ── llama-server management endpoints ─────────────────────────────
+    // ── Model management endpoints ─────────────────────────────────────
 
     /**
-     * Sets the active model and restarts llama-server.
+     * Sets the active model and loads it into the native inference engine.
      *
      * @param request the set active model request
-     * @return the llama-server status after model switch
+     * @return the native inference status after model load
      */
     @PostMapping("/active")
     @PreAuthorize("hasRole('OWNER')")
-    public ApiResponse<LlamaServerStatusDto> setActiveModel(
+    public ApiResponse<NativeLlamaStatusDto> setActiveModel(
             @Valid @RequestBody SetActiveModelRequest request) {
         log.info("Setting active model: {}", request.filename());
-        if (llamaServerProcessService == null) {
-            return ApiResponse.error("llama-server process service not available");
+        if (nativeInferenceService == null) {
+            return ApiResponse.error("Native inference service not available");
         }
-        LlamaServerStatusDto status = llamaServerProcessService.switchModel(request.filename());
-        return ApiResponse.success(status);
+        nativeInferenceService.loadModel(request.filename());
+        return ApiResponse.success(nativeInferenceService.getStatus());
     }
 
     /**
-     * Returns the current llama-server process status.
+     * Returns the current inference engine status.
      *
-     * @return the server status
+     * @return the engine status
      */
     @GetMapping("/server-status")
-    public ApiResponse<LlamaServerStatusDto> getServerStatus() {
-        if (llamaServerProcessService == null) {
-            return ApiResponse.error("llama-server process service not available");
+    public ApiResponse<NativeLlamaStatusDto> getServerStatus() {
+        if (nativeInferenceService == null) {
+            return ApiResponse.error("Native inference service not available");
         }
-        return ApiResponse.success(llamaServerProcessService.getStatus());
+        return ApiResponse.success(nativeInferenceService.getStatus());
     }
 
     /**
-     * Restarts the llama-server process.
+     * Reloads the currently active model in the native inference engine.
      *
-     * @return success response
+     * @return the engine status after reload
      */
     @PostMapping("/restart")
     @PreAuthorize("hasRole('OWNER')")
-    public ApiResponse<LlamaServerStatusDto> restartServer() {
-        log.info("Restart llama-server requested");
-        if (llamaServerProcessService == null) {
-            return ApiResponse.error("llama-server process service not available");
+    public ApiResponse<NativeLlamaStatusDto> reloadModel() {
+        log.info("Reload model requested");
+        if (nativeInferenceService == null) {
+            return ApiResponse.error("Native inference service not available");
         }
-        llamaServerProcessService.restart();
-        return ApiResponse.success(llamaServerProcessService.getStatus());
+        String currentModel = systemConfigService.getActiveModelFilename();
+        if (currentModel != null && !currentModel.isBlank()) {
+            nativeInferenceService.loadModel(currentModel);
+        }
+        return ApiResponse.success(nativeInferenceService.getStatus());
     }
 }
