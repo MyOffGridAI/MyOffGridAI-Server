@@ -597,4 +597,52 @@ public final class AppConstants {
 
     /** Timeout in minutes for model file downloads */
     public static final int HF_DOWNLOAD_TIMEOUT_MINUTES = 120;
+
+    // ── Model Quantization Recommendation ──────────────────────────────────
+
+    /** RAM overhead multiplier for loaded models (accounts for KV cache, runtime buffers) */
+    public static final double MODEL_RAM_OVERHEAD_FACTOR = 1.2;
+
+    /** RAM reserved for OS and other processes in bytes (4 GB) */
+    public static final long MODEL_RAM_OS_RESERVE_BYTES = 4L * 1024 * 1024 * 1024;
+
+    // ── Judge Model ──────────────────────────────────────────────────────────
+
+    /** Default port for the judge llama-server instance */
+    public static final int JUDGE_DEFAULT_PORT = 1235;
+
+    /** Default minimum score threshold; below this the judge recommends cloud refinement */
+    public static final double JUDGE_DEFAULT_SCORE_THRESHOLD = 7.5;
+
+    /** Default timeout in seconds for judge model inference and health checks */
+    public static final int JUDGE_DEFAULT_TIMEOUT_SECONDS = 30;
+
+    /** Context window size in tokens for the judge model */
+    public static final int JUDGE_CONTEXT_SIZE = 4096;
+
+    /** SSE event type emitted when the judge begins evaluating a local response */
+    public static final String JUDGE_EVALUATING_EVENT = "JUDGE_EVALUATING";
+
+    /** SSE event type emitted when judge evaluation is complete */
+    public static final String JUDGE_RESULT_EVENT = "JUDGE_RESULT";
+
+    /** SSE event type for tokens streamed from a cloud frontier model */
+    public static final String ENHANCED_CONTENT_EVENT = "ENHANCED_CONTENT";
+
+    /** SSE event type emitted when the enhanced cloud response stream is complete */
+    public static final String ENHANCED_DONE_EVENT = "ENHANCED_DONE";
+
+    // ── Frontier API Providers ───────────────────────────────────────────────
+
+    /** Grok (xAI) API base URL (OpenAI-compatible) */
+    public static final String GROK_API_BASE_URL = "https://api.x.ai/v1";
+
+    /** Default Grok model for frontier completions */
+    public static final String GROK_DEFAULT_MODEL = "grok-3-mini";
+
+    /** OpenAI API base URL */
+    public static final String OPENAI_API_BASE_URL = "https://api.openai.com/v1";
+
+    /** Default OpenAI model for frontier completions */
+    public static final String OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
 }

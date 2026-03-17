@@ -1,5 +1,6 @@
 package com.myoffgridai.settings.service;
 
+import com.myoffgridai.frontier.FrontierProvider;
 import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
 import com.myoffgridai.settings.dto.UpdateExternalApiSettingsRequest;
 import com.myoffgridai.settings.model.ExternalApiSettings;
@@ -38,6 +39,20 @@ class ExternalApiSettingsServiceTest {
         entity.setAnthropicModel("claude-sonnet-4-20250514");
     }
 
+    // ── Helper to build a full request with sensible defaults ───────────
+
+    private UpdateExternalApiSettingsRequest buildRequest(
+            String anthropicApiKey, String anthropicModel, boolean anthropicEnabled,
+            String braveApiKey, boolean braveEnabled, int maxWebFetchSizeKb, int searchResultLimit,
+            String huggingFaceToken, boolean huggingFaceEnabled) {
+        return new UpdateExternalApiSettingsRequest(
+                anthropicApiKey, anthropicModel, anthropicEnabled,
+                braveApiKey, braveEnabled, maxWebFetchSizeKb, searchResultLimit,
+                huggingFaceToken, huggingFaceEnabled,
+                null, null, null, null, null, null, null, null
+        );
+    }
+
     @Test
     void getSettings_createsDefaultsWhenNotFound() {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.empty());
@@ -51,6 +66,13 @@ class ExternalApiSettingsServiceTest {
         assertFalse(dto.braveKeyConfigured());
         assertEquals(512, dto.maxWebFetchSizeKb());
         assertEquals(5, dto.searchResultLimit());
+        assertFalse(dto.grokEnabled());
+        assertFalse(dto.grokKeyConfigured());
+        assertFalse(dto.openAiEnabled());
+        assertFalse(dto.openAiKeyConfigured());
+        assertFalse(dto.judgeEnabled());
+        assertNull(dto.judgeModelFilename());
+        assertEquals(7.5, dto.judgeScoreThreshold());
         verify(repository).save(any());
     }
 
@@ -70,13 +92,16 @@ class ExternalApiSettingsServiceTest {
     void getSettings_neverReturnsActualKeys() {
         entity.setAnthropicApiKey("secret-key-123");
         entity.setBraveApiKey("brave-key-456");
+        entity.setGrokApiKey("grok-key-789");
+        entity.setOpenAiApiKey("openai-key-012");
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
 
         ExternalApiSettingsDto dto = service.getSettings();
 
-        // DTO has boolean flags, not keys
         assertTrue(dto.anthropicKeyConfigured());
         assertTrue(dto.braveKeyConfigured());
+        assertTrue(dto.grokKeyConfigured());
+        assertTrue(dto.openAiKeyConfigured());
     }
 
     @Test
@@ -84,7 +109,7 @@ class ExternalApiSettingsServiceTest {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
         when(repository.save(any())).thenReturn(entity);
 
-        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+        UpdateExternalApiSettingsRequest request = buildRequest(
                 "new-anthropic-key", "claude-sonnet-4-20250514", true,
                 "new-brave-key", true, 1024, 10,
                 null, false
@@ -111,7 +136,7 @@ class ExternalApiSettingsServiceTest {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
         when(repository.save(any())).thenReturn(entity);
 
-        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+        UpdateExternalApiSettingsRequest request = buildRequest(
                 null, "claude-sonnet-4-20250514", true,
                 null, true, 512, 5,
                 null, false
@@ -132,7 +157,7 @@ class ExternalApiSettingsServiceTest {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
         when(repository.save(any())).thenReturn(entity);
 
-        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+        UpdateExternalApiSettingsRequest request = buildRequest(
                 "", "claude-sonnet-4-20250514", false,
                 null, false, 512, 5,
                 null, false
@@ -231,7 +256,7 @@ class ExternalApiSettingsServiceTest {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
         when(repository.save(any())).thenReturn(entity);
 
-        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+        UpdateExternalApiSettingsRequest request = buildRequest(
                 null, "claude-sonnet-4-20250514", false,
                 null, false, 512, 5,
                 "hf_new_token_456", true
@@ -253,7 +278,7 @@ class ExternalApiSettingsServiceTest {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
         when(repository.save(any())).thenReturn(entity);
 
-        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+        UpdateExternalApiSettingsRequest request = buildRequest(
                 null, "claude-sonnet-4-20250514", false,
                 null, false, 512, 5,
                 "", false
@@ -273,7 +298,7 @@ class ExternalApiSettingsServiceTest {
         when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
         when(repository.save(any())).thenReturn(entity);
 
-        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+        UpdateExternalApiSettingsRequest request = buildRequest(
                 null, "claude-sonnet-4-20250514", false,
                 null, false, 512, 5,
                 null, true
@@ -320,5 +345,193 @@ class ExternalApiSettingsServiceTest {
 
         assertTrue(dto.huggingFaceEnabled());
         assertFalse(dto.huggingFaceKeyConfigured());
+    }
+
+    // ── Grok key tests ──────────────────────────────────────────────────────
+
+    @Test
+    void getGrokKey_returnsEmptyWhenDisabled() {
+        entity.setGrokApiKey("grok-key");
+        entity.setGrokEnabled(false);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertTrue(service.getGrokKey().isEmpty());
+    }
+
+    @Test
+    void getGrokKey_returnsEmptyWhenNoKey() {
+        entity.setGrokEnabled(true);
+        entity.setGrokApiKey(null);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertTrue(service.getGrokKey().isEmpty());
+    }
+
+    @Test
+    void getGrokKey_returnsKeyWhenConfigured() {
+        entity.setGrokApiKey("grok-key-123");
+        entity.setGrokEnabled(true);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        Optional<String> key = service.getGrokKey();
+        assertTrue(key.isPresent());
+        assertEquals("grok-key-123", key.get());
+    }
+
+    // ── OpenAI key tests ────────────────────────────────────────────────────
+
+    @Test
+    void getOpenAiKey_returnsEmptyWhenDisabled() {
+        entity.setOpenAiApiKey("openai-key");
+        entity.setOpenAiEnabled(false);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertTrue(service.getOpenAiKey().isEmpty());
+    }
+
+    @Test
+    void getOpenAiKey_returnsEmptyWhenNoKey() {
+        entity.setOpenAiEnabled(true);
+        entity.setOpenAiApiKey(null);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertTrue(service.getOpenAiKey().isEmpty());
+    }
+
+    @Test
+    void getOpenAiKey_returnsKeyWhenConfigured() {
+        entity.setOpenAiApiKey("sk-openai-key");
+        entity.setOpenAiEnabled(true);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        Optional<String> key = service.getOpenAiKey();
+        assertTrue(key.isPresent());
+        assertEquals("sk-openai-key", key.get());
+    }
+
+    // ── Frontier provider tests ─────────────────────────────────────────────
+
+    @Test
+    void getPreferredFrontierProvider_defaultsToClaude() {
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertEquals(FrontierProvider.CLAUDE, service.getPreferredFrontierProvider());
+    }
+
+    @Test
+    void getPreferredFrontierProvider_returnsConfiguredProvider() {
+        entity.setPreferredFrontierProvider(FrontierProvider.GROK);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        assertEquals(FrontierProvider.GROK, service.getPreferredFrontierProvider());
+    }
+
+    // ── Judge settings tests ────────────────────────────────────────────────
+
+    @Test
+    void updateSettings_updatesGrokAndOpenAiKeys() {
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                null, false,
+                "new-grok-key", true,
+                "new-openai-key", true,
+                FrontierProvider.GROK,
+                null, null, null
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+
+        ExternalApiSettings saved = captor.getValue();
+        assertEquals("new-grok-key", saved.getGrokApiKey());
+        assertTrue(saved.isGrokEnabled());
+        assertEquals("new-openai-key", saved.getOpenAiApiKey());
+        assertTrue(saved.isOpenAiEnabled());
+        assertEquals(FrontierProvider.GROK, saved.getPreferredFrontierProvider());
+    }
+
+    @Test
+    void updateSettings_clearsGrokKeyOnEmptyString() {
+        entity.setGrokApiKey("existing-grok-key");
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                null, false,
+                "", null, null, null, null, null, null, null
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+        assertNull(captor.getValue().getGrokApiKey());
+    }
+
+    @Test
+    void updateSettings_updatesJudgeSettings() {
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                null, false,
+                null, null, null, null, null,
+                true, "judge-model.gguf", 8.0
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+
+        ExternalApiSettings saved = captor.getValue();
+        assertTrue(saved.isJudgeEnabled());
+        assertEquals("judge-model.gguf", saved.getJudgeModelFilename());
+        assertEquals(8.0, saved.getJudgeScoreThreshold());
+    }
+
+    @Test
+    void updateSettings_clearsJudgeModelFilenameOnEmptyString() {
+        entity.setJudgeModelFilename("old-judge.gguf");
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+        when(repository.save(any())).thenReturn(entity);
+
+        UpdateExternalApiSettingsRequest request = new UpdateExternalApiSettingsRequest(
+                null, "claude-sonnet-4-20250514", false,
+                null, false, 512, 5,
+                null, false,
+                null, null, null, null, null,
+                null, "", null
+        );
+
+        service.updateSettings(request);
+
+        ArgumentCaptor<ExternalApiSettings> captor = ArgumentCaptor.forClass(ExternalApiSettings.class);
+        verify(repository).save(captor.capture());
+        assertNull(captor.getValue().getJudgeModelFilename());
+    }
+
+    @Test
+    void toDto_includesJudgeFields() {
+        entity.setJudgeEnabled(true);
+        entity.setJudgeModelFilename("judge.gguf");
+        entity.setJudgeScoreThreshold(6.0);
+        when(repository.findBySingletonGuard("SINGLETON")).thenReturn(Optional.of(entity));
+
+        ExternalApiSettingsDto dto = service.getSettings();
+
+        assertTrue(dto.judgeEnabled());
+        assertEquals("judge.gguf", dto.judgeModelFilename());
+        assertEquals(6.0, dto.judgeScoreThreshold());
     }
 }

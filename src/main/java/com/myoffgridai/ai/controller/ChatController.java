@@ -408,6 +408,8 @@ public class ChatController {
                 m.getTokenCount(), m.getHasRagContext(),
                 m.getThinkingContent(), m.getTokensPerSecond(),
                 m.getInferenceTimeSeconds(), m.getStopReason(),
-                m.getThinkingTokenCount(), m.getCreatedAt());
+                m.getThinkingTokenCount(),
+                m.getSourceTag(), m.getJudgeScore(), m.getJudgeReason(),
+                m.getCreatedAt());
     }
 }

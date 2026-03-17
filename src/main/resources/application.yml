@@ -80,6 +80,13 @@ app:
     enabled: false
     broker-url: tcp://localhost:1883
     client-id: myoffgridai-server
+  judge:
+    enabled: false
+    model-filename: ""
+    port: 1235
+    score-threshold: 7.5
+    timeout-seconds: 30
+    context-size: 4096
   library:
     zim-directory: ./library/zim
     ebook-directory: ./library/ebooks

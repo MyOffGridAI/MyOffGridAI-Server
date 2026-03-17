@@ -1,5 +1,6 @@
 package com.myoffgridai.ai.model;
 
+import com.myoffgridai.ai.SourceTag;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -53,6 +54,19 @@ public class Message {
 
     @Column(name = "thinking_token_count")
     private Integer thinkingTokenCount;
+
+    /** Indicates whether the response is local-only or was enhanced by a cloud frontier model. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_tag", length = 20, nullable = false)
+    private SourceTag sourceTag = SourceTag.LOCAL;
+
+    /** Quality score assigned by the AI judge model (1–10), or null if judge was not used. */
+    @Column(name = "judge_score")
+    private Double judgeScore;
+
+    /** Brief explanation from the AI judge for the assigned score. */
+    @Column(name = "judge_reason", columnDefinition = "TEXT")
+    private String judgeReason;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -164,5 +178,29 @@ public class Message {
 
     public void setThinkingTokenCount(Integer thinkingTokenCount) {
         this.thinkingTokenCount = thinkingTokenCount;
+    }
+
+    public SourceTag getSourceTag() {
+        return sourceTag;
+    }
+
+    public void setSourceTag(SourceTag sourceTag) {
+        this.sourceTag = sourceTag != null ? sourceTag : SourceTag.LOCAL;
+    }
+
+    public Double getJudgeScore() {
+        return judgeScore;
+    }
+
+    public void setJudgeScore(Double judgeScore) {
+        this.judgeScore = judgeScore;
+    }
+
+    public String getJudgeReason() {
+        return judgeReason;
+    }
+
+    public void setJudgeReason(String judgeReason) {
+        this.judgeReason = judgeReason;
     }
 }

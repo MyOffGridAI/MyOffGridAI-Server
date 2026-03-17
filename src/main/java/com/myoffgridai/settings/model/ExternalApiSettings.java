@@ -1,6 +1,8 @@
 package com.myoffgridai.settings.model;
 
 import com.myoffgridai.common.util.AesAttributeConverter;
+import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.frontier.FrontierProvider;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -58,6 +60,41 @@ public class ExternalApiSettings {
     @Column(name = "hugging_face_enabled", nullable = false)
     private boolean huggingFaceEnabled = false;
 
+    /** Grok (xAI) API key, encrypted at rest. */
+    @Convert(converter = AesAttributeConverter.class)
+    @Column(name = "grok_api_key", length = 1000)
+    private String grokApiKey;
+
+    /** Whether the Grok (xAI) frontier provider is enabled. */
+    @Column(name = "grok_enabled", nullable = false)
+    private boolean grokEnabled = false;
+
+    /** OpenAI API key, encrypted at rest. */
+    @Convert(converter = AesAttributeConverter.class)
+    @Column(name = "openai_api_key", length = 1000)
+    private String openAiApiKey;
+
+    /** Whether the OpenAI frontier provider is enabled. */
+    @Column(name = "openai_enabled", nullable = false)
+    private boolean openAiEnabled = false;
+
+    /** Preferred frontier provider for cloud refinement routing. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "preferred_frontier_provider", length = 20)
+    private FrontierProvider preferredFrontierProvider = FrontierProvider.CLAUDE;
+
+    /** Whether the AI judge evaluation pipeline is enabled. */
+    @Column(name = "judge_enabled", nullable = false)
+    private boolean judgeEnabled = false;
+
+    /** Filename of the judge GGUF model in the models directory. */
+    @Column(name = "judge_model_filename", length = 500)
+    private String judgeModelFilename;
+
+    /** Minimum judge score (1–10) below which cloud refinement is triggered. */
+    @Column(name = "judge_score_threshold", nullable = false)
+    private double judgeScoreThreshold = AppConstants.JUDGE_DEFAULT_SCORE_THRESHOLD;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -108,6 +145,35 @@ public class ExternalApiSettings {
 
     public boolean isHuggingFaceEnabled() { return huggingFaceEnabled; }
     public void setHuggingFaceEnabled(boolean huggingFaceEnabled) { this.huggingFaceEnabled = huggingFaceEnabled; }
+
+    public String getGrokApiKey() { return grokApiKey; }
+    public void setGrokApiKey(String grokApiKey) { this.grokApiKey = grokApiKey; }
+
+    public boolean isGrokEnabled() { return grokEnabled; }
+    public void setGrokEnabled(boolean grokEnabled) { this.grokEnabled = grokEnabled; }
+
+    public String getOpenAiApiKey() { return openAiApiKey; }
+    public void setOpenAiApiKey(String openAiApiKey) { this.openAiApiKey = openAiApiKey; }
+
+    public boolean isOpenAiEnabled() { return openAiEnabled; }
+    public void setOpenAiEnabled(boolean openAiEnabled) { this.openAiEnabled = openAiEnabled; }
+
+    public FrontierProvider getPreferredFrontierProvider() { return preferredFrontierProvider; }
+    public void setPreferredFrontierProvider(FrontierProvider preferredFrontierProvider) {
+        this.preferredFrontierProvider = preferredFrontierProvider != null ? preferredFrontierProvider : FrontierProvider.CLAUDE;
+    }
+
+    public boolean isJudgeEnabled() { return judgeEnabled; }
+    public void setJudgeEnabled(boolean judgeEnabled) { this.judgeEnabled = judgeEnabled; }
+
+    public String getJudgeModelFilename() { return judgeModelFilename; }
+    public void setJudgeModelFilename(String judgeModelFilename) { this.judgeModelFilename = judgeModelFilename; }
+
+    public double getJudgeScoreThreshold() { return judgeScoreThreshold; }
+    public void setJudgeScoreThreshold(double judgeScoreThreshold) {
+        this.judgeScoreThreshold = judgeScoreThreshold >= 0.0 && judgeScoreThreshold <= 10.0
+                ? judgeScoreThreshold : AppConstants.JUDGE_DEFAULT_SCORE_THRESHOLD;
+    }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

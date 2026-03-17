@@ -1,5 +1,6 @@
 package com.myoffgridai.settings.service;
 
+import com.myoffgridai.frontier.FrontierProvider;
 import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
 import com.myoffgridai.settings.dto.UpdateExternalApiSettingsRequest;
 import com.myoffgridai.settings.model.ExternalApiSettings;
@@ -50,7 +51,8 @@ public class ExternalApiSettingsService {
      * Updates external API settings from the given request.
      *
      * <p>API keys are only updated when a non-null value is provided.
-     * An empty string clears the key.</p>
+     * An empty string clears the key. Boolean and enum fields use null
+     * to mean "no change".</p>
      *
      * @param request the update request
      * @return the updated settings DTO (keys are never included)
@@ -77,12 +79,43 @@ public class ExternalApiSettingsService {
             log.info("HuggingFace token {}", key != null ? "updated" : "cleared");
         }
 
+        if (request.grokApiKey() != null) {
+            String key = request.grokApiKey().isBlank() ? null : request.grokApiKey();
+            settings.setGrokApiKey(key);
+            log.info("Grok API key {}", key != null ? "updated" : "cleared");
+        }
+
+        if (request.openAiApiKey() != null) {
+            String key = request.openAiApiKey().isBlank() ? null : request.openAiApiKey();
+            settings.setOpenAiApiKey(key);
+            log.info("OpenAI API key {}", key != null ? "updated" : "cleared");
+        }
+
         settings.setAnthropicModel(request.anthropicModel());
         settings.setAnthropicEnabled(request.anthropicEnabled());
         settings.setBraveEnabled(request.braveEnabled());
         settings.setHuggingFaceEnabled(request.huggingFaceEnabled());
         settings.setMaxWebFetchSizeKb(request.maxWebFetchSizeKb());
         settings.setSearchResultLimit(request.searchResultLimit());
+
+        if (request.grokEnabled() != null) {
+            settings.setGrokEnabled(request.grokEnabled());
+        }
+        if (request.openAiEnabled() != null) {
+            settings.setOpenAiEnabled(request.openAiEnabled());
+        }
+        if (request.preferredFrontierProvider() != null) {
+            settings.setPreferredFrontierProvider(request.preferredFrontierProvider());
+        }
+        if (request.judgeEnabled() != null) {
+            settings.setJudgeEnabled(request.judgeEnabled());
+        }
+        if (request.judgeModelFilename() != null) {
+            settings.setJudgeModelFilename(request.judgeModelFilename().isBlank() ? null : request.judgeModelFilename());
+        }
+        if (request.judgeScoreThreshold() != null) {
+            settings.setJudgeScoreThreshold(request.judgeScoreThreshold());
+        }
 
         settings = repository.save(settings);
         return toDto(settings);
@@ -163,6 +196,47 @@ public class ExternalApiSettingsService {
         return Optional.of(settings.getHuggingFaceToken());
     }
 
+    /**
+     * Returns the decrypted Grok API key if configured and enabled.
+     * For internal service use only — never exposed via REST.
+     *
+     * @return the decrypted key, or empty if not configured or disabled
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> getGrokKey() {
+        ExternalApiSettings settings = getOrCreateEntity();
+        if (!settings.isGrokEnabled() || settings.getGrokApiKey() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(settings.getGrokApiKey());
+    }
+
+    /**
+     * Returns the decrypted OpenAI API key if configured and enabled.
+     * For internal service use only — never exposed via REST.
+     *
+     * @return the decrypted key, or empty if not configured or disabled
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> getOpenAiKey() {
+        ExternalApiSettings settings = getOrCreateEntity();
+        if (!settings.isOpenAiEnabled() || settings.getOpenAiApiKey() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(settings.getOpenAiApiKey());
+    }
+
+    /**
+     * Returns the preferred frontier provider for cloud refinement routing.
+     *
+     * @return the preferred provider enum value
+     */
+    @Transactional(readOnly = true)
+    public FrontierProvider getPreferredFrontierProvider() {
+        FrontierProvider provider = getOrCreateEntity().getPreferredFrontierProvider();
+        return provider != null ? provider : FrontierProvider.CLAUDE;
+    }
+
     private ExternalApiSettings getOrCreateEntity() {
         return repository.findBySingletonGuard("SINGLETON")
                 .orElseGet(() -> {
@@ -181,7 +255,15 @@ public class ExternalApiSettingsService {
                 entity.getMaxWebFetchSizeKb(),
                 entity.getSearchResultLimit(),
                 entity.isHuggingFaceEnabled(),
-                entity.getHuggingFaceToken() != null
+                entity.getHuggingFaceToken() != null,
+                entity.isGrokEnabled(),
+                entity.getGrokApiKey() != null,
+                entity.isOpenAiEnabled(),
+                entity.getOpenAiApiKey() != null,
+                entity.getPreferredFrontierProvider(),
+                entity.isJudgeEnabled(),
+                entity.getJudgeModelFilename(),
+                entity.getJudgeScoreThreshold()
         );
     }
 }

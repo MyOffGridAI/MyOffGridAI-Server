@@ -1,5 +1,6 @@
 package com.myoffgridai.ai.dto;
 
+import com.myoffgridai.ai.SourceTag;
 import com.myoffgridai.ai.model.MessageRole;
 
 import java.time.Instant;
@@ -22,6 +23,9 @@ public record MessageDto(
         Double inferenceTimeSeconds,
         String stopReason,
         Integer thinkingTokenCount,
+        SourceTag sourceTag,
+        Double judgeScore,
+        String judgeReason,
         Instant createdAt
 ) {
 }

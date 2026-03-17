@@ -1,10 +1,13 @@
 package com.myoffgridai.ai.service;
 
+import com.myoffgridai.ai.SourceTag;
 import com.myoffgridai.ai.dto.ChunkType;
 import com.myoffgridai.ai.dto.InferenceChunk;
 import com.myoffgridai.ai.dto.OllamaChatRequest;
 import com.myoffgridai.ai.dto.OllamaChatResponse;
 import com.myoffgridai.ai.dto.OllamaMessage;
+import com.myoffgridai.ai.judge.JudgeInferenceService;
+import com.myoffgridai.ai.judge.JudgeResult;
 import com.myoffgridai.ai.model.Conversation;
 import com.myoffgridai.ai.model.Message;
 import com.myoffgridai.ai.model.MessageRole;
@@ -15,9 +18,12 @@ import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.common.util.TokenCounter;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.frontier.FrontierApiRouter;
 import com.myoffgridai.memory.dto.RagContext;
 import com.myoffgridai.memory.service.MemoryExtractionService;
 import com.myoffgridai.memory.service.RagService;
+import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
+import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
@@ -29,8 +35,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -38,8 +46,9 @@ import java.util.UUID;
  *
  * <p>Handles conversation lifecycle (create, list, archive, delete) and message
  * exchange (synchronous and streaming) with the Ollama LLM via {@link OllamaService}.
- * Integrates RAG context from {@link RagService} and triggers asynchronous memory
- * extraction via {@link MemoryExtractionService} after each exchange.</p>
+ * Integrates RAG context from {@link RagService}, triggers asynchronous memory
+ * extraction via {@link MemoryExtractionService}, and optionally evaluates responses
+ * with the AI judge pipeline for cloud frontier refinement.</p>
  */
 @Service
 public class ChatService {
@@ -56,20 +65,26 @@ public class ChatService {
     private final RagService ragService;
     private final MemoryExtractionService memoryExtractionService;
     private final SystemConfigService systemConfigService;
+    private final JudgeInferenceService judgeInferenceService;
+    private final FrontierApiRouter frontierApiRouter;
+    private final ExternalApiSettingsService externalApiSettingsService;
 
     /**
      * Constructs the chat service with required dependencies.
      *
-     * @param conversationRepository  the conversation data access layer
-     * @param messageRepository       the message data access layer
-     * @param userRepository          the user data access layer
-     * @param ollamaService           the Ollama integration service
-     * @param inferenceService        the inference abstraction service
-     * @param systemPromptBuilder     the system prompt builder
-     * @param contextWindowService    the context window manager
-     * @param ragService              the RAG pipeline service
-     * @param memoryExtractionService the memory extraction service
-     * @param systemConfigService     the system config service for dynamic AI settings
+     * @param conversationRepository     the conversation data access layer
+     * @param messageRepository          the message data access layer
+     * @param userRepository             the user data access layer
+     * @param ollamaService              the Ollama integration service
+     * @param inferenceService           the inference abstraction service
+     * @param systemPromptBuilder        the system prompt builder
+     * @param contextWindowService       the context window manager
+     * @param ragService                 the RAG pipeline service
+     * @param memoryExtractionService    the memory extraction service
+     * @param systemConfigService        the system config service for dynamic AI settings
+     * @param judgeInferenceService      the AI judge evaluation service
+     * @param frontierApiRouter          the multi-provider frontier API router
+     * @param externalApiSettingsService the external API settings service
      */
     public ChatService(ConversationRepository conversationRepository,
                        MessageRepository messageRepository,
@@ -80,7 +95,10 @@ public class ChatService {
                        ContextWindowService contextWindowService,
                        RagService ragService,
                        MemoryExtractionService memoryExtractionService,
-                       SystemConfigService systemConfigService) {
+                       SystemConfigService systemConfigService,
+                       JudgeInferenceService judgeInferenceService,
+                       FrontierApiRouter frontierApiRouter,
+                       ExternalApiSettingsService externalApiSettingsService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
@@ -91,6 +109,9 @@ public class ChatService {
         this.ragService = ragService;
         this.memoryExtractionService = memoryExtractionService;
         this.systemConfigService = systemConfigService;
+        this.judgeInferenceService = judgeInferenceService;
+        this.frontierApiRouter = frontierApiRouter;
+        this.externalApiSettingsService = externalApiSettingsService;
     }
 
     /**
@@ -177,8 +198,10 @@ public class ChatService {
      * Sends a message synchronously and returns the assistant's response.
      *
      * <p>Persists the user message, builds RAG context, builds the context window,
-     * calls Ollama synchronously, persists the assistant response, triggers async
-     * title generation on the first exchange, and triggers async memory extraction.</p>
+     * calls Ollama synchronously, optionally evaluates with the AI judge,
+     * optionally enhances via a frontier provider, persists the assistant response,
+     * triggers async title generation on the first exchange, and triggers async
+     * memory extraction.</p>
      *
      * @param conversationId the conversation ID
      * @param userId         the user's ID
@@ -216,13 +239,44 @@ public class ChatService {
                 Map.of("temperature", aiSettings.temperature(), "num_ctx", aiSettings.contextSize()));
         OllamaChatResponse response = ollamaService.chat(request);
 
+        String finalResponse = response.message().content();
+        SourceTag sourceTag = SourceTag.LOCAL;
+        Double judgeScore = null;
+        String judgeReason = null;
+
+        // Judge pipeline
+        ExternalApiSettingsDto settings = externalApiSettingsService.getSettings();
+        if (settings.judgeEnabled() && judgeInferenceService.isAvailable()) {
+            Optional<JudgeResult> judgeResult = judgeInferenceService.evaluate(userContent, finalResponse);
+            if (judgeResult.isPresent()) {
+                judgeScore = judgeResult.get().score();
+                judgeReason = judgeResult.get().reason();
+
+                if (judgeResult.get().score() < settings.judgeScoreThreshold()
+                        || judgeResult.get().needsCloud()) {
+                    if (frontierApiRouter.isAnyAvailable()) {
+                        Optional<String> enhanced = frontierApiRouter.complete(systemPrompt, userContent);
+                        if (enhanced.isPresent()) {
+                            finalResponse = enhanced.get();
+                            sourceTag = SourceTag.ENHANCED;
+                        }
+                    } else {
+                        log.warn("Judge requested cloud but no frontier provider available");
+                    }
+                }
+            }
+        }
+
         // Persist assistant message
         Message assistantMessage = new Message();
         assistantMessage.setConversation(conversation);
         assistantMessage.setRole(MessageRole.ASSISTANT);
-        assistantMessage.setContent(response.message().content());
+        assistantMessage.setContent(finalResponse);
         assistantMessage.setTokenCount(response.evalCount());
         assistantMessage.setHasRagContext(ragContext != null && ragContext.hasContext());
+        assistantMessage.setSourceTag(sourceTag);
+        assistantMessage.setJudgeScore(judgeScore);
+        assistantMessage.setJudgeReason(judgeReason);
         messageRepository.save(assistantMessage);
 
         // Update conversation message count
@@ -236,7 +290,7 @@ public class ChatService {
 
         // Trigger async memory extraction
         memoryExtractionService.extractAndStore(
-                userId, conversationId, userContent, response.message().content());
+                userId, conversationId, userContent, finalResponse);
 
         log.info("Message exchange complete in conversation: {}", conversationId);
         return assistantMessage;
@@ -246,8 +300,9 @@ public class ChatService {
      * Sends a message and returns a streaming response as a Flux of typed JSON events.
      *
      * <p>Uses {@link InferenceService#streamChatWithThinking(List, UUID)} to emit
-     * thinking and content chunks separately. Each chunk is serialized as a JSON
-     * event with a {@code type} field: "thinking", "content", "done", or "error".</p>
+     * thinking and content chunks separately. After local inference completes,
+     * optionally runs the AI judge pipeline and streams enhanced content if
+     * cloud refinement is needed.</p>
      *
      * @param conversationId the conversation ID
      * @param userId         the user's ID
@@ -282,7 +337,8 @@ public class ChatService {
         StringBuilder contentAccumulator = new StringBuilder();
         StringBuilder thinkingAccumulator = new StringBuilder();
 
-        return inferenceService.streamChatWithThinking(messages, userId)
+        // Local inference stream
+        Flux<String> localFlux = inferenceService.streamChatWithThinking(messages, userId)
                 .map(chunk -> {
                     if (chunk.type() == ChunkType.THINKING) {
                         thinkingAccumulator.append(chunk.text());
@@ -291,45 +347,13 @@ public class ChatService {
                         contentAccumulator.append(chunk.text());
                         return "{\"type\":\"content\",\"content\":" + jsonEscape(chunk.text()) + "}";
                     } else {
-                        // DONE chunk — persist and emit metadata
-                        String fullResponse = contentAccumulator.toString();
-                        String thinkingContent = thinkingAccumulator.length() > 0
-                                ? thinkingAccumulator.toString() : null;
-
-                        Message assistantMessage = new Message();
-                        assistantMessage.setConversation(conversation);
-                        assistantMessage.setRole(MessageRole.ASSISTANT);
-                        assistantMessage.setContent(fullResponse);
-                        assistantMessage.setHasRagContext(hasRag);
-                        assistantMessage.setThinkingContent(thinkingContent);
-
-                        if (chunk.metadata() != null) {
-                            assistantMessage.setTokenCount(chunk.metadata().tokensGenerated());
-                            assistantMessage.setTokensPerSecond(chunk.metadata().tokensPerSecond());
-                            assistantMessage.setInferenceTimeSeconds(chunk.metadata().inferenceTimeSeconds());
-                            assistantMessage.setStopReason(chunk.metadata().stopReason());
-                            assistantMessage.setThinkingTokenCount(
-                                    thinkingContent != null ? TokenCounter.estimateTokens(thinkingContent) : null);
-                        }
-
-                        messageRepository.save(assistantMessage);
-
-                        conversation.setMessageCount(conversation.getMessageCount() + 2);
-                        conversationRepository.save(conversation);
-
-                        if (isFirstExchange) {
-                            generateTitle(conversationId, userContent);
-                        }
-
-                        memoryExtractionService.extractAndStore(
-                                userId, conversationId, userContent, fullResponse);
-
-                        log.info("Streaming complete in conversation: {}", conversationId);
-
+                        // DONE chunk — emit metadata (message save deferred to judge phase)
                         double thinkingTime = chunk.metadata() != null ? chunk.metadata().inferenceTimeSeconds() : 0;
                         double tokPerSec = chunk.metadata() != null ? chunk.metadata().tokensPerSecond() : 0;
                         int totalTokens = chunk.metadata() != null ? chunk.metadata().tokensGenerated() : 0;
                         String stopReason = chunk.metadata() != null ? chunk.metadata().stopReason() : "stop";
+                        String thinkingContent = thinkingAccumulator.length() > 0
+                                ? thinkingAccumulator.toString() : null;
                         Integer thinkTokenCount = thinkingContent != null
                                 ? TokenCounter.estimateTokens(thinkingContent) : null;
 
@@ -342,6 +366,88 @@ public class ChatService {
                                 + ",\"stopReason\":" + jsonEscape(stopReason) + "}";
                     }
                 });
+
+        // Judge + frontier pipeline (appended after local stream completes)
+        Flux<String> judgeFlux = Flux.defer(() -> {
+            ExternalApiSettingsDto settings = externalApiSettingsService.getSettings();
+            String localResponse = contentAccumulator.toString();
+            String thinkingContent = thinkingAccumulator.length() > 0
+                    ? thinkingAccumulator.toString() : null;
+
+            SourceTag sourceTag = SourceTag.LOCAL;
+            Double judgeScore = null;
+            String judgeReason = null;
+            String finalResponse = localResponse;
+
+            List<String> judgeEvents = new ArrayList<>();
+
+            if (settings.judgeEnabled() && judgeInferenceService.isAvailable()) {
+                judgeEvents.add("{\"type\":\"judge_evaluating\"}");
+
+                Optional<JudgeResult> result = judgeInferenceService.evaluate(userContent, localResponse);
+                if (result.isPresent()) {
+                    judgeScore = result.get().score();
+                    judgeReason = result.get().reason();
+
+                    judgeEvents.add("{\"type\":\"judge_result\",\"content\":{\"score\":"
+                            + judgeScore + ",\"reason\":" + jsonEscape(judgeReason)
+                            + ",\"needsCloud\":" + result.get().needsCloud() + "}}");
+
+                    if (result.get().score() < settings.judgeScoreThreshold()
+                            || result.get().needsCloud()) {
+                        if (frontierApiRouter.isAnyAvailable()) {
+                            Optional<String> enhanced = frontierApiRouter.complete(systemPrompt, userContent);
+                            if (enhanced.isPresent()) {
+                                finalResponse = enhanced.get();
+                                sourceTag = SourceTag.ENHANCED;
+
+                                // Stream enhanced content in chunks of ~100 chars
+                                for (int i = 0; i < finalResponse.length(); i += 100) {
+                                    String chunkText = finalResponse.substring(i,
+                                            Math.min(i + 100, finalResponse.length()));
+                                    judgeEvents.add("{\"type\":\"enhanced_content\",\"content\":"
+                                            + jsonEscape(chunkText) + "}");
+                                }
+                                judgeEvents.add("{\"type\":\"enhanced_done\"}");
+                            }
+                        } else {
+                            log.warn("Judge requested cloud but no frontier provider available");
+                        }
+                    }
+                }
+            }
+
+            // Persist assistant message with final state
+            Message assistantMessage = new Message();
+            assistantMessage.setConversation(conversation);
+            assistantMessage.setRole(MessageRole.ASSISTANT);
+            assistantMessage.setContent(finalResponse);
+            assistantMessage.setHasRagContext(hasRag);
+            assistantMessage.setThinkingContent(thinkingContent);
+            assistantMessage.setThinkingTokenCount(
+                    thinkingContent != null ? TokenCounter.estimateTokens(thinkingContent) : null);
+            assistantMessage.setSourceTag(sourceTag);
+            assistantMessage.setJudgeScore(judgeScore);
+            assistantMessage.setJudgeReason(judgeReason);
+            assistantMessage.setTokenCount(TokenCounter.estimateTokens(finalResponse));
+            messageRepository.save(assistantMessage);
+
+            conversation.setMessageCount(conversation.getMessageCount() + 2);
+            conversationRepository.save(conversation);
+
+            if (isFirstExchange) {
+                generateTitle(conversationId, userContent);
+            }
+
+            memoryExtractionService.extractAndStore(
+                    userId, conversationId, userContent, finalResponse);
+
+            log.info("Streaming complete in conversation: {}", conversationId);
+
+            return Flux.fromIterable(judgeEvents);
+        });
+
+        return Flux.concat(localFlux, judgeFlux);
     }
 
     /**
@@ -462,6 +568,9 @@ public class ChatService {
             copy.setInferenceTimeSeconds(srcMsg.getInferenceTimeSeconds());
             copy.setStopReason(srcMsg.getStopReason());
             copy.setThinkingTokenCount(srcMsg.getThinkingTokenCount());
+            copy.setSourceTag(srcMsg.getSourceTag());
+            copy.setJudgeScore(srcMsg.getJudgeScore());
+            copy.setJudgeReason(srcMsg.getJudgeReason());
             messageRepository.save(copy);
             messageCount++;
 

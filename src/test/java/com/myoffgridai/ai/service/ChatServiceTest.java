@@ -1,11 +1,14 @@
 package com.myoffgridai.ai.service;
 
+import com.myoffgridai.ai.SourceTag;
 import com.myoffgridai.ai.dto.ChunkType;
 import com.myoffgridai.ai.dto.InferenceChunk;
 import com.myoffgridai.ai.dto.InferenceMetadata;
 import com.myoffgridai.ai.dto.OllamaChatChunk;
 import com.myoffgridai.ai.dto.OllamaChatResponse;
 import com.myoffgridai.ai.dto.OllamaMessage;
+import com.myoffgridai.ai.judge.JudgeInferenceService;
+import com.myoffgridai.ai.judge.JudgeResult;
 import com.myoffgridai.ai.model.Conversation;
 import com.myoffgridai.ai.model.Message;
 import com.myoffgridai.ai.model.MessageRole;
@@ -15,8 +18,12 @@ import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.common.exception.EntityNotFoundException;
+import com.myoffgridai.frontier.FrontierApiRouter;
+import com.myoffgridai.frontier.FrontierProvider;
 import com.myoffgridai.memory.service.MemoryExtractionService;
 import com.myoffgridai.memory.service.RagService;
+import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
+import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +69,9 @@ class ChatServiceTest {
     @Mock private RagService ragService;
     @Mock private MemoryExtractionService memoryExtractionService;
     @Mock private SystemConfigService systemConfigService;
+    @Mock private JudgeInferenceService judgeInferenceService;
+    @Mock private FrontierApiRouter frontierApiRouter;
+    @Mock private ExternalApiSettingsService externalApiSettingsService;
 
     @InjectMocks
     private ChatService chatService;
@@ -92,6 +102,18 @@ class ChatServiceTest {
         // Default AI settings for all tests that call sendMessage/streamMessage
         lenient().when(systemConfigService.getAiSettings())
                 .thenReturn(new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048, 4096, 20));
+
+        // Default external API settings (judge disabled)
+        lenient().when(externalApiSettingsService.getSettings())
+                .thenReturn(new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false,
+                        false, false,
+                        false, false,
+                        FrontierProvider.CLAUDE,
+                        false, null, 7.5
+                ));
     }
 
     // ── createConversation tests ─────────────────────────────────────────
@@ -743,5 +765,114 @@ class ChatServiceTest {
 
         assertThrows(EntityNotFoundException.class,
                 () -> chatService.regenerateMessage(conversationId, messageId, userId));
+    }
+
+    // ── judge pipeline tests (sendMessage) ──────────────────────────────
+
+    @Test
+    void sendMessage_judgeEnabled_enhancesResponse_whenScoreBelowThreshold() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "hello")));
+        OllamaChatResponse ollamaResponse = new OllamaChatResponse(
+                new OllamaMessage("assistant", "local response"), true, 1000L, 5);
+        when(ollamaService.chat(any())).thenReturn(ollamaResponse);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        // Enable judge in settings
+        when(externalApiSettingsService.getSettings())
+                .thenReturn(new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false,
+                        false, false,
+                        false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "judge.gguf", 7.5
+                ));
+        when(judgeInferenceService.isAvailable()).thenReturn(true);
+        when(judgeInferenceService.evaluate(anyString(), anyString()))
+                .thenReturn(Optional.of(new JudgeResult(5.0, "Incomplete answer", true)));
+        when(frontierApiRouter.isAnyAvailable()).thenReturn(true);
+        when(frontierApiRouter.complete(anyString(), anyString()))
+                .thenReturn(Optional.of("enhanced cloud response"));
+
+        Message result = chatService.sendMessage(conversationId, userId, "hello");
+
+        assertEquals("enhanced cloud response", result.getContent());
+        assertEquals(SourceTag.ENHANCED, result.getSourceTag());
+        assertEquals(5.0, result.getJudgeScore());
+        assertEquals("Incomplete answer", result.getJudgeReason());
+    }
+
+    @Test
+    void sendMessage_judgeEnabled_keepsLocal_whenScoreAboveThreshold() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "hello")));
+        OllamaChatResponse ollamaResponse = new OllamaChatResponse(
+                new OllamaMessage("assistant", "good local response"), true, 1000L, 5);
+        when(ollamaService.chat(any())).thenReturn(ollamaResponse);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        when(externalApiSettingsService.getSettings())
+                .thenReturn(new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false,
+                        false, false,
+                        false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "judge.gguf", 7.5
+                ));
+        when(judgeInferenceService.isAvailable()).thenReturn(true);
+        when(judgeInferenceService.evaluate(anyString(), anyString()))
+                .thenReturn(Optional.of(new JudgeResult(9.0, "Excellent response", false)));
+
+        Message result = chatService.sendMessage(conversationId, userId, "hello");
+
+        assertEquals("good local response", result.getContent());
+        assertEquals(SourceTag.LOCAL, result.getSourceTag());
+        assertEquals(9.0, result.getJudgeScore());
+        verifyNoInteractions(frontierApiRouter);
+    }
+
+    @Test
+    void sendMessage_judgeDisabled_skipsEvaluation() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "hello")));
+        OllamaChatResponse ollamaResponse = new OllamaChatResponse(
+                new OllamaMessage("assistant", "local response"), true, 1000L, 5);
+        when(ollamaService.chat(any())).thenReturn(ollamaResponse);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        Message result = chatService.sendMessage(conversationId, userId, "hello");
+
+        assertEquals(SourceTag.LOCAL, result.getSourceTag());
+        assertNull(result.getJudgeScore());
+        verifyNoInteractions(judgeInferenceService);
+        verifyNoInteractions(frontierApiRouter);
     }
 }
