@@ -65,6 +65,9 @@ public class SystemConfig {
     @Column(name = "ai_context_message_limit")
     private Integer aiContextMessageLimit = 20;
 
+    @Column(name = "active_model_filename")
+    private String activeModelFilename;
+
     @Column(name = "knowledge_storage_path")
     private String knowledgeStoragePath = "/var/myoffgridai/knowledge";
 
@@ -134,6 +137,9 @@ public class SystemConfig {
 
     public Integer getAiContextMessageLimit() { return aiContextMessageLimit != null ? aiContextMessageLimit : 20; }
     public void setAiContextMessageLimit(Integer aiContextMessageLimit) { this.aiContextMessageLimit = aiContextMessageLimit; }
+
+    public String getActiveModelFilename() { return activeModelFilename; }
+    public void setActiveModelFilename(String activeModelFilename) { this.activeModelFilename = activeModelFilename; }
 
     public String getKnowledgeStoragePath() { return knowledgeStoragePath != null ? knowledgeStoragePath : "/var/myoffgridai/knowledge"; }
     public void setKnowledgeStoragePath(String knowledgeStoragePath) { this.knowledgeStoragePath = knowledgeStoragePath; }

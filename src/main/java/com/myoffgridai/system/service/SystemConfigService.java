@@ -188,6 +188,27 @@ public class SystemConfigService {
     }
 
     /**
+     * Returns the active model filename from the system configuration.
+     *
+     * @return the active model filename, or null if not set
+     */
+    public String getActiveModelFilename() {
+        return getConfig().getActiveModelFilename();
+    }
+
+    /**
+     * Sets the active model filename in the system configuration.
+     *
+     * @param filename the GGUF model filename to persist
+     */
+    public void setActiveModelFilename(String filename) {
+        SystemConfig config = getConfig();
+        config.setActiveModelFilename(filename);
+        systemConfigRepository.save(config);
+        log.info("Active model filename set to: {}", filename);
+    }
+
+    /**
      * Validates and updates AI and memory settings.
      *
      * @param dto the new AI settings

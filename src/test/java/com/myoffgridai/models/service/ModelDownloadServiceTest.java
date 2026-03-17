@@ -27,7 +27,7 @@ import static org.mockito.Mockito.*;
 /**
  * Unit tests for {@link ModelDownloadService}.
  *
- * <p>Uses a temporary directory to simulate the LM Studio models directory.
+ * <p>Uses a temporary directory to simulate the local models directory.
  * WebClient calls (actual downloads) are not tested here since they require
  * network access; only the synchronous management methods are verified.</p>
  */
@@ -54,7 +54,7 @@ class ModelDownloadServiceTest {
                 progressRegistry,
                 inferenceService,
                 tempDir.toString(),
-                "http://localhost:1234"
+                null
         );
     }
 
@@ -131,7 +131,7 @@ class ModelDownloadServiceTest {
                 progressRegistry,
                 inferenceService,
                 tempDir.resolve("nonexistent").toString(),
-                "http://localhost:1234"
+                null
         );
 
         List<LocalModelFileDto> models = svcMissing.listLocalModels();

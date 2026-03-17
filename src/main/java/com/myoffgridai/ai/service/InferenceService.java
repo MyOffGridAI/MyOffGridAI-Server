@@ -14,7 +14,7 @@ import java.util.UUID;
  * <p>Current implementations:
  * <ul>
  *   <li>{@link OllamaInferenceService} — delegates to Ollama ({@code app.inference.provider=ollama})</li>
- *   <li>{@link LmStudioInferenceService} — LM Studio OpenAI-compatible API ({@code app.inference.provider=lmstudio})</li>
+ *   <li>{@link LlamaServerInferenceService} — llama-server OpenAI-compatible API ({@code app.inference.provider=llama-server})</li>
  * </ul>
  *
  * <p>The active implementation is selected via the {@code app.inference.provider} configuration

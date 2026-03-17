@@ -31,9 +31,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Inference provider implementation for LM Studio's OpenAI-compatible REST API.
+ * Inference provider implementation for llama-server's OpenAI-compatible REST API.
  *
- * <p>LM Studio exposes endpoints matching the OpenAI specification:
+ * <p>llama-server (from llama.cpp) exposes endpoints matching the OpenAI specification:
  * {@code POST /v1/chat/completions} for chat, {@code GET /v1/models} for model listing.
  * Streaming uses Server-Sent Events with {@code data: {...}} lines terminated by
  * {@code data: [DONE]}.
@@ -43,16 +43,16 @@ import java.util.concurrent.atomic.AtomicReference;
  * detects and splits those tags, emitting {@link ChunkType#THINKING} chunks for
  * content inside the tags and {@link ChunkType#CONTENT} chunks for content outside.
  *
- * <p>Activated when {@code app.inference.provider=lmstudio}.
+ * <p>Activated when {@code app.inference.provider=llama-server}.
  */
 @Service
-@ConditionalOnProperty(name = "app.inference.provider", havingValue = "lmstudio")
-public class LmStudioInferenceService implements InferenceService {
+@ConditionalOnProperty(name = "app.inference.provider", havingValue = "llama-server")
+public class LlamaServerInferenceService implements InferenceService {
 
-    private static final Logger log = LoggerFactory.getLogger(LmStudioInferenceService.class);
+    private static final Logger log = LoggerFactory.getLogger(LlamaServerInferenceService.class);
 
-    private final WebClient lmStudioWebClient;
-    private final RestClient lmStudioRestClient;
+    private final WebClient llamaServerWebClient;
+    private final RestClient llamaServerRestClient;
     private final RestClient ollamaEmbedRestClient;
     private final ObjectMapper objectMapper;
 
@@ -69,20 +69,20 @@ public class LmStudioInferenceService implements InferenceService {
     private double temperature;
 
     /**
-     * Constructs the LM Studio inference service.
+     * Constructs the llama-server inference service.
      *
-     * @param lmStudioWebClient    reactive client pointed at the LM Studio base URL
-     * @param lmStudioRestClient   blocking client pointed at the LM Studio base URL
-     * @param ollamaEmbedRestClient blocking client pointed at the Ollama base URL for embeddings
-     * @param objectMapper         Jackson ObjectMapper for JSON parsing
+     * @param llamaServerWebClient    reactive client pointed at the llama-server base URL
+     * @param llamaServerRestClient   blocking client pointed at the llama-server base URL
+     * @param ollamaEmbedRestClient   blocking client pointed at the Ollama base URL for embeddings
+     * @param objectMapper            Jackson ObjectMapper for JSON parsing
      */
-    public LmStudioInferenceService(
-            @Qualifier("lmStudioWebClient") WebClient lmStudioWebClient,
-            @Qualifier("lmStudioRestClient") RestClient lmStudioRestClient,
+    public LlamaServerInferenceService(
+            @Qualifier("llamaServerWebClient") WebClient llamaServerWebClient,
+            @Qualifier("llamaServerRestClient") RestClient llamaServerRestClient,
             @Qualifier("ollamaEmbedRestClient") RestClient ollamaEmbedRestClient,
             ObjectMapper objectMapper) {
-        this.lmStudioWebClient = lmStudioWebClient;
-        this.lmStudioRestClient = lmStudioRestClient;
+        this.llamaServerWebClient = llamaServerWebClient;
+        this.llamaServerRestClient = llamaServerRestClient;
         this.ollamaEmbedRestClient = ollamaEmbedRestClient;
         this.objectMapper = objectMapper;
     }
@@ -90,25 +90,25 @@ public class LmStudioInferenceService implements InferenceService {
     /** {@inheritDoc} */
     @Override
     public String chat(List<OllamaMessage> messages, UUID userId) {
-        log.debug("LM Studio sync chat for user {}", userId);
+        log.debug("llama-server sync chat for user {}", userId);
 
         Map<String, Object> requestBody = buildChatRequest(messages, false);
 
-        Map<String, Object> response = lmStudioRestClient.post()
-                .uri(AppConstants.LM_STUDIO_CHAT_ENDPOINT)
+        Map<String, Object> response = llamaServerRestClient.post()
+                .uri(AppConstants.LLAMA_SERVER_CHAT_ENDPOINT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(requestBody)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
 
         if (response == null) {
-            throw new RuntimeException("LM Studio returned null response");
+            throw new RuntimeException("llama-server returned null response");
         }
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
         if (choices == null || choices.isEmpty()) {
-            throw new RuntimeException("LM Studio returned no choices");
+            throw new RuntimeException("llama-server returned no choices");
         }
 
         @SuppressWarnings("unchecked")
@@ -130,7 +130,7 @@ public class LmStudioInferenceService implements InferenceService {
     /** {@inheritDoc} */
     @Override
     public Flux<InferenceChunk> streamChatWithThinking(List<OllamaMessage> messages, UUID userId) {
-        log.debug("LM Studio streaming chat with thinking for user {}", userId);
+        log.debug("llama-server streaming chat with thinking for user {}", userId);
 
         Map<String, Object> requestBody = buildChatRequest(messages, true);
 
@@ -144,8 +144,8 @@ public class LmStudioInferenceService implements InferenceService {
 
         Sinks.Many<InferenceChunk> sink = Sinks.many().unicast().onBackpressureBuffer();
 
-        lmStudioWebClient.post()
-                .uri(AppConstants.LM_STUDIO_CHAT_ENDPOINT)
+        llamaServerWebClient.post()
+                .uri(AppConstants.LLAMA_SERVER_CHAT_ENDPOINT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .retrieve()
@@ -155,7 +155,7 @@ public class LmStudioInferenceService implements InferenceService {
                         line -> processSSELine(line, state, tagBuffer, startNanos, endNanos,
                                 completionTokens, stopReason, sink),
                         error -> {
-                            log.error("LM Studio streaming error", error);
+                            log.error("llama-server streaming error", error);
                             sink.tryEmitError(error);
                         },
                         () -> {
@@ -213,13 +213,13 @@ public class LmStudioInferenceService implements InferenceService {
     @Override
     public boolean isAvailable() {
         try {
-            lmStudioRestClient.get()
-                    .uri(AppConstants.LM_STUDIO_MODELS_ENDPOINT)
+            llamaServerRestClient.get()
+                    .uri(AppConstants.LLAMA_SERVER_MODELS_ENDPOINT)
                     .retrieve()
                     .body(String.class);
             return true;
         } catch (Exception e) {
-            log.warn("LM Studio unavailable: {}", e.getMessage());
+            log.warn("llama-server unavailable: {}", e.getMessage());
             return false;
         }
     }
@@ -228,8 +228,8 @@ public class LmStudioInferenceService implements InferenceService {
     @Override
     public List<InferenceModelInfo> listModels() {
         try {
-            Map<String, Object> response = lmStudioRestClient.get()
-                    .uri(AppConstants.LM_STUDIO_MODELS_ENDPOINT)
+            Map<String, Object> response = llamaServerRestClient.get()
+                    .uri(AppConstants.LLAMA_SERVER_MODELS_ENDPOINT)
                     .retrieve()
                     .body(new ParameterizedTypeReference<>() {});
 
@@ -252,7 +252,7 @@ public class LmStudioInferenceService implements InferenceService {
             }
             return models;
         } catch (Exception e) {
-            log.error("Failed to list LM Studio models", e);
+            log.error("Failed to list llama-server models", e);
             return List.of();
         }
     }
@@ -285,7 +285,7 @@ public class LmStudioInferenceService implements InferenceService {
     }
 
     /**
-     * Processes a single SSE line from LM Studio.
+     * Processes a single SSE line from llama-server.
      * Handles the "data: " prefix and JSON parsing, then feeds content tokens
      * through the think-tag state machine.
      */

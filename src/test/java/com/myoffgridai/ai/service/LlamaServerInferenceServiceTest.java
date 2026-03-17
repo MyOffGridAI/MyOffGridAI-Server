@@ -5,7 +5,6 @@ import com.myoffgridai.ai.dto.ChunkType;
 import com.myoffgridai.ai.dto.InferenceChunk;
 import com.myoffgridai.ai.dto.InferenceModelInfo;
 import com.myoffgridai.ai.dto.OllamaMessage;
-import com.myoffgridai.config.AppConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,28 +30,28 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link LmStudioInferenceService}.
+ * Unit tests for {@link LlamaServerInferenceService}.
  *
- * <p>Validates the LM Studio OpenAI-compatible inference provider including
+ * <p>Validates the llama-server OpenAI-compatible inference provider including
  * sync chat, streaming with think-tag parsing, embedding delegation to Ollama,
  * availability checking, and model listing.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @org.mockito.junit.jupiter.MockitoSettings(strictness = Strictness.LENIENT)
-class LmStudioInferenceServiceTest {
+class LlamaServerInferenceServiceTest {
 
-    @Mock private WebClient lmStudioWebClient;
-    @Mock private RestClient lmStudioRestClient;
+    @Mock private WebClient llamaServerWebClient;
+    @Mock private RestClient llamaServerRestClient;
     @Mock private RestClient ollamaEmbedRestClient;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private LmStudioInferenceService service;
+    private LlamaServerInferenceService service;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
-        service = new LmStudioInferenceService(
-                lmStudioWebClient, lmStudioRestClient, ollamaEmbedRestClient, objectMapper);
+        service = new LlamaServerInferenceService(
+                llamaServerWebClient, llamaServerRestClient, ollamaEmbedRestClient, objectMapper);
         ReflectionTestUtils.setField(service, "model", "test-model");
         ReflectionTestUtils.setField(service, "embedModel", "nomic-embed-text");
         ReflectionTestUtils.setField(service, "maxTokens", 4096);
@@ -92,7 +91,7 @@ class LmStudioInferenceServiceTest {
                 mock(WebClient.RequestBodyUriSpec.class, RETURNS_SELF);
         WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
 
-        when(lmStudioWebClient.post()).thenReturn(postSpec);
+        when(llamaServerWebClient.post()).thenReturn(postSpec);
         when(postSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.bodyToFlux(String.class)).thenReturn(Flux.fromIterable(sseLines));
     }
@@ -219,7 +218,7 @@ class LmStudioInferenceServiceTest {
 
     @Test
     void isAvailable_returnsTrueOn200() {
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(String.class)).thenReturn("{\"data\":[]}");
 
         assertTrue(service.isAvailable());
@@ -227,7 +226,7 @@ class LmStudioInferenceServiceTest {
 
     @Test
     void isAvailable_returnsFalseOnError() {
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(String.class)).thenThrow(new RuntimeException("Connection refused"));
 
         assertFalse(service.isAvailable());
@@ -244,7 +243,7 @@ class LmStudioInferenceServiceTest {
                 Map.of("id", "qwen3.5-27b", "created", 1700000000L),
                 Map.of("id", "llama3-8b", "created", 1700001000L)));
 
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
 
         List<InferenceModelInfo> models = service.listModels();
@@ -262,7 +261,7 @@ class LmStudioInferenceServiceTest {
     void listModels_returnsEmptyOnNullData() {
         Map<String, Object> response = Map.of("object", "list");
 
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
 
         List<InferenceModelInfo> models = service.listModels();
@@ -272,7 +271,7 @@ class LmStudioInferenceServiceTest {
     @SuppressWarnings("unchecked")
     @Test
     void listModels_returnsEmptyOnError() {
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class)))
                 .thenThrow(new RuntimeException("timeout"));
 
@@ -300,9 +299,9 @@ class LmStudioInferenceServiceTest {
         assertEquals(0.3f, result[2], 0.001f);
         assertEquals(0.4f, result[3], 0.001f);
 
-        // Verify it used the ollamaEmbedRestClient, not lmStudioRestClient
+        // Verify it used the ollamaEmbedRestClient, not llamaServerRestClient
         verify(ollamaEmbedRestClient).post();
-        verify(lmStudioRestClient, never()).post();
+        verify(llamaServerRestClient, never()).post();
     }
 
     @SuppressWarnings("unchecked")
@@ -325,7 +324,7 @@ class LmStudioInferenceServiceTest {
                 "choices", List.of(
                         Map.of("message", Map.of("content", "<think>reasoning</think>The answer is 42"))));
 
-        RestClient.ResponseSpec resp = stubPost(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubPost(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
 
         List<OllamaMessage> messages = List.of(new OllamaMessage("user", "what is the answer?"));
@@ -337,7 +336,7 @@ class LmStudioInferenceServiceTest {
     @SuppressWarnings("unchecked")
     @Test
     void chat_throwsOnNullResponse() {
-        RestClient.ResponseSpec resp = stubPost(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubPost(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(null);
 
         List<OllamaMessage> messages = List.of(new OllamaMessage("user", "hi"));
@@ -349,7 +348,7 @@ class LmStudioInferenceServiceTest {
     void chat_throwsOnEmptyChoices() {
         Map<String, Object> response = Map.of("choices", List.of());
 
-        RestClient.ResponseSpec resp = stubPost(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubPost(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
 
         List<OllamaMessage> messages = List.of(new OllamaMessage("user", "hi"));
@@ -395,7 +394,7 @@ class LmStudioInferenceServiceTest {
         Map<String, Object> response = Map.of("data", List.of(
                 Map.of("id", "loaded-model", "created", 1700000000L)));
 
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
 
         InferenceModelInfo active = service.getActiveModel();
@@ -405,7 +404,7 @@ class LmStudioInferenceServiceTest {
     @SuppressWarnings("unchecked")
     @Test
     void getActiveModel_fallsBackToConfiguredModel() {
-        RestClient.ResponseSpec resp = stubGet(lmStudioRestClient);
+        RestClient.ResponseSpec resp = stubGet(llamaServerRestClient);
         when(resp.body(any(ParameterizedTypeReference.class)))
                 .thenThrow(new RuntimeException("unavailable"));
 
@@ -419,43 +418,41 @@ class LmStudioInferenceServiceTest {
 
     @Test
     void partialTagMatchLength_noMatch() {
-        assertEquals(0, LmStudioInferenceService.partialTagMatchLength("hello", "<think>"));
+        assertEquals(0, LlamaServerInferenceService.partialTagMatchLength("hello", "<think>"));
     }
 
     @Test
     void partialTagMatchLength_singleChar() {
-        assertEquals(1, LmStudioInferenceService.partialTagMatchLength("abc<", "<think>"));
+        assertEquals(1, LlamaServerInferenceService.partialTagMatchLength("abc<", "<think>"));
     }
 
     @Test
     void partialTagMatchLength_multiChar() {
-        assertEquals(4, LmStudioInferenceService.partialTagMatchLength("abc<thi", "<think>"));
+        assertEquals(4, LlamaServerInferenceService.partialTagMatchLength("abc<thi", "<think>"));
     }
 
     @Test
     void partialTagMatchLength_almostFullTag() {
-        assertEquals(6, LmStudioInferenceService.partialTagMatchLength("<think", "<think>"));
+        assertEquals(6, LlamaServerInferenceService.partialTagMatchLength("<think", "<think>"));
     }
 
     @Test
     void partialTagMatchLength_fullTagDoesNotMatch() {
-        // Full tag match returns 0 because maxLen = min(text.len, tag.len - 1)
-        // and indexOf would find the tag, not partialTagMatchLength
-        assertEquals(0, LmStudioInferenceService.partialTagMatchLength("<think>", "<think>"));
+        assertEquals(0, LlamaServerInferenceService.partialTagMatchLength("<think>", "<think>"));
     }
 
     @Test
     void partialTagMatchLength_closeTag() {
-        assertEquals(3, LmStudioInferenceService.partialTagMatchLength("end</t", "</think>"));
+        assertEquals(3, LlamaServerInferenceService.partialTagMatchLength("end</t", "</think>"));
     }
 
     @Test
     void partialTagMatchLength_emptyText() {
-        assertEquals(0, LmStudioInferenceService.partialTagMatchLength("", "<think>"));
+        assertEquals(0, LlamaServerInferenceService.partialTagMatchLength("", "<think>"));
     }
 
     @Test
     void partialTagMatchLength_textShorterThanTag() {
-        assertEquals(2, LmStudioInferenceService.partialTagMatchLength("<t", "<think>"));
+        assertEquals(2, LlamaServerInferenceService.partialTagMatchLength("<t", "<think>"));
     }
 }

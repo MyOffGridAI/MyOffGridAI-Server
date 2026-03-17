@@ -1,11 +1,13 @@
 package com.myoffgridai.models.service;
 
 import com.myoffgridai.ai.service.InferenceService;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.models.dto.*;
 import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
@@ -25,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Downloads GGUF and MLX model files from HuggingFace directly into
- * LM Studio's local model directory.
+ * the local model directory.
  *
  * <p>Downloads are tracked in-memory (no database entity needed — downloads
  * are transient operations). Progress is emitted as SSE events via
@@ -34,8 +36,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>Downloads are resumable: if a partial file exists at the target path,
  * the service uses HTTP Range requests to resume from the last byte.</p>
  *
- * <p>After successful download, the LM Studio API is notified to rescan
- * its model directory.</p>
+ * <p>After successful download, if a {@link LlamaServerProcessService} is
+ * present and the active model was re-downloaded, the server is restarted.</p>
  */
 @Service
 public class ModelDownloadService {
@@ -47,7 +49,7 @@ public class ModelDownloadService {
     private final ModelDownloadProgressRegistry progressRegistry;
     private final InferenceService inferenceService;
     private final String modelsDirectory;
-    private final String lmStudioApiUrl;
+    private final LlamaServerProcessService llamaServerProcessService;
 
     private final ConcurrentHashMap<String, DownloadProgress> downloads = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> cancelFlags = new ConcurrentHashMap<>();
@@ -55,25 +57,25 @@ public class ModelDownloadService {
     /**
      * Constructs the service.
      *
-     * @param webClientBuilder  the WebClient builder
-     * @param settingsService   the external API settings service for HuggingFace token
-     * @param progressRegistry  the SSE progress emitter registry
-     * @param inferenceService  the inference service for active model info
-     * @param modelsDirectory   the local models directory path
-     * @param lmStudioApiUrl    the LM Studio API URL for rescan notification
+     * @param webClientBuilder         the WebClient builder
+     * @param settingsService          the external API settings service for HuggingFace token
+     * @param progressRegistry         the SSE progress emitter registry
+     * @param inferenceService         the inference service for active model info
+     * @param modelsDirectory          the local models directory path
+     * @param llamaServerProcessService the llama-server process service (nullable, absent when provider=ollama)
      */
     public ModelDownloadService(WebClient.Builder webClientBuilder,
                                 ExternalApiSettingsService settingsService,
                                 ModelDownloadProgressRegistry progressRegistry,
                                 InferenceService inferenceService,
-                                @Value("${app.huggingface.models-directory}") String modelsDirectory,
-                                @Value("${app.huggingface.lmstudio-api-url}") String lmStudioApiUrl) {
+                                @Value("${app.inference.models-dir}") String modelsDirectory,
+                                @Autowired(required = false) LlamaServerProcessService llamaServerProcessService) {
         this.webClient = webClientBuilder.build();
         this.settingsService = settingsService;
         this.progressRegistry = progressRegistry;
         this.inferenceService = inferenceService;
         this.modelsDirectory = modelsDirectory;
-        this.lmStudioApiUrl = lmStudioApiUrl;
+        this.llamaServerProcessService = llamaServerProcessService;
     }
 
     /**
@@ -337,7 +339,7 @@ public class ModelDownloadService {
             progressRegistry.complete(downloadId);
 
             log.info("Download completed: {} → {}", filename, targetPath);
-            notifyLmStudio();
+            notifyModelDownloaded(filename);
 
         } catch (Exception e) {
             String errorMsg = e.getMessage();
@@ -372,17 +374,24 @@ public class ModelDownloadService {
         }
     }
 
-    private void notifyLmStudio() {
-        try {
-            webClient.post()
-                    .uri(lmStudioApiUrl + "/api/v0/models/rescan")
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-            log.info("LM Studio model rescan triggered");
-        } catch (Exception e) {
-            log.info("LM Studio rescan endpoint not available (will detect on next startup): {}",
-                    e.getMessage());
+    /**
+     * Notifies the llama-server process service that a model was downloaded.
+     * If the downloaded file is the currently active model, triggers a restart.
+     *
+     * @param filename the downloaded model filename
+     */
+    private void notifyModelDownloaded(String filename) {
+        if (llamaServerProcessService == null) {
+            log.debug("No llama-server process service available — skipping notification");
+            return;
+        }
+
+        String activeModelPath = llamaServerProcessService.getActiveModelPath();
+        if (activeModelPath != null && activeModelPath.endsWith(filename)) {
+            log.info("Active model re-downloaded — restarting llama-server");
+            llamaServerProcessService.restart();
+        } else {
+            log.info("Downloaded model {} is not the active model — no restart needed", filename);
         }
     }
 

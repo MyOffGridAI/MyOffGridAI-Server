@@ -545,17 +545,23 @@ public final class AppConstants {
 
     // ── Inference Provider ─────────────────────────────────────────────────
 
-    /** Inference provider value for LM Studio */
-    public static final String INFERENCE_PROVIDER_LMSTUDIO = "lmstudio";
+    /** Inference provider value for llama-server (llama.cpp standalone HTTP binary) */
+    public static final String INFERENCE_PROVIDER_LLAMA_SERVER = "llama-server";
 
     /** Inference provider value for Ollama */
     public static final String INFERENCE_PROVIDER_OLLAMA = "ollama";
 
-    /** LM Studio chat completions endpoint (OpenAI-compatible) */
-    public static final String LM_STUDIO_CHAT_ENDPOINT = "/v1/chat/completions";
+    /** llama-server chat completions endpoint (OpenAI-compatible) */
+    public static final String LLAMA_SERVER_CHAT_ENDPOINT = "/v1/chat/completions";
 
-    /** LM Studio models listing endpoint (OpenAI-compatible) */
-    public static final String LM_STUDIO_MODELS_ENDPOINT = "/v1/models";
+    /** llama-server models listing endpoint (OpenAI-compatible) */
+    public static final String LLAMA_SERVER_MODELS_ENDPOINT = "/v1/models";
+
+    /** Interval in milliseconds between startup health polls for llama-server */
+    public static final int LLAMA_SERVER_STARTUP_POLL_INTERVAL_MS = 2000;
+
+    /** Maximum number of log lines to retain in the llama-server log buffer */
+    public static final int LLAMA_SERVER_LOG_BUFFER_LINES = 100;
 
     /** Opening tag for reasoning model thinking traces */
     public static final String THINK_TAG_OPEN = "<think>";

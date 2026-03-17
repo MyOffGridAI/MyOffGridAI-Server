@@ -1,5 +1,8 @@
 package com.myoffgridai.models.controller;
 
+import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.ai.dto.SetActiveModelRequest;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
 import com.myoffgridai.common.response.ApiResponse;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.models.dto.*;
@@ -9,6 +12,7 @@ import com.myoffgridai.models.service.ModelDownloadService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -32,20 +36,24 @@ public class ModelDownloadController {
     private final ModelCatalogService catalogService;
     private final ModelDownloadService downloadService;
     private final ModelDownloadProgressRegistry progressRegistry;
+    private final LlamaServerProcessService llamaServerProcessService;
 
     /**
      * Constructs the controller.
      *
-     * @param catalogService   the HuggingFace catalog service
-     * @param downloadService  the model download service
-     * @param progressRegistry the SSE progress registry
+     * @param catalogService            the HuggingFace catalog service
+     * @param downloadService           the model download service
+     * @param progressRegistry          the SSE progress registry
+     * @param llamaServerProcessService the llama-server process service (nullable)
      */
     public ModelDownloadController(ModelCatalogService catalogService,
                                    ModelDownloadService downloadService,
-                                   ModelDownloadProgressRegistry progressRegistry) {
+                                   ModelDownloadProgressRegistry progressRegistry,
+                                   @Autowired(required = false) LlamaServerProcessService llamaServerProcessService) {
         this.catalogService = catalogService;
         this.downloadService = downloadService;
         this.progressRegistry = progressRegistry;
+        this.llamaServerProcessService = llamaServerProcessService;
     }
 
     // ── Catalog endpoints (authenticated) ────────────────────────────────
@@ -164,7 +172,7 @@ public class ModelDownloadController {
     // ── Local model management ────────────────────────────────────────
 
     /**
-     * Returns the list of model files in the LM Studio models directory.
+     * Returns the list of model files in the local models directory.
      *
      * @return the list of local models
      */
@@ -185,5 +193,54 @@ public class ModelDownloadController {
         log.info("Deleting local model: {}", filename);
         downloadService.deleteLocalModel(filename);
         return ApiResponse.success(null);
+    }
+
+    // ── llama-server management endpoints ─────────────────────────────
+
+    /**
+     * Sets the active model and restarts llama-server.
+     *
+     * @param request the set active model request
+     * @return the llama-server status after model switch
+     */
+    @PostMapping("/active")
+    @PreAuthorize("hasRole('OWNER')")
+    public ApiResponse<LlamaServerStatusDto> setActiveModel(
+            @Valid @RequestBody SetActiveModelRequest request) {
+        log.info("Setting active model: {}", request.filename());
+        if (llamaServerProcessService == null) {
+            return ApiResponse.error("llama-server process service not available");
+        }
+        LlamaServerStatusDto status = llamaServerProcessService.switchModel(request.filename());
+        return ApiResponse.success(status);
+    }
+
+    /**
+     * Returns the current llama-server process status.
+     *
+     * @return the server status
+     */
+    @GetMapping("/server-status")
+    public ApiResponse<LlamaServerStatusDto> getServerStatus() {
+        if (llamaServerProcessService == null) {
+            return ApiResponse.error("llama-server process service not available");
+        }
+        return ApiResponse.success(llamaServerProcessService.getStatus());
+    }
+
+    /**
+     * Restarts the llama-server process.
+     *
+     * @return success response
+     */
+    @PostMapping("/restart")
+    @PreAuthorize("hasRole('OWNER')")
+    public ApiResponse<LlamaServerStatusDto> restartServer() {
+        log.info("Restart llama-server requested");
+        if (llamaServerProcessService == null) {
+            return ApiResponse.error("llama-server process service not available");
+        }
+        llamaServerProcessService.restart();
+        return ApiResponse.success(llamaServerProcessService.getStatus());
     }
 }

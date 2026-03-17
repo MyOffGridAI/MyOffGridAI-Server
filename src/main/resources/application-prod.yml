@@ -22,16 +22,23 @@ app:
   encryption:
     key: ${ENCRYPTION_KEY}
   inference:
-    provider: ${INFERENCE_PROVIDER:lmstudio}
+    provider: ${INFERENCE_PROVIDER:llama-server}
     base-url: ${INFERENCE_BASE_URL:http://localhost:1234}
     model: ${INFERENCE_MODEL:Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF}
     embed-model: ${INFERENCE_EMBED_MODEL:nomic-embed-text}
+    llama-server-binary: ${LLAMA_SERVER_BINARY:/usr/local/bin/llama-server}
+    models-dir: ${MODELS_DIR:./models}
+    active-model: ${ACTIVE_MODEL:}
+    port: ${INFERENCE_PORT:1234}
+    context-size: ${INFERENCE_CONTEXT_SIZE:32768}
+    gpu-layers: ${INFERENCE_GPU_LAYERS:99}
+    threads: ${INFERENCE_THREADS:8}
     timeout-seconds: ${INFERENCE_TIMEOUT:120}
     max-tokens: ${INFERENCE_MAX_TOKENS:4096}
     temperature: ${INFERENCE_TEMPERATURE:0.7}
-  huggingface:
-    models-directory: ${HF_MODELS_DIR:${user.home}/.lmstudio/models}
-    lmstudio-api-url: ${LMSTUDIO_API_URL:http://localhost:1234}
+    health-check-interval-seconds: ${HEALTH_CHECK_INTERVAL:30}
+    restart-delay-seconds: ${RESTART_DELAY:5}
+    startup-timeout-seconds: ${STARTUP_TIMEOUT:120}
   fortress:
     mock: false
   ap:

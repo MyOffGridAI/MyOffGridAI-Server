@@ -1,5 +1,6 @@
 package com.myoffgridai.config;
 
+import com.myoffgridai.ai.service.ProcessBuilderFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -12,21 +13,21 @@ import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * Spring configuration for LM Studio HTTP clients.
+ * Spring configuration for llama-server HTTP clients.
  *
- * <p>Creates {@code lmStudioWebClient} (reactive, for SSE streaming) and
- * {@code lmStudioRestClient} (blocking, for sync calls and model listing).
+ * <p>Creates {@code llamaServerWebClient} (reactive, for SSE streaming) and
+ * {@code llamaServerRestClient} (blocking, for sync calls and model listing).
  * Also creates {@code ollamaEmbedRestClient} for embedding requests that
  * always go to Ollama regardless of the inference provider.
  *
- * <p>Only active when {@code app.inference.provider=lmstudio}.
+ * <p>Only active when {@code app.inference.provider=llama-server}.
  */
 @Configuration
-@ConditionalOnProperty(name = "app.inference.provider", havingValue = "lmstudio")
-public class LmStudioConfig {
+@ConditionalOnProperty(name = "app.inference.provider", havingValue = "llama-server")
+public class LlamaServerConfig {
 
     @Value("${app.inference.base-url:http://localhost:1234}")
-    private String lmStudioBaseUrl;
+    private String llamaServerBaseUrl;
 
     @Value("${app.inference.timeout-seconds:120}")
     private int timeoutSeconds;
@@ -35,14 +36,14 @@ public class LmStudioConfig {
     private String ollamaBaseUrl;
 
     /**
-     * Reactive WebClient for LM Studio SSE streaming responses.
+     * Reactive WebClient for llama-server SSE streaming responses.
      *
-     * @return configured WebClient pointed at LM Studio
+     * @return configured WebClient pointed at llama-server
      */
-    @Bean("lmStudioWebClient")
-    public WebClient lmStudioWebClient() {
+    @Bean("llamaServerWebClient")
+    public WebClient llamaServerWebClient() {
         return WebClient.builder()
-                .baseUrl(lmStudioBaseUrl)
+                .baseUrl(llamaServerBaseUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .exchangeStrategies(ExchangeStrategies.builder()
                         .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
@@ -51,18 +52,18 @@ public class LmStudioConfig {
     }
 
     /**
-     * Blocking RestClient for LM Studio sync requests and model listing.
+     * Blocking RestClient for llama-server sync requests and model listing.
      *
-     * @return configured RestClient pointed at LM Studio
+     * @return configured RestClient pointed at llama-server
      */
-    @Bean("lmStudioRestClient")
-    public RestClient lmStudioRestClient() {
+    @Bean("llamaServerRestClient")
+    public RestClient llamaServerRestClient() {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(AppConstants.OLLAMA_CONNECT_TIMEOUT_SECONDS * 1000);
         factory.setReadTimeout(timeoutSeconds * 1000);
 
         return RestClient.builder()
-                .baseUrl(lmStudioBaseUrl)
+                .baseUrl(llamaServerBaseUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestFactory(factory)
                 .build();
@@ -85,5 +86,16 @@ public class LmStudioConfig {
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestFactory(factory)
                 .build();
+    }
+
+    /**
+     * Factory for creating {@link ProcessBuilder} instances, enabling testability
+     * of process management in {@link com.myoffgridai.ai.service.LlamaServerProcessService}.
+     *
+     * @return the default ProcessBuilderFactory using the system ProcessBuilder
+     */
+    @Bean
+    public ProcessBuilderFactory processBuilderFactory() {
+        return ProcessBuilder::new;
     }
 }

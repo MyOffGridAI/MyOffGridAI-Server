@@ -1,6 +1,10 @@
 package com.myoffgridai.models.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.ai.dto.SetActiveModelRequest;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
+import com.myoffgridai.ai.service.LlamaServerStatus;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.service.AuthService;
@@ -58,6 +62,7 @@ class ModelDownloadControllerTest {
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
     @MockitoBean private SystemConfigService systemConfigService;
+    @MockitoBean private LlamaServerProcessService llamaServerProcessService;
 
     private User ownerUser;
     private User memberUser;
@@ -341,6 +346,95 @@ class ModelDownloadControllerTest {
     @Test
     void deleteLocalModel_unauthenticated_returns401() throws Exception {
         mockMvc.perform(delete("/api/models/local/model-Q4.gguf"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── llama-server management endpoints ──────────────────────────────────
+
+    @Test
+    void setActiveModel_ownerRole_returns200() throws Exception {
+        LlamaServerStatusDto statusDto = new LlamaServerStatusDto(
+                LlamaServerStatus.RUNNING, "model.gguf", 1234, Collections.emptyList(), null);
+        when(llamaServerProcessService.switchModel("model.gguf")).thenReturn(statusDto);
+
+        SetActiveModelRequest request = new SetActiveModelRequest("model.gguf");
+
+        mockMvc.perform(post("/api/models/active")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(authentication(createAuth(ownerUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("RUNNING"))
+                .andExpect(jsonPath("$.data.activeModel").value("model.gguf"));
+
+        verify(llamaServerProcessService).switchModel("model.gguf");
+    }
+
+    @Test
+    void setActiveModel_memberRole_returns403() throws Exception {
+        SetActiveModelRequest request = new SetActiveModelRequest("model.gguf");
+
+        mockMvc.perform(post("/api/models/active")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(authentication(createAuth(memberUser))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void setActiveModel_unauthenticated_returns401() throws Exception {
+        SetActiveModelRequest request = new SetActiveModelRequest("model.gguf");
+
+        mockMvc.perform(post("/api/models/active")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getServerStatus_authenticated_returns200() throws Exception {
+        LlamaServerStatusDto statusDto = new LlamaServerStatusDto(
+                LlamaServerStatus.RUNNING, "model.gguf", 1234, Collections.emptyList(), null);
+        when(llamaServerProcessService.getStatus()).thenReturn(statusDto);
+
+        mockMvc.perform(get("/api/models/server-status")
+                        .with(authentication(createAuth(memberUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("RUNNING"));
+    }
+
+    @Test
+    void getServerStatus_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/models/server-status"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void restartServer_ownerRole_returns200() throws Exception {
+        LlamaServerStatusDto statusDto = new LlamaServerStatusDto(
+                LlamaServerStatus.RUNNING, "model.gguf", 1234, Collections.emptyList(), null);
+        when(llamaServerProcessService.getStatus()).thenReturn(statusDto);
+
+        mockMvc.perform(post("/api/models/restart")
+                        .with(authentication(createAuth(ownerUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(llamaServerProcessService).restart();
+    }
+
+    @Test
+    void restartServer_memberRole_returns403() throws Exception {
+        mockMvc.perform(post("/api/models/restart")
+                        .with(authentication(createAuth(memberUser))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void restartServer_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/api/models/restart"))
                 .andExpect(status().isUnauthorized());
     }
 

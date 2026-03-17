@@ -1,6 +1,9 @@
 package com.myoffgridai.system.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
+import com.myoffgridai.ai.service.LlamaServerStatus;
 import com.myoffgridai.auth.dto.AuthResponse;
 import com.myoffgridai.auth.dto.UserSummaryDto;
 import com.myoffgridai.auth.model.Role;
@@ -46,6 +49,7 @@ class SystemControllerTest {
     @MockitoBean private NetworkTransitionService networkTransitionService;
     @MockitoBean private FactoryResetService factoryResetService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
+    @MockitoBean private LlamaServerProcessService llamaServerProcessService;
 
     // ── Status ──────────────────────────────────────────────────────────────
 
@@ -56,7 +60,13 @@ class SystemControllerTest {
         config.setInstanceName("My Homestead");
         config.setFortressEnabled(false);
         config.setWifiConfigured(true);
+        config.setActiveModelFilename("test-model.gguf");
         when(systemConfigService.getConfig()).thenReturn(config);
+
+        LlamaServerStatusDto serverStatus = new LlamaServerStatusDto(
+                LlamaServerStatus.RUNNING, "test-model.gguf", 1234,
+                java.util.Collections.emptyList(), null);
+        when(llamaServerProcessService.getStatus()).thenReturn(serverStatus);
 
         mockMvc.perform(get("/api/system/status"))
                 .andExpect(status().isOk())
@@ -64,7 +74,9 @@ class SystemControllerTest {
                 .andExpect(jsonPath("$.data.initialized").value(true))
                 .andExpect(jsonPath("$.data.instanceName").value("My Homestead"))
                 .andExpect(jsonPath("$.data.fortressEnabled").value(false))
-                .andExpect(jsonPath("$.data.serverVersion").value("1.0.0"));
+                .andExpect(jsonPath("$.data.serverVersion").value("1.0.0"))
+                .andExpect(jsonPath("$.data.inferenceProviderStatus").value("RUNNING"))
+                .andExpect(jsonPath("$.data.activeModelFilename").value("test-model.gguf"));
     }
 
     // ── Initialize ──────────────────────────────────────────────────────────

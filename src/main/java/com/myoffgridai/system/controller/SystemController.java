@@ -1,11 +1,11 @@
 package com.myoffgridai.system.controller;
 
+import com.myoffgridai.ai.service.LlamaServerProcessService;
 import com.myoffgridai.auth.dto.AuthResponse;
 import com.myoffgridai.auth.dto.RegisterRequest;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.common.response.ApiResponse;
-import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.system.dto.AiSettingsDto;
 import com.myoffgridai.system.dto.FactoryResetRequest;
@@ -19,6 +19,8 @@ import com.myoffgridai.system.service.SystemConfigService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -44,23 +46,31 @@ public class SystemController {
     private final AuthService authService;
     private final NetworkTransitionService networkTransitionService;
     private final FactoryResetService factoryResetService;
+    private final LlamaServerProcessService llamaServerProcessService;
+    private final String inferenceProvider;
 
     /**
      * Constructs the system controller.
      *
-     * @param systemConfigService      the system config service
-     * @param authService              the auth service for creating the owner account
-     * @param networkTransitionService the network transition service
-     * @param factoryResetService      the factory reset service
+     * @param systemConfigService       the system config service
+     * @param authService               the auth service for creating the owner account
+     * @param networkTransitionService  the network transition service
+     * @param factoryResetService       the factory reset service
+     * @param llamaServerProcessService the llama-server process service (nullable)
+     * @param inferenceProvider         the configured inference provider name
      */
     public SystemController(SystemConfigService systemConfigService,
                             AuthService authService,
                             NetworkTransitionService networkTransitionService,
-                            FactoryResetService factoryResetService) {
+                            FactoryResetService factoryResetService,
+                            @Autowired(required = false) LlamaServerProcessService llamaServerProcessService,
+                            @Value("${app.inference.provider}") String inferenceProvider) {
         this.systemConfigService = systemConfigService;
         this.authService = authService;
         this.networkTransitionService = networkTransitionService;
         this.factoryResetService = factoryResetService;
+        this.llamaServerProcessService = llamaServerProcessService;
+        this.inferenceProvider = inferenceProvider;
     }
 
     /**
@@ -71,13 +81,27 @@ public class SystemController {
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<SystemStatusDto>> getStatus() {
         SystemConfig config = systemConfigService.getConfig();
+
+        String providerStatus = "UNKNOWN";
+        String activeModel = config.getActiveModelFilename();
+        if (llamaServerProcessService != null) {
+            var serverStatus = llamaServerProcessService.getStatus();
+            providerStatus = serverStatus.status().name();
+            if (serverStatus.activeModel() != null) {
+                activeModel = serverStatus.activeModel();
+            }
+        }
+
         SystemStatusDto status = new SystemStatusDto(
                 config.isInitialized(),
                 config.getInstanceName(),
                 config.isFortressEnabled(),
                 config.isWifiConfigured(),
                 SERVER_VERSION,
-                Instant.now()
+                Instant.now(),
+                inferenceProvider,
+                providerStatus,
+                activeModel
         );
         return ResponseEntity.ok(ApiResponse.success(status));
     }

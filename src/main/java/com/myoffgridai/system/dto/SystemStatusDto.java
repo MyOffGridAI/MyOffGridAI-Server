@@ -14,5 +14,8 @@ public record SystemStatusDto(
         boolean fortressEnabled,
         boolean wifiConfigured,
         String serverVersion,
-        Instant timestamp
+        Instant timestamp,
+        String inferenceProvider,
+        String inferenceProviderStatus,
+        String activeModelFilename
 ) {}

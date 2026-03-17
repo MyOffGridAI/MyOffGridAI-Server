@@ -1,3 +1,16 @@
 # Test defaults — override production application.yml for all test contexts
 spring.ai.mcp.server:
   enabled: false
+
+app:
+  inference:
+    llama-server-binary: /usr/local/bin/llama-server
+    models-dir: ./models
+    active-model: ""
+    port: 1234
+    context-size: 32768
+    gpu-layers: 99
+    threads: 8
+    health-check-interval-seconds: 30
+    restart-delay-seconds: 5
+    startup-timeout-seconds: 120
