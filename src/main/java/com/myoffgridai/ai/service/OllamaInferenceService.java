@@ -108,7 +108,8 @@ public class OllamaInferenceService implements InferenceService {
                 aiSettings.modelName() != null ? aiSettings.modelName() : modelName,
                 messages, true,
                 Map.of("num_ctx", aiSettings.contextSize(),
-                        "temperature", aiSettings.temperature()));
+                        "temperature", aiSettings.temperature()),
+                true);
 
         AtomicLong startNanos = new AtomicLong(System.nanoTime());
         AtomicInteger tokenCount = new AtomicInteger(0);
