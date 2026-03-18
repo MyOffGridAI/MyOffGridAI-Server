@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.stream.Collectors;
@@ -278,6 +279,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleClientDisconnect(AsyncRequestNotUsableException ex) {
         log.debug("Client disconnected before response completed: {}", ex.getMessage());
+    }
+
+    /**
+     * Handles async request timeout on SSE/streaming endpoints.
+     *
+     * <p>The response is already committed as {@code text/event-stream},
+     * so no JSON body can be written. Log and return void to prevent
+     * the catch-all handler from attempting to serialize an
+     * {@link ApiResponse} onto the committed stream.</p>
+     *
+     * @param ex the timeout exception
+     */
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncTimeout(AsyncRequestTimeoutException ex) {
+        log.warn("Async request timed out (SSE stream): {}", ex.getMessage());
     }
 
     /**
