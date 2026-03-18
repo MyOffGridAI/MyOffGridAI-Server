@@ -48,7 +48,10 @@ app:
     expiration-ms: 86400000
     refresh-expiration-ms: 604800000
   inference:
-    provider: llama-server
+    # NEVER set to true on macOS — llama-server Metal GPU usage will crash WindowServer.
+    # Set to true only on Linux appliance deployments.
+    manage-process: false
+    provider: lmstudio
     base-url: http://localhost:1234
     model: Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
     embed-model: local

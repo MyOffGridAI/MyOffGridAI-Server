@@ -2,6 +2,7 @@ package com.myoffgridai.ai.service;
 
 import com.myoffgridai.ai.dto.LlamaServerStatusDto;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.config.InferenceProperties;
 import com.myoffgridai.config.LlamaServerProperties;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
     private static final Logger log = LoggerFactory.getLogger(LlamaServerProcessService.class);
     private static final int LOG_BUFFER_MAX_LINES = 200;
 
+    private final InferenceProperties inferenceProperties;
     private final LlamaServerProperties properties;
     private final SystemConfigService systemConfigService;
     private final ProcessBuilderFactory processBuilderFactory;
@@ -64,13 +66,16 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
     /**
      * Constructs the llama-server process service.
      *
+     * @param inferenceProperties   inference configuration with process management flag
      * @param properties            llama-server configuration properties
      * @param systemConfigService   system config service for active model lookup
      * @param processBuilderFactory factory for creating ProcessBuilder instances
      */
-    public LlamaServerProcessService(LlamaServerProperties properties,
+    public LlamaServerProcessService(InferenceProperties inferenceProperties,
+                                      LlamaServerProperties properties,
                                       SystemConfigService systemConfigService,
                                       ProcessBuilderFactory processBuilderFactory) {
+        this.inferenceProperties = inferenceProperties;
         this.properties = properties;
         this.systemConfigService = systemConfigService;
         this.processBuilderFactory = processBuilderFactory;
@@ -85,6 +90,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      */
     @Override
     public void run(ApplicationArguments args) {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return;
+        }
         try {
             start();
         } catch (Exception e) {
@@ -105,6 +114,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      * timeout expires.</p>
      */
     public synchronized void start() {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return;
+        }
         if (status == LlamaServerStatus.RUNNING) {
             return;
         }
@@ -192,6 +205,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      * it does not terminate within 10 seconds.
      */
     public synchronized void stop() {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return;
+        }
         if (process != null) {
             log.info("Stopping llama-server");
             process.destroy();
@@ -213,6 +230,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      * Restarts the llama-server process by stopping and then starting it.
      */
     public void restart() {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return;
+        }
         stop();
         start();
     }
@@ -226,6 +247,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      * @throws IllegalArgumentException if filename is blank or the file is not found
      */
     public synchronized LlamaServerStatusDto switchModel(String filename) {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return getStatus();
+        }
         if (filename == null || filename.isBlank()) {
             throw new IllegalArgumentException("Model filename must not be blank");
         }
@@ -284,6 +309,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      */
     @Scheduled(fixedDelayString = "#{${app.llama-server.health-check-interval-seconds:30} * 1000}")
     public void monitorHealth() {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return;
+        }
         if (status == LlamaServerStatus.RUNNING) {
             if (!checkHealth()) {
                 log.warn("llama-server appears to have crashed — restarting");
@@ -303,6 +332,10 @@ public class LlamaServerProcessService implements ApplicationRunner, DisposableB
      */
     @Override
     public void destroy() {
+        if (!inferenceProperties.isManageProcess()) {
+            log.debug("llama-server process management disabled (app.inference.manage-process=false) — skipping");
+            return;
+        }
         stop();
     }
 

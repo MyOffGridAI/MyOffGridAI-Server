@@ -1,6 +1,7 @@
 package com.myoffgridai.ai.service;
 
 import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.config.InferenceProperties;
 import com.myoffgridai.config.LlamaServerProperties;
 import com.myoffgridai.system.model.SystemConfig;
 import com.myoffgridai.system.service.SystemConfigService;
@@ -40,12 +41,16 @@ class LlamaServerProcessServiceTest {
     @TempDir
     Path tempDir;
 
+    private InferenceProperties inferenceProperties;
     private LlamaServerProperties properties;
     private LlamaServerProcessService service;
     private Path binaryPath;
 
     @BeforeEach
     void setUp() throws IOException {
+        inferenceProperties = new InferenceProperties();
+        inferenceProperties.setManageProcess(true);
+
         properties = new LlamaServerProperties();
         properties.setModelsDir(tempDir.toString());
         properties.setStartupTimeoutSeconds(2);
@@ -64,7 +69,7 @@ class LlamaServerProcessServiceTest {
         when(systemConfigService.getConfig()).thenReturn(systemConfig);
 
         service = new LlamaServerProcessService(
-                properties, systemConfigService, processBuilderFactory);
+                inferenceProperties, properties, systemConfigService, processBuilderFactory);
     }
 
     // ── start() returns early when no model configured ──────────────────
@@ -257,5 +262,91 @@ class LlamaServerProcessServiceTest {
         service.start();
 
         verify(processBuilderFactory).create(any());
+    }
+
+    // ── manage-process guard ────────────────────────────────────────────
+
+    @Test
+    void start_manageProcessFalse_doesNotStartProcess() {
+        inferenceProperties.setManageProcess(false);
+
+        service.start();
+
+        verify(processBuilderFactory, never()).create(any());
+        assertEquals("STOPPED", service.getStatus().status());
+    }
+
+    @Test
+    void start_manageProcessTrue_startsProcess() throws Exception {
+        inferenceProperties.setManageProcess(true);
+
+        when(processBuilderFactory.create(any())).thenReturn(mockProcessBuilder);
+        when(mockProcessBuilder.redirectErrorStream(true)).thenReturn(mockProcessBuilder);
+        when(mockProcessBuilder.start()).thenReturn(mockProcess);
+        when(mockProcess.pid()).thenReturn(600L);
+        when(mockProcess.isAlive()).thenReturn(true);
+        when(mockProcess.getInputStream())
+                .thenReturn(new ByteArrayInputStream("log\n".getBytes()));
+
+        service.start();
+
+        verify(processBuilderFactory).create(any());
+    }
+
+    @Test
+    void stop_manageProcessFalse_doesNotStopProcess() throws Exception {
+        // First start with manage-process=true to get a process reference
+        when(processBuilderFactory.create(any())).thenReturn(mockProcessBuilder);
+        when(mockProcessBuilder.redirectErrorStream(true)).thenReturn(mockProcessBuilder);
+        when(mockProcessBuilder.start()).thenReturn(mockProcess);
+        when(mockProcess.pid()).thenReturn(700L);
+        when(mockProcess.isAlive()).thenReturn(true);
+        when(mockProcess.waitFor(anyLong(), any())).thenReturn(true);
+        when(mockProcess.getInputStream())
+                .thenReturn(new ByteArrayInputStream("log\n".getBytes()));
+
+        service.start();
+
+        // Now disable manage-process and attempt stop
+        inferenceProperties.setManageProcess(false);
+        service.stop();
+
+        verify(mockProcess, never()).destroy();
+    }
+
+    @Test
+    void restart_manageProcessFalse_doesNothing() {
+        inferenceProperties.setManageProcess(false);
+
+        service.restart();
+
+        verify(processBuilderFactory, never()).create(any());
+    }
+
+    @Test
+    void switchModel_manageProcessFalse_returnsStatusWithoutProcessAction() {
+        inferenceProperties.setManageProcess(false);
+
+        LlamaServerStatusDto status = service.switchModel("test-model.gguf");
+
+        assertNotNull(status);
+        verify(processBuilderFactory, never()).create(any());
+    }
+
+    @Test
+    void monitorHealth_manageProcessFalse_doesNothing() {
+        inferenceProperties.setManageProcess(false);
+
+        assertDoesNotThrow(() -> service.monitorHealth());
+        verify(processBuilderFactory, never()).create(any());
+    }
+
+    @Test
+    void destroy_manageProcessFalse_doesNotStopProcess() {
+        inferenceProperties.setManageProcess(false);
+
+        assertDoesNotThrow(() -> service.destroy());
+        // Verify stop() was effectively skipped (no process interaction)
+        verify(processBuilderFactory, never()).create(any());
     }
 }

@@ -22,6 +22,7 @@ app:
   encryption:
     key: ${ENCRYPTION_KEY}
   inference:
+    manage-process: true
     provider: ${INFERENCE_PROVIDER:llama-server}
     base-url: ${INFERENCE_BASE_URL:http://localhost:1234}
     model: ${INFERENCE_MODEL:Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF}

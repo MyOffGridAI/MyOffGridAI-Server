@@ -18,6 +18,14 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.inference")
 public class InferenceProperties {
 
+    /**
+     * When {@code true}, MyOffGridAI-Server owns the llama-server process lifecycle
+     * (start, stop, restart). Set to {@code true} only on appliance/Linux deployments.
+     * Never set to {@code true} on macOS dev machines — llama-server's Metal GPU usage
+     * will compete with WindowServer and cause system instability.
+     */
+    private boolean manageProcess = false;
+
     private String llamaServerBinary;
     private String modelsDir;
     private String activeModel;
@@ -28,6 +36,15 @@ public class InferenceProperties {
     private int healthCheckIntervalSeconds = 30;
     private int restartDelaySeconds = 5;
     private int startupTimeoutSeconds = 120;
+
+    /** @return {@code true} if this server should manage the llama-server process lifecycle */
+    public boolean isManageProcess() {
+        return manageProcess;
+    }
+
+    public void setManageProcess(boolean manageProcess) {
+        this.manageProcess = manageProcess;
+    }
 
     /** @return absolute path to the llama-server binary */
     public String getLlamaServerBinary() {
