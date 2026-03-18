@@ -33,7 +33,7 @@ class OllamaServiceTest {
 
     @BeforeEach
     void setUp() {
-        ollamaService = new OllamaService(restClient, webClient);
+        ollamaService = new OllamaService(restClient, webClient, new com.fasterxml.jackson.databind.ObjectMapper());
     }
 
     // Helpers that create RETURNS_SELF mocks for fluent APIs
@@ -142,17 +142,23 @@ class OllamaServiceTest {
         OllamaChatRequest request = new OllamaChatRequest(
                 "test-model", List.of(new OllamaMessage("user", "hello")), true, Map.of());
 
-        OllamaChatChunk chunk1 = new OllamaChatChunk(new OllamaMessage("assistant", "Hi"), false);
-        OllamaChatChunk chunk2 = new OllamaChatChunk(new OllamaMessage("assistant", " there!"), true);
+        String json1 = "{\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"done\":false}";
+        String json2 = "{\"message\":{\"role\":\"assistant\",\"content\":\" there!\"},\"done\":true}";
 
         WebClient.ResponseSpec resp = stubWebPost();
-        when(resp.bodyToFlux(OllamaChatChunk.class)).thenReturn(Flux.just(chunk1, chunk2));
+        when(resp.bodyToFlux(String.class)).thenReturn(Flux.just(json1, json2));
 
         Flux<OllamaChatChunk> result = ollamaService.chatStream(request);
 
         StepVerifier.create(result)
-                .expectNext(chunk1)
-                .expectNext(chunk2)
+                .assertNext(c -> {
+                    assertEquals("Hi", c.message().content());
+                    assertFalse(c.done());
+                })
+                .assertNext(c -> {
+                    assertEquals(" there!", c.message().content());
+                    assertTrue(c.done());
+                })
                 .verifyComplete();
     }
 

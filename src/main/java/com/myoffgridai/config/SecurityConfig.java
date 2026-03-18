@@ -3,6 +3,7 @@ package com.myoffgridai.config;
 import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.mcp.config.McpAuthFilter;
 import com.myoffgridai.mcp.service.McpTokenService;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,6 +85,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/register",

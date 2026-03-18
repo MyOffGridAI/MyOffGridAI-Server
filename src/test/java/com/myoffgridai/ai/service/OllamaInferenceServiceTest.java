@@ -161,13 +161,43 @@ class OllamaInferenceServiceTest {
                 .thenConsumeWhile(c -> true)
                 .verifyComplete();
 
-        // Ollama does not support thinking — all content should be CONTENT type
         assertEquals(3, chunks.size());
         assertEquals(ChunkType.CONTENT, chunks.get(0).type());
         assertEquals("Hello", chunks.get(0).text());
         assertEquals(ChunkType.CONTENT, chunks.get(1).type());
         assertEquals(" world", chunks.get(1).text());
         assertEquals(ChunkType.DONE, chunks.get(2).type());
+    }
+
+    @Test
+    void streamChatWithThinking_emitsThinkingFromThinkingField() {
+        // Ollama 0.6+ sends thinking content in a dedicated 'thinking' field
+        OllamaChatChunk think1 = new OllamaChatChunk(
+                new OllamaMessage("assistant", "", "Let me"), false);
+        OllamaChatChunk think2 = new OllamaChatChunk(
+                new OllamaMessage("assistant", "", " reason"), false);
+        OllamaChatChunk content1 = new OllamaChatChunk(
+                new OllamaMessage("assistant", "The answer"), false);
+        OllamaChatChunk doneChunk = new OllamaChatChunk(null, true);
+        when(ollamaService.chatStream(any(OllamaChatRequest.class)))
+                .thenReturn(Flux.just(think1, think2, content1, doneChunk));
+
+        List<OllamaMessage> messages = List.of(new OllamaMessage("user", "think about this"));
+
+        List<InferenceChunk> chunks = new ArrayList<>();
+        StepVerifier.create(service.streamChatWithThinking(messages, userId))
+                .recordWith(() -> chunks)
+                .thenConsumeWhile(c -> true)
+                .verifyComplete();
+
+        assertEquals(4, chunks.size());
+        assertEquals(ChunkType.THINKING, chunks.get(0).type());
+        assertEquals("Let me", chunks.get(0).text());
+        assertEquals(ChunkType.THINKING, chunks.get(1).type());
+        assertEquals(" reason", chunks.get(1).text());
+        assertEquals(ChunkType.CONTENT, chunks.get(2).type());
+        assertEquals("The answer", chunks.get(2).text());
+        assertEquals(ChunkType.DONE, chunks.get(3).type());
     }
 
     @Test
@@ -198,12 +228,8 @@ class OllamaInferenceServiceTest {
 
     @Test
     void streamChatWithThinking_skipsEmptyContentChunks() {
-        // Only chunks with non-null, non-empty content are mapped to CONTENT;
-        // null-message and null-content chunks map to null which the source code
-        // filters out with .filter(chunk -> chunk != null).
-        // However, Reactor's .map() does not allow null returns, so these would
-        // actually cause an NPE in the real code. The test validates that chunks
-        // with valid content and done=true are correctly emitted.
+        // Chunks with null message or empty content/thinking are silently skipped
+        // by the handle() operator (no sink.next() call).
         OllamaChatChunk validChunk = new OllamaChatChunk(
                 new OllamaMessage("assistant", "valid"), false);
         OllamaChatChunk doneChunk = new OllamaChatChunk(null, true);

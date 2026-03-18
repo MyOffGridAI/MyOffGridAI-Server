@@ -1,5 +1,6 @@
 package com.myoffgridai.ai.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myoffgridai.ai.dto.*;
 import com.myoffgridai.common.exception.OllamaInferenceException;
 import com.myoffgridai.common.exception.OllamaUnavailableException;
@@ -32,17 +33,21 @@ public class OllamaService {
 
     private final RestClient restClient;
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
     /**
      * Constructs the OllamaService with configured HTTP clients.
      *
-     * @param restClient the blocking REST client for Ollama
-     * @param webClient  the reactive WebClient for streaming
+     * @param restClient   the blocking REST client for Ollama
+     * @param webClient    the reactive WebClient for streaming
+     * @param objectMapper the Jackson object mapper for NDJSON parsing
      */
     public OllamaService(@Qualifier("ollamaRestClient") RestClient restClient,
-                          @Qualifier("ollamaWebClient") WebClient webClient) {
+                          @Qualifier("ollamaWebClient") WebClient webClient,
+                          ObjectMapper objectMapper) {
         this.restClient = restClient;
         this.webClient = webClient;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -155,7 +160,15 @@ public class OllamaService {
                 .uri("/api/chat")
                 .bodyValue(streamRequest)
                 .retrieve()
-                .bodyToFlux(OllamaChatChunk.class);
+                .bodyToFlux(String.class)
+                .map(raw -> {
+                    try {
+                        return objectMapper.readValue(raw, OllamaChatChunk.class);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse Ollama chunk: {}", e.getMessage());
+                        return new OllamaChatChunk(null, false);
+                    }
+                });
     }
 
     /**
