@@ -225,13 +225,6 @@
             <version>${logstash-logback.version}</version>
         </dependency>
 
-        <!-- Native LLM Inference (java-llama.cpp JNI bindings) -->
-        <dependency>
-            <groupId>de.kherud</groupId>
-            <artifactId>llama</artifactId>
-            <version>4.2.0</version>
-        </dependency>
-
         <!-- API Documentation -->
         <dependency>
             <groupId>org.springdoc</groupId>

@@ -1,10 +1,9 @@
 package com.myoffgridai.models.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.myoffgridai.ai.dto.NativeLlamaStatusDto;
+import com.myoffgridai.ai.dto.LlamaServerStatusDto;
 import com.myoffgridai.ai.dto.SetActiveModelRequest;
-import com.myoffgridai.ai.service.NativeLlamaInferenceService;
-import com.myoffgridai.ai.service.NativeLlamaStatus;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.auth.service.AuthService;
@@ -62,7 +61,7 @@ class ModelDownloadControllerTest {
     @MockitoBean private UserDetailsService userDetailsService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
     @MockitoBean private SystemConfigService systemConfigService;
-    @MockitoBean private NativeLlamaInferenceService nativeInferenceService;
+    @MockitoBean private LlamaServerProcessService llamaServerProcessService;
 
     private User ownerUser;
     private User memberUser;
@@ -349,13 +348,13 @@ class ModelDownloadControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    // ── Native inference management endpoints ───────────────────────────────
+    // ── llama-server inference management endpoints ─────────────────────────
 
     @Test
     void setActiveModel_ownerRole_returns200() throws Exception {
-        NativeLlamaStatusDto statusDto = new NativeLlamaStatusDto(
-                NativeLlamaStatus.READY, "model.gguf", null, 512L);
-        when(nativeInferenceService.getStatus()).thenReturn(statusDto);
+        LlamaServerStatusDto statusDto = new LlamaServerStatusDto(
+                "RUNNING", "model.gguf", 1234, "/models", null, true);
+        when(llamaServerProcessService.switchModel("model.gguf")).thenReturn(statusDto);
 
         SetActiveModelRequest request = new SetActiveModelRequest("model.gguf");
 
@@ -365,10 +364,10 @@ class ModelDownloadControllerTest {
                         .with(authentication(createAuth(ownerUser))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("READY"))
-                .andExpect(jsonPath("$.data.activeModel").value("model.gguf"));
+                .andExpect(jsonPath("$.data.status").value("RUNNING"))
+                .andExpect(jsonPath("$.data.activeModelPath").value("model.gguf"));
 
-        verify(nativeInferenceService).loadModel("model.gguf");
+        verify(llamaServerProcessService).switchModel("model.gguf");
     }
 
     @Test
@@ -394,15 +393,15 @@ class ModelDownloadControllerTest {
 
     @Test
     void getServerStatus_authenticated_returns200() throws Exception {
-        NativeLlamaStatusDto statusDto = new NativeLlamaStatusDto(
-                NativeLlamaStatus.READY, "model.gguf", null, 512L);
-        when(nativeInferenceService.getStatus()).thenReturn(statusDto);
+        LlamaServerStatusDto statusDto = new LlamaServerStatusDto(
+                "RUNNING", "model.gguf", 1234, "/models", null, true);
+        when(llamaServerProcessService.getStatus()).thenReturn(statusDto);
 
         mockMvc.perform(get("/api/models/server-status")
                         .with(authentication(createAuth(memberUser))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("READY"));
+                .andExpect(jsonPath("$.data.status").value("RUNNING"));
     }
 
     @Test
@@ -413,17 +412,16 @@ class ModelDownloadControllerTest {
 
     @Test
     void reloadModel_ownerRole_returns200() throws Exception {
-        NativeLlamaStatusDto statusDto = new NativeLlamaStatusDto(
-                NativeLlamaStatus.READY, "model.gguf", null, 512L);
-        when(nativeInferenceService.getStatus()).thenReturn(statusDto);
-        when(systemConfigService.getActiveModelFilename()).thenReturn("model.gguf");
+        LlamaServerStatusDto statusDto = new LlamaServerStatusDto(
+                "RUNNING", "model.gguf", 1234, "/models", null, true);
+        when(llamaServerProcessService.getStatus()).thenReturn(statusDto);
 
         mockMvc.perform(post("/api/models/restart")
                         .with(authentication(createAuth(ownerUser))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(nativeInferenceService).loadModel("model.gguf");
+        verify(llamaServerProcessService).restart();
     }
 
     @Test

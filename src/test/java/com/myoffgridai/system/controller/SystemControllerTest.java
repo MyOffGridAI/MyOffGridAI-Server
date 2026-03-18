@@ -1,9 +1,8 @@
 package com.myoffgridai.system.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.myoffgridai.ai.dto.NativeLlamaStatusDto;
-import com.myoffgridai.ai.service.NativeLlamaInferenceService;
-import com.myoffgridai.ai.service.NativeLlamaStatus;
+import com.myoffgridai.ai.dto.LlamaServerStatusDto;
+import com.myoffgridai.ai.service.LlamaServerProcessService;
 import com.myoffgridai.auth.dto.AuthResponse;
 import com.myoffgridai.auth.dto.UserSummaryDto;
 import com.myoffgridai.auth.model.Role;
@@ -49,7 +48,7 @@ class SystemControllerTest {
     @MockitoBean private NetworkTransitionService networkTransitionService;
     @MockitoBean private FactoryResetService factoryResetService;
     @MockitoBean private CaptivePortalRedirectFilter captivePortalRedirectFilter;
-    @MockitoBean private NativeLlamaInferenceService nativeInferenceService;
+    @MockitoBean private LlamaServerProcessService llamaServerProcessService;
 
     // ── Status ──────────────────────────────────────────────────────────────
 
@@ -63,9 +62,9 @@ class SystemControllerTest {
         config.setActiveModelFilename("test-model.gguf");
         when(systemConfigService.getConfig()).thenReturn(config);
 
-        NativeLlamaStatusDto nativeStatus = new NativeLlamaStatusDto(
-                NativeLlamaStatus.READY, "test-model.gguf", null, 512L);
-        when(nativeInferenceService.getStatus()).thenReturn(nativeStatus);
+        LlamaServerStatusDto serverStatus = new LlamaServerStatusDto(
+                "RUNNING", "test-model.gguf", 1234, "/models", null, true);
+        when(llamaServerProcessService.getStatus()).thenReturn(serverStatus);
 
         mockMvc.perform(get("/api/system/status"))
                 .andExpect(status().isOk())
@@ -74,7 +73,7 @@ class SystemControllerTest {
                 .andExpect(jsonPath("$.data.instanceName").value("My Homestead"))
                 .andExpect(jsonPath("$.data.fortressEnabled").value(false))
                 .andExpect(jsonPath("$.data.serverVersion").value("1.0.0"))
-                .andExpect(jsonPath("$.data.inferenceProviderStatus").value("READY"))
+                .andExpect(jsonPath("$.data.inferenceProviderStatus").value("RUNNING"))
                 .andExpect(jsonPath("$.data.activeModelFilename").value("test-model.gguf"));
     }
 

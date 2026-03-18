@@ -65,12 +65,6 @@ app:
     health-check-interval-seconds: 30
     restart-delay-seconds: 5
     startup-timeout-seconds: 120
-    native:
-      # Kept for future use when de.kherud:llama updates to support Qwen3.5
-      context-size: 32768
-      gpu-layers: 0
-      threads: 8
-      enable-embedding: false
   llama-server:
     binary: /opt/homebrew/bin/llama-server
     models-dir: /Users/adamallard/.lmstudio/models

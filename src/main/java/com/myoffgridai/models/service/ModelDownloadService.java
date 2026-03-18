@@ -1,13 +1,11 @@
 package com.myoffgridai.models.service;
 
 import com.myoffgridai.ai.service.InferenceService;
-import com.myoffgridai.ai.service.NativeLlamaInferenceService;
 import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.models.dto.*;
 import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
@@ -36,8 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>Downloads are resumable: if a partial file exists at the target path,
  * the service uses HTTP Range requests to resume from the last byte.</p>
  *
- * <p>After successful download, if a {@link NativeLlamaInferenceService} is
- * present and the active model was re-downloaded, the model is reloaded.</p>
+ * <p>After successful download, logs the completion event.</p>
  */
 @Service
 public class ModelDownloadService {
@@ -49,7 +46,6 @@ public class ModelDownloadService {
     private final ModelDownloadProgressRegistry progressRegistry;
     private final InferenceService inferenceService;
     private final String modelsDirectory;
-    private final NativeLlamaInferenceService nativeInferenceService;
 
     private final ConcurrentHashMap<String, DownloadProgress> downloads = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> cancelFlags = new ConcurrentHashMap<>();
@@ -62,20 +58,17 @@ public class ModelDownloadService {
      * @param progressRegistry         the SSE progress emitter registry
      * @param inferenceService         the inference service for active model info
      * @param modelsDirectory          the local models directory path
-     * @param nativeInferenceService the native inference service (nullable, absent when provider!=native)
      */
     public ModelDownloadService(WebClient.Builder webClientBuilder,
                                 ExternalApiSettingsService settingsService,
                                 ModelDownloadProgressRegistry progressRegistry,
                                 InferenceService inferenceService,
-                                @Value("${app.inference.models-dir}") String modelsDirectory,
-                                @Autowired(required = false) NativeLlamaInferenceService nativeInferenceService) {
+                                @Value("${app.inference.models-dir}") String modelsDirectory) {
         this.webClient = webClientBuilder.build();
         this.settingsService = settingsService;
         this.progressRegistry = progressRegistry;
         this.inferenceService = inferenceService;
         this.modelsDirectory = modelsDirectory;
-        this.nativeInferenceService = nativeInferenceService;
     }
 
     /**
@@ -375,24 +368,12 @@ public class ModelDownloadService {
     }
 
     /**
-     * Notifies the native inference service that a model was downloaded.
-     * If the downloaded file is the currently active model, triggers a reload.
+     * Callback invoked after a model file is successfully downloaded.
      *
      * @param filename the downloaded model filename
      */
     private void notifyModelDownloaded(String filename) {
-        if (nativeInferenceService == null) {
-            log.debug("No native inference service available — skipping notification");
-            return;
-        }
-
-        var statusDto = nativeInferenceService.getStatus();
-        if (statusDto.activeModel() != null && statusDto.activeModel().equals(filename)) {
-            log.info("Active model re-downloaded — reloading native model");
-            nativeInferenceService.loadModel(filename);
-        } else {
-            log.info("Downloaded model {} is not the active model — no reload needed", filename);
-        }
+        log.info("Model download completed: {}", filename);
     }
 
     private void updateProgress(String downloadId,

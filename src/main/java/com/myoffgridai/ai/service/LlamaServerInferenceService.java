@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>Streaming chat with thinking support detects {@code <think>}/{@code </think>}
  * tags in the SSE token stream and emits typed {@link InferenceChunk} instances,
- * mirroring the think-tag detection logic from {@link NativeLlamaInferenceService}.</p>
+ * using a think-tag detection state machine.</p>
  *
  * <p>Activated when {@code app.inference.provider=llama-server}.</p>
  */

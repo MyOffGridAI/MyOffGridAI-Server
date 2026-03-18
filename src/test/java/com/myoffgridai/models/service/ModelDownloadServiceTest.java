@@ -53,8 +53,7 @@ class ModelDownloadServiceTest {
                 settingsService,
                 progressRegistry,
                 inferenceService,
-                tempDir.toString(),
-                null
+                tempDir.toString()
         );
     }
 
@@ -130,8 +129,7 @@ class ModelDownloadServiceTest {
                 settingsService,
                 progressRegistry,
                 inferenceService,
-                tempDir.resolve("nonexistent").toString(),
-                null
+                tempDir.resolve("nonexistent").toString()
         );
 
         List<LocalModelFileDto> models = svcMissing.listLocalModels();

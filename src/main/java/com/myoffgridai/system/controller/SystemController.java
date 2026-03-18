@@ -3,8 +3,6 @@ package com.myoffgridai.system.controller;
 import com.myoffgridai.ai.dto.LlamaServerStatusDto;
 import com.myoffgridai.ai.dto.SetActiveModelRequest;
 import com.myoffgridai.ai.service.LlamaServerProcessService;
-import com.myoffgridai.ai.service.NativeLlamaInferenceService;
-import com.myoffgridai.ai.service.NativeLlamaStatus;
 import com.myoffgridai.auth.dto.AuthResponse;
 import com.myoffgridai.auth.dto.RegisterRequest;
 import com.myoffgridai.auth.model.Role;
@@ -50,7 +48,6 @@ public class SystemController {
     private final AuthService authService;
     private final NetworkTransitionService networkTransitionService;
     private final FactoryResetService factoryResetService;
-    private final NativeLlamaInferenceService nativeInferenceService;
     private final LlamaServerProcessService llamaServerProcessService;
     private final String inferenceProvider;
 
@@ -61,7 +58,6 @@ public class SystemController {
      * @param authService                the auth service for creating the owner account
      * @param networkTransitionService   the network transition service
      * @param factoryResetService        the factory reset service
-     * @param nativeInferenceService     the native inference service (nullable)
      * @param llamaServerProcessService  the llama-server process service (nullable)
      * @param inferenceProvider          the configured inference provider name
      */
@@ -69,14 +65,12 @@ public class SystemController {
                             AuthService authService,
                             NetworkTransitionService networkTransitionService,
                             FactoryResetService factoryResetService,
-                            @Autowired(required = false) NativeLlamaInferenceService nativeInferenceService,
                             @Autowired(required = false) LlamaServerProcessService llamaServerProcessService,
                             @Value("${app.inference.provider}") String inferenceProvider) {
         this.systemConfigService = systemConfigService;
         this.authService = authService;
         this.networkTransitionService = networkTransitionService;
         this.factoryResetService = factoryResetService;
-        this.nativeInferenceService = nativeInferenceService;
         this.llamaServerProcessService = llamaServerProcessService;
         this.inferenceProvider = inferenceProvider;
     }
@@ -98,12 +92,6 @@ public class SystemController {
             providerStatus = serverStatus.status();
             if (serverStatus.activeModelPath() != null) {
                 activeModel = serverStatus.activeModelPath();
-            }
-        } else if (nativeInferenceService != null) {
-            var nativeStatus = nativeInferenceService.getStatus();
-            providerStatus = nativeStatus.status().name();
-            if (nativeStatus.activeModel() != null) {
-                activeModel = nativeStatus.activeModel();
             }
         }
 
