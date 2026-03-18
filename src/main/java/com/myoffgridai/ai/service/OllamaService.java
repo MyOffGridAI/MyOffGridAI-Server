@@ -154,7 +154,7 @@ public class OllamaService {
         log.debug("Starting streaming chat request to model: {}", request.model());
 
         OllamaChatRequest streamRequest = new OllamaChatRequest(
-                request.model(), request.messages(), true, request.options());
+                request.model(), request.messages(), true, request.options(), request.think());
 
         return webClient.post()
                 .uri("/api/chat")
