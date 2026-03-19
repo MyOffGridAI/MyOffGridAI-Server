@@ -117,11 +117,20 @@ public class OllamaService {
      * @throws OllamaInferenceException   if Ollama returns an error during inference
      */
     public OllamaChatResponse chat(OllamaChatRequest request) {
-        log.debug("Sending synchronous chat request to model: {}", request.model());
+        log.info("[DIAG] sync chat() called — model={}, options={}, messages={}",
+                request.model(), request.options(),
+                request.messages() != null ? request.messages().size() : 0);
+        long chatStart = System.nanoTime();
+
+        // Ensure keep_alive is always set to prevent model unloading
+        OllamaChatRequest withKeepAlive = request.keepAlive() != null ? request
+                : new OllamaChatRequest(request.model(), request.messages(), request.stream(),
+                        request.options(), request.think(), AppConstants.OLLAMA_KEEP_ALIVE);
+
         try {
             OllamaChatResponse response = restClient.post()
                     .uri("/api/chat")
-                    .body(request)
+                    .body(withKeepAlive)
                     .retrieve()
                     .body(OllamaChatResponse.class);
 
@@ -129,7 +138,8 @@ public class OllamaService {
                 throw new OllamaInferenceException("Ollama returned null response");
             }
 
-            log.debug("Received chat response, evalCount: {}", response.evalCount());
+            long chatMs = (System.nanoTime() - chatStart) / 1_000_000;
+            log.info("[DIAG] sync chat() completed — {}ms, evalCount: {}", chatMs, response.evalCount());
             return response;
         } catch (OllamaUnavailableException | OllamaInferenceException e) {
             throw e;
@@ -154,13 +164,30 @@ public class OllamaService {
         log.debug("Starting streaming chat request to model: {}", request.model());
 
         OllamaChatRequest streamRequest = new OllamaChatRequest(
-                request.model(), request.messages(), true, request.options(), request.think());
+                request.model(), request.messages(), true, request.options(), request.think(),
+                AppConstants.OLLAMA_KEEP_ALIVE);
+
+        int messageCount = streamRequest.messages() != null ? streamRequest.messages().size() : 0;
+        int totalChars = streamRequest.messages() != null
+                ? streamRequest.messages().stream()
+                        .mapToInt(m -> m.content() != null ? m.content().length() : 0).sum()
+                : 0;
+        log.info("[DIAG] chatStream — model={}, think={}, options={}, messages={}, totalChars={}, estimatedTokens={}",
+                streamRequest.model(), streamRequest.think(), streamRequest.options(),
+                messageCount, totalChars, totalChars / 4);
+
+        long buildTime = System.nanoTime();
 
         return webClient.post()
                 .uri("/api/chat")
                 .bodyValue(streamRequest)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .doFirst(() -> log.info("[DIAG] chatStream Flux subscribed — {}ms after build",
+                        (System.nanoTime() - buildTime) / 1_000_000))
+                .doOnNext(raw -> {
+                    // Log only the first raw chunk to see what Ollama sends back
+                })
                 .map(raw -> {
                     try {
                         return objectMapper.readValue(raw, OllamaChatChunk.class);
@@ -180,11 +207,13 @@ public class OllamaService {
      */
     @SuppressWarnings("unchecked")
     public float[] embed(String text) {
-        log.debug("Generating embedding for text of length: {}", text.length());
+        log.info("[DIAG] embed() called — model={}, textLength={}", AppConstants.OLLAMA_EMBED_MODEL, text.length());
+        long embedStart = System.nanoTime();
         try {
             Map<String, Object> request = Map.of(
                     "model", AppConstants.OLLAMA_EMBED_MODEL,
-                    "prompt", text
+                    "prompt", text,
+                    "keep_alive", AppConstants.OLLAMA_KEEP_ALIVE
             );
 
             Map<String, Object> response = restClient.post()
@@ -203,7 +232,8 @@ public class OllamaService {
                 result[i] = embedding.get(i).floatValue();
             }
 
-            log.debug("Generated embedding with {} dimensions", result.length);
+            long embedMs = (System.nanoTime() - embedStart) / 1_000_000;
+            log.info("[DIAG] embed() completed — {}ms, {} dimensions", embedMs, result.length);
             return result;
         } catch (OllamaUnavailableException | OllamaInferenceException e) {
             throw e;
@@ -229,6 +259,22 @@ public class OllamaService {
             results.add(embed(text));
         }
         return results;
+    }
+
+    /**
+     * Queries Ollama /api/ps to log currently loaded models and their status.
+     * Used for diagnostics only.
+     */
+    public void logLoadedModels() {
+        try {
+            String psResponse = restClient.get()
+                    .uri("/api/ps")
+                    .retrieve()
+                    .body(String.class);
+            log.info("[DIAG] Ollama /api/ps: {}", psResponse);
+        } catch (Exception e) {
+            log.warn("[DIAG] Failed to query /api/ps: {}", e.getMessage());
+        }
     }
 
     private boolean isConnectionError(Exception e) {

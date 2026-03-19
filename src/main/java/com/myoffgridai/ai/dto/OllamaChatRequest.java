@@ -1,6 +1,7 @@
 package com.myoffgridai.ai.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 import java.util.Map;
@@ -17,13 +18,22 @@ public record OllamaChatRequest(
         List<OllamaMessage> messages,
         boolean stream,
         Map<String, Object> options,
-        Boolean think
+        Boolean think,
+        @JsonProperty("keep_alive") String keepAlive
 ) {
     /**
-     * Convenience constructor without the think parameter (defaults to null / omitted).
+     * Convenience constructor without think or keep_alive (defaults to null / omitted).
      */
     public OllamaChatRequest(String model, List<OllamaMessage> messages,
                              boolean stream, Map<String, Object> options) {
-        this(model, messages, stream, options, null);
+        this(model, messages, stream, options, null, null);
+    }
+
+    /**
+     * Convenience constructor without keep_alive (defaults to null / omitted).
+     */
+    public OllamaChatRequest(String model, List<OllamaMessage> messages,
+                             boolean stream, Map<String, Object> options, Boolean think) {
+        this(model, messages, stream, options, think, null);
     }
 }

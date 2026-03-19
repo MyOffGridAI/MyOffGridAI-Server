@@ -118,8 +118,17 @@ public class OllamaInferenceService implements InferenceService {
      */
     @Override
     public Flux<InferenceChunk> streamChatWithThinking(List<OllamaMessage> messages, UUID userId) {
-        log.debug("Ollama streaming chat with thinking for user {}", userId);
         var aiSettings = systemConfigService.getAiSettings();
+        int totalChars = messages.stream()
+                .mapToInt(m -> m.content() != null ? m.content().length() : 0).sum();
+        log.info("[DIAG] streamChatWithThinking — model={}, num_ctx={}, temp={}, messages={}, totalChars={}, ~tokens={}",
+                aiSettings.modelName() != null ? aiSettings.modelName() : modelName,
+                aiSettings.contextSize(), aiSettings.temperature(),
+                messages.size(), totalChars, totalChars / 4);
+
+        // Check what Ollama currently has loaded before we send the request
+        ollamaService.logLoadedModels();
+
         var request = new OllamaChatRequest(
                 aiSettings.modelName() != null ? aiSettings.modelName() : modelName,
                 messages, true,

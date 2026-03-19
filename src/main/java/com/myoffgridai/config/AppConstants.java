@@ -232,6 +232,9 @@ public final class AppConstants {
     /** Default maximum number of messages fetched from DB per conversation */
     public static final int OLLAMA_CONTEXT_MESSAGE_LIMIT_DEFAULT = 20;
 
+    /** Ollama keep_alive duration — how long to keep models loaded after a request */
+    public static final String OLLAMA_KEEP_ALIVE = "24h";
+
     // ── Chat ───────────────────────────────────────────────────────────────
 
     /** Maximum length of a single user message in characters */
