@@ -1,6 +1,8 @@
 package com.myoffgridai.ai.judge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
+import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,7 @@ class JudgeInferenceServiceTest {
 
     @Mock private JudgeProperties judgeProperties;
     @Mock private JudgeModelProcessService judgeModelProcessService;
+    @Mock private ExternalApiSettingsService externalApiSettingsService;
     @Mock private WebClient.Builder webClientBuilder;
     @Mock private WebClient webClient;
     @Mock private WebClient.RequestBodyUriSpec requestBodyUriSpec;
@@ -45,14 +48,15 @@ class JudgeInferenceServiceTest {
     void setUp() {
         when(webClientBuilder.build()).thenReturn(webClient);
         service = new JudgeInferenceService(
-                judgeProperties, judgeModelProcessService, objectMapper, webClientBuilder);
+                judgeProperties, judgeModelProcessService, externalApiSettingsService,
+                objectMapper, webClientBuilder);
     }
 
     // ── isAvailable tests ───────────────────────────────────────────────────
 
     @Test
     void isAvailable_returnsTrueWhenEnabledAndRunning() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
 
         assertTrue(service.isAvailable());
@@ -60,14 +64,14 @@ class JudgeInferenceServiceTest {
 
     @Test
     void isAvailable_returnsFalseWhenDisabled() {
-        when(judgeProperties.isEnabled()).thenReturn(false);
+        mockJudgeEnabled(false);
 
         assertFalse(service.isAvailable());
     }
 
     @Test
     void isAvailable_returnsFalseWhenNotRunning() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(false);
 
         assertFalse(service.isAvailable());
@@ -77,7 +81,7 @@ class JudgeInferenceServiceTest {
 
     @Test
     void evaluate_returnsEmptyWhenNotAvailable() {
-        when(judgeProperties.isEnabled()).thenReturn(false);
+        mockJudgeEnabled(false);
 
         Optional<JudgeResult> result = service.evaluate("query", "response");
         assertTrue(result.isEmpty());
@@ -86,7 +90,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_parsesValidJsonResponse() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
         when(judgeModelProcessService.getPort()).thenReturn(1235);
         when(judgeProperties.getTimeoutSeconds()).thenReturn(30);
@@ -116,7 +120,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_handlesMarkdownFencedJson() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
         when(judgeModelProcessService.getPort()).thenReturn(1235);
         when(judgeProperties.getTimeoutSeconds()).thenReturn(30);
@@ -143,7 +147,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_returnsEmptyOnNullResponse() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
         when(judgeModelProcessService.getPort()).thenReturn(1235);
         when(judgeProperties.getTimeoutSeconds()).thenReturn(30);
@@ -162,7 +166,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_returnsEmptyOnEmptyChoices() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
         when(judgeModelProcessService.getPort()).thenReturn(1235);
         when(judgeProperties.getTimeoutSeconds()).thenReturn(30);
@@ -183,7 +187,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_returnsEmptyOnInvalidJson() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
         when(judgeModelProcessService.getPort()).thenReturn(1235);
         when(judgeProperties.getTimeoutSeconds()).thenReturn(30);
@@ -206,7 +210,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_returnsEmptyOnException() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
 
         when(webClient.post()).thenThrow(new RuntimeException("Connection refused"));
@@ -218,7 +222,7 @@ class JudgeInferenceServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void evaluate_handlesMissingFieldsInJson() {
-        when(judgeProperties.isEnabled()).thenReturn(true);
+        mockJudgeEnabled(true);
         when(judgeModelProcessService.isRunning()).thenReturn(true);
         when(judgeModelProcessService.getPort()).thenReturn(1235);
         when(judgeProperties.getTimeoutSeconds()).thenReturn(30);
@@ -240,5 +244,13 @@ class JudgeInferenceServiceTest {
         assertEquals(7.0, result.get().score());
         assertEquals("", result.get().reason());
         assertFalse(result.get().needsCloud());
+    }
+
+    private void mockJudgeEnabled(boolean enabled) {
+        ExternalApiSettingsDto dto = new ExternalApiSettingsDto(
+                false, null, false, false, false, 0, 0,
+                false, false, false, false, false, false, null,
+                enabled, null, 7.5);
+        when(externalApiSettingsService.getSettings()).thenReturn(dto);
     }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -28,23 +29,27 @@ public class JudgeInferenceService {
 
     private final JudgeProperties judgeProperties;
     private final JudgeModelProcessService judgeModelProcessService;
+    private final ExternalApiSettingsService externalApiSettingsService;
     private final ObjectMapper objectMapper;
     private final WebClient webClient;
 
     /**
      * Constructs the judge inference service.
      *
-     * @param judgeProperties         judge configuration
-     * @param judgeModelProcessService the judge process manager
-     * @param objectMapper            Jackson object mapper for JSON parsing
-     * @param webClientBuilder        Spring WebClient builder
+     * @param judgeProperties            judge configuration
+     * @param judgeModelProcessService   the judge process manager
+     * @param externalApiSettingsService DB-backed settings for judge enabled flag
+     * @param objectMapper               Jackson object mapper for JSON parsing
+     * @param webClientBuilder           Spring WebClient builder
      */
     public JudgeInferenceService(JudgeProperties judgeProperties,
                                   JudgeModelProcessService judgeModelProcessService,
+                                  ExternalApiSettingsService externalApiSettingsService,
                                   ObjectMapper objectMapper,
                                   WebClient.Builder webClientBuilder) {
         this.judgeProperties = judgeProperties;
         this.judgeModelProcessService = judgeModelProcessService;
+        this.externalApiSettingsService = externalApiSettingsService;
         this.objectMapper = objectMapper;
         this.webClient = webClientBuilder.build();
     }
@@ -52,10 +57,14 @@ public class JudgeInferenceService {
     /**
      * Returns whether the judge pipeline is both enabled and the process is running.
      *
+     * <p>Checks the database-backed setting (set via the Settings UI) rather than
+     * the YAML property, so toggling the judge in the UI takes effect immediately.</p>
+     *
      * @return true if the judge is ready to evaluate responses
      */
     public boolean isAvailable() {
-        return judgeProperties.isEnabled() && judgeModelProcessService.isRunning();
+        return externalApiSettingsService.getSettings().judgeEnabled()
+                && judgeModelProcessService.isRunning();
     }
 
     /**
