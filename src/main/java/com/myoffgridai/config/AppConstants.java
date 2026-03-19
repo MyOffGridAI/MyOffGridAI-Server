@@ -461,6 +461,9 @@ public final class AppConstants {
     /** Base path for external API settings endpoints */
     public static final String API_SETTINGS_EXTERNAL = "/api/settings/external-apis";
 
+    /** Base path for per-user settings endpoints */
+    public static final String API_USER_SETTINGS = "/api/users/me/settings";
+
     /** Base path for enrichment endpoints */
     public static final String API_ENRICHMENT = "/api/enrichment";
 
