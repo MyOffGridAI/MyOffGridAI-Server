@@ -67,10 +67,10 @@ app:
     models-dir: /Users/adamallard/.lmstudio/models
     active-model: ""
     port: 1234
-    context-size: 32768
+    context-size: 4096
     gpu-layers: 99
     threads: 8
-    timeout-seconds: 120
+    timeout-seconds: 600
     max-tokens: 4096
     temperature: 0.7
     health-check-interval-seconds: 30
@@ -81,7 +81,7 @@ app:
     models-dir: /Users/adamallard/.lmstudio/models
     active-model: Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-GGUF/Qwen3.5-27B.Q4_K_S.gguf
     port: 1234
-    context-size: 32768
+    context-size: 4096
     gpu-layers: 99
     threads: 8
     startup-timeout-seconds: 120
@@ -90,7 +90,7 @@ app:
     base-url: http://localhost:11434
     model: jackrong-qwen35-27b
     embed-model: nomic-embed-text
-    timeout-seconds: 120
+    timeout-seconds: 600
   fortress:
     mock: true
   ap:

@@ -218,7 +218,7 @@ public final class AppConstants {
     public static final int OLLAMA_CONNECT_TIMEOUT_SECONDS = 10;
 
     /** Ollama read timeout in seconds */
-    public static final int OLLAMA_READ_TIMEOUT_SECONDS = 120;
+    public static final int OLLAMA_READ_TIMEOUT_SECONDS = 600;
 
     /** Maximum context window size in tokens for Ollama requests */
     public static final int OLLAMA_MAX_CONTEXT_TOKENS = 8192;

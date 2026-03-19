@@ -31,7 +31,7 @@ public class LlamaServerProperties {
     private int port = 1234;
 
     /** Model context size in tokens. */
-    private int contextSize = 32768;
+    private int contextSize = 4096;
 
     /**
      * Number of model layers to offload to GPU.

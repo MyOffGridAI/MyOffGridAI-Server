@@ -71,7 +71,9 @@ public class RagService {
         // Embed once — shared by both memory and knowledge searches
         float[] queryEmbedding;
         try {
+            long embedStart = System.currentTimeMillis();
             queryEmbedding = embeddingService.embed(queryText);
+            log.info("[TIMING] Embedding call: {}ms", System.currentTimeMillis() - embedStart);
         } catch (Exception e) {
             log.warn("Failed to embed query for RAG context: {}. Returning empty context.", e.getMessage());
             return new RagContext(List.of(), List.of(), false, 0);
@@ -104,7 +106,9 @@ public class RagService {
         });
 
         // Wait for both searches to complete
+        long searchStart = System.currentTimeMillis();
         CompletableFuture.allOf(memoryFuture, knowledgeFuture).join();
+        log.info("[TIMING] Parallel searches (memory + knowledge): {}ms", System.currentTimeMillis() - searchStart);
 
         List<String> memorySnippets = memoryFuture.join();
         List<String> knowledgeSnippets = knowledgeFuture.join();

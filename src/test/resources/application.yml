@@ -8,7 +8,7 @@ app:
     models-dir: ./models
     active-model: ""
     port: 1234
-    context-size: 32768
+    context-size: 4096
     gpu-layers: 99
     threads: 8
     health-check-interval-seconds: 30

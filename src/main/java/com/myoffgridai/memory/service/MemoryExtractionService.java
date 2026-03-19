@@ -86,11 +86,13 @@ public class MemoryExtractionService {
                     JSON array only, no other text:""",
                     AppConstants.MEMORY_EXTRACTION_MAX_FACTS, userMessage, assistantResponse);
 
+            var aiSettings = systemConfigService.getAiSettings();
             OllamaChatRequest request = new OllamaChatRequest(
-                    systemConfigService.getAiSettings().modelName(),
+                    aiSettings.modelName(),
                     List.of(new OllamaMessage("user", prompt)),
                     false,
-                    Map.of());
+                    Map.of("num_ctx", aiSettings.contextSize(),
+                            "num_predict", 512));
 
             OllamaChatResponse response = ollamaService.chat(request);
             String responseText = response.message().content().trim();

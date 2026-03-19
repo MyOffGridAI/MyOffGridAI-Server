@@ -30,7 +30,7 @@ public class InferenceProperties {
     private String modelsDir;
     private String activeModel;
     private int port = 1234;
-    private int contextSize = 32768;
+    private int contextSize = 4096;
     private int gpuLayers = 99;
     private int threads = 8;
     private int healthCheckIntervalSeconds = 30;

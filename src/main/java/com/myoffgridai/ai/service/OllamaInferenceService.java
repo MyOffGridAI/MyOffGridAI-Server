@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -131,8 +132,14 @@ public class OllamaInferenceService implements InferenceService {
         AtomicLong startNanos = new AtomicLong(System.nanoTime());
         AtomicInteger tokenCount = new AtomicInteger(0);
 
+        AtomicBoolean firstTokenLogged = new AtomicBoolean(false);
+
         return ollamaService.chatStream(request)
                 .concatMap(chunk -> {
+                    if (!firstTokenLogged.getAndSet(true)) {
+                        long ttft = (System.nanoTime() - startNanos.get()) / 1_000_000;
+                        log.info("[TIMING] First token from Ollama: {}ms (time-to-first-token after stream started)", ttft);
+                    }
                     if (chunk.message() == null) {
                         return Flux.<InferenceChunk>empty();
                     }

@@ -310,6 +310,7 @@ public class ChatService {
      * @return a Flux emitting JSON event strings
      */
     public Flux<String> streamMessage(UUID conversationId, UUID userId, String userContent) {
+        long t0 = System.currentTimeMillis();
         log.info("Starting streaming message in conversation: {} for user: {}", conversationId, userId);
 
         Conversation conversation = getConversation(conversationId, userId);
@@ -323,14 +324,20 @@ public class ChatService {
         userMessage.setContent(userContent);
         userMessage.setTokenCount(TokenCounter.estimateTokens(userContent));
         messageRepository.save(userMessage);
+        long t1 = System.currentTimeMillis();
+        log.info("[TIMING] Message persist: {}ms", t1 - t0);
 
         // Build RAG context
         RagContext ragContext = buildRagContextSafely(userId, userContent);
+        long t2 = System.currentTimeMillis();
+        log.info("[TIMING] RAG context build: {}ms", t2 - t1);
 
         // Build context window
         String systemPrompt = systemPromptBuilder.build(user, "MyOffGridAI", ragContext);
         List<OllamaMessage> messages = contextWindowService.prepareMessages(
                 conversationId, systemPrompt, userContent);
+        long t3 = System.currentTimeMillis();
+        log.info("[TIMING] Context window assembly: {}ms — Total before stream: {}ms", t3 - t2, t3 - t0);
 
         final boolean hasRag = ragContext != null && ragContext.hasContext();
 
@@ -741,11 +748,13 @@ public class ChatService {
             String prompt = "Generate a 4-6 word title for a conversation that starts with: "
                     + firstUserMessage + ". Return only the title, no punctuation.";
 
+            var aiSettings = systemConfigService.getAiSettings();
             OllamaChatRequest request = new OllamaChatRequest(
-                    systemConfigService.getAiSettings().modelName(),
+                    aiSettings.modelName(),
                     List.of(new OllamaMessage("user", prompt)),
                     false,
-                    Map.of("num_predict", AppConstants.TITLE_GENERATION_MAX_TOKENS),
+                    Map.of("num_predict", AppConstants.TITLE_GENERATION_MAX_TOKENS,
+                            "num_ctx", aiSettings.contextSize()),
                     false
             );
 
