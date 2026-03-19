@@ -2,6 +2,9 @@ package com.myoffgridai.ai.judge;
 
 import com.myoffgridai.ai.service.ProcessBuilderFactory;
 import com.myoffgridai.config.InferenceProperties;
+import com.myoffgridai.frontier.FrontierProvider;
+import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
+import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +37,7 @@ class JudgeModelProcessServiceTest {
     @Mock private ProcessBuilderFactory processBuilderFactory;
     @Mock private ProcessBuilder mockProcessBuilder;
     @Mock private Process mockProcess;
+    @Mock private ExternalApiSettingsService externalApiSettingsService;
 
     @TempDir
     Path tempDir;
@@ -62,15 +66,35 @@ class JudgeModelProcessServiceTest {
         // Create judge model file
         Files.writeString(tempDir.resolve("judge-model.gguf"), "fake gguf data");
 
+        // Default DB settings: judge enabled with model filename set
+        when(externalApiSettingsService.getSettings()).thenReturn(
+                new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false, false, false, false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "judge-model.gguf", 6.0
+                )
+        );
+
         service = new JudgeModelProcessService(
-                judgeProperties, llamaProperties, processBuilderFactory);
+                judgeProperties, llamaProperties, processBuilderFactory,
+                externalApiSettingsService);
     }
 
     // ── start tests ─────────────────────────────────────────────────────────
 
     @Test
     void start_disabled_doesNothing() {
-        judgeProperties.setEnabled(false);
+        when(externalApiSettingsService.getSettings()).thenReturn(
+                new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false, false, false, false, false,
+                        FrontierProvider.CLAUDE,
+                        false, "judge-model.gguf", 6.0
+                )
+        );
 
         service.start();
 
@@ -79,7 +103,15 @@ class JudgeModelProcessServiceTest {
 
     @Test
     void start_noModelFilename_doesNothing() {
-        judgeProperties.setModelFilename("");
+        when(externalApiSettingsService.getSettings()).thenReturn(
+                new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false, false, false, false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "", 6.0
+                )
+        );
 
         service.start();
 
@@ -88,7 +120,15 @@ class JudgeModelProcessServiceTest {
 
     @Test
     void start_nullModelFilename_doesNothing() {
-        judgeProperties.setModelFilename(null);
+        when(externalApiSettingsService.getSettings()).thenReturn(
+                new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false, false, false, false, false,
+                        FrontierProvider.CLAUDE,
+                        true, null, 6.0
+                )
+        );
 
         service.start();
 
@@ -97,7 +137,15 @@ class JudgeModelProcessServiceTest {
 
     @Test
     void start_modelFileNotFound_doesNothing() {
-        judgeProperties.setModelFilename("nonexistent.gguf");
+        when(externalApiSettingsService.getSettings()).thenReturn(
+                new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false, false, false, false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "nonexistent.gguf", 6.0
+                )
+        );
 
         service.start();
 
@@ -223,7 +271,15 @@ class JudgeModelProcessServiceTest {
         Path subDir = tempDir.resolve("submodels");
         Files.createDirectories(subDir);
         Files.writeString(subDir.resolve("deep-judge.gguf"), "data");
-        judgeProperties.setModelFilename("deep-judge.gguf");
+        when(externalApiSettingsService.getSettings()).thenReturn(
+                new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false, false, false, false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "deep-judge.gguf", 6.0
+                )
+        );
 
         when(processBuilderFactory.create(any())).thenReturn(mockProcessBuilder);
         when(mockProcessBuilder.redirectErrorStream(true)).thenReturn(mockProcessBuilder);

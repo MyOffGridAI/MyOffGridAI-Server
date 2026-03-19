@@ -2,6 +2,8 @@ package com.myoffgridai.ai.judge;
 
 import com.myoffgridai.config.InferenceProperties;
 import com.myoffgridai.ai.service.ProcessBuilderFactory;
+import com.myoffgridai.settings.dto.ExternalApiSettingsDto;
+import com.myoffgridai.settings.service.ExternalApiSettingsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -33,22 +35,26 @@ public class JudgeModelProcessService implements DisposableBean {
     private final JudgeProperties judgeProperties;
     private final InferenceProperties llamaProperties;
     private final ProcessBuilderFactory processBuilderFactory;
+    private final ExternalApiSettingsService externalApiSettingsService;
 
     private volatile Process process;
 
     /**
      * Constructs the judge model process service.
      *
-     * @param judgeProperties       judge-specific configuration
-     * @param llamaProperties       inference configuration (reuses binary path and models dir)
-     * @param processBuilderFactory factory for creating ProcessBuilder instances
+     * @param judgeProperties            judge-specific configuration (port, context size, timeout)
+     * @param llamaProperties            inference configuration (reuses binary path and models dir)
+     * @param processBuilderFactory      factory for creating ProcessBuilder instances
+     * @param externalApiSettingsService  DB-backed settings for enabled flag and model filename
      */
     public JudgeModelProcessService(JudgeProperties judgeProperties,
                                      InferenceProperties llamaProperties,
-                                     ProcessBuilderFactory processBuilderFactory) {
+                                     ProcessBuilderFactory processBuilderFactory,
+                                     ExternalApiSettingsService externalApiSettingsService) {
         this.judgeProperties = judgeProperties;
         this.llamaProperties = llamaProperties;
         this.processBuilderFactory = processBuilderFactory;
+        this.externalApiSettingsService = externalApiSettingsService;
     }
 
     /**
@@ -58,7 +64,9 @@ public class JudgeModelProcessService implements DisposableBean {
      * or the configured model file does not exist.</p>
      */
     public synchronized void start() {
-        if (!judgeProperties.isEnabled()) {
+        ExternalApiSettingsDto settings = externalApiSettingsService.getSettings();
+
+        if (!settings.judgeEnabled()) {
             log.info("Judge model is disabled — skipping start");
             return;
         }
@@ -68,7 +76,7 @@ public class JudgeModelProcessService implements DisposableBean {
             return;
         }
 
-        String modelFilename = judgeProperties.getModelFilename();
+        String modelFilename = settings.judgeModelFilename();
         if (modelFilename == null || modelFilename.isBlank()) {
             log.warn("No judge model filename configured — cannot start judge process");
             return;
