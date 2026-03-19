@@ -100,6 +100,7 @@ public class MemoryService {
 
     /**
      * Finds memories relevant to the query text using vector similarity search.
+     * Generates the embedding internally.
      *
      * @param userId    the user's ID
      * @param queryText the text to search for
@@ -110,7 +111,26 @@ public class MemoryService {
     public List<Memory> findRelevantMemories(UUID userId, String queryText, int topK) {
         log.debug("Finding relevant memories for user: {}", userId);
 
-        List<MemoryWithScore> scored = findRelevantMemoriesInternal(userId, queryText, topK);
+        List<MemoryWithScore> scored = findRelevantMemoriesInternal(userId, queryText, topK, null);
+        return scored.stream().map(MemoryWithScore::memory).toList();
+    }
+
+    /**
+     * Finds memories relevant to the query text using a pre-computed embedding vector.
+     * Avoids redundant embedding calls when the caller has already embedded the query.
+     *
+     * @param userId              the user's ID
+     * @param queryText           the text to search for
+     * @param topK                maximum number of results
+     * @param precomputedEmbedding the pre-computed embedding vector
+     * @return list of relevant memories ordered by similarity (most similar first)
+     */
+    @Transactional
+    public List<Memory> findRelevantMemories(UUID userId, String queryText, int topK,
+                                              float[] precomputedEmbedding) {
+        log.debug("Finding relevant memories for user: {} (pre-computed embedding)", userId);
+
+        List<MemoryWithScore> scored = findRelevantMemoriesInternal(userId, queryText, topK, precomputedEmbedding);
         return scored.stream().map(MemoryWithScore::memory).toList();
     }
 
@@ -126,7 +146,7 @@ public class MemoryService {
     public List<MemorySearchResultDto> searchMemoriesWithScores(UUID userId, String queryText, int topK) {
         log.debug("Searching memories with scores for user: {}", userId);
 
-        List<MemoryWithScore> scored = findRelevantMemoriesInternal(userId, queryText, topK);
+        List<MemoryWithScore> scored = findRelevantMemoriesInternal(userId, queryText, topK, null);
         return scored.stream()
                 .map(mws -> new MemorySearchResultDto(toDto(mws.memory()), mws.score()))
                 .toList();
@@ -250,13 +270,18 @@ public class MemoryService {
                 memory.getLastAccessedAt(), memory.getAccessCount());
     }
 
-    private List<MemoryWithScore> findRelevantMemoriesInternal(UUID userId, String queryText, int topK) {
+    private List<MemoryWithScore> findRelevantMemoriesInternal(UUID userId, String queryText, int topK,
+                                                                  float[] precomputedEmbedding) {
         float[] queryEmbedding;
-        try {
-            queryEmbedding = embeddingService.embed(queryText);
-        } catch (Exception e) {
-            log.warn("Failed to embed query for memory search: {}", e.getMessage());
-            return List.of();
+        if (precomputedEmbedding != null) {
+            queryEmbedding = precomputedEmbedding;
+        } else {
+            try {
+                queryEmbedding = embeddingService.embed(queryText);
+            } catch (Exception e) {
+                log.warn("Failed to embed query for memory search: {}", e.getMessage());
+                return List.of();
+            }
         }
 
         String formattedEmbedding = EmbeddingService.formatEmbedding(queryEmbedding);

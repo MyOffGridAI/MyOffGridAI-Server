@@ -26,14 +26,20 @@ class RagServiceTest {
     @Mock private MemoryService memoryService;
     @Mock private SemanticSearchService semanticSearchService;
     @Mock private SystemConfigService systemConfigService;
+    @Mock private EmbeddingService embeddingService;
 
     private RagService ragService;
     private UUID userId;
 
+    private static final float[] DUMMY_EMBEDDING = new float[]{0.1f, 0.2f, 0.3f};
+
     @BeforeEach
     void setUp() {
-        ragService = new RagService(memoryService, semanticSearchService, systemConfigService);
+        ragService = new RagService(memoryService, semanticSearchService, systemConfigService, embeddingService);
         userId = UUID.randomUUID();
+
+        // Default: embedding succeeds with a dummy vector
+        when(embeddingService.embed(anyString())).thenReturn(DUMMY_EMBEDDING);
 
         // Default AI settings for top-K values
         when(systemConfigService.getAiSettings())
@@ -45,9 +51,9 @@ class RagServiceTest {
         Memory m1 = new Memory();
         m1.setContent("User has 3 chickens");
         m1.setImportance(MemoryImportance.MEDIUM);
-        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
+        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of(m1));
-        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of());
 
         RagContext context = ragService.buildRagContext(userId, "how many chickens?");
@@ -59,9 +65,9 @@ class RagServiceTest {
 
     @Test
     void buildRagContext_withNoMemories_returnsEmptyContext() {
-        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
+        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of());
-        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of());
 
         RagContext context = ragService.buildRagContext(userId, "test");
@@ -72,9 +78,9 @@ class RagServiceTest {
 
     @Test
     void buildRagContext_withKnowledgeChunks_includesKnowledge() {
-        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
+        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of());
-        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of("[Solar Guide]: Solar panels require 6 hours of sunlight"));
 
         RagContext context = ragService.buildRagContext(userId, "solar panels");
@@ -85,9 +91,9 @@ class RagServiceTest {
 
     @Test
     void buildRagContext_gracefullyHandlesSearchFailure() {
-        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt()))
+        when(memoryService.findRelevantMemories(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenReturn(List.of());
-        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt()))
+        when(semanticSearchService.searchForRagContext(eq(userId), anyString(), anyInt(), any(float[].class)))
                 .thenThrow(new RuntimeException("unavailable"));
 
         RagContext context = ragService.buildRagContext(userId, "test");

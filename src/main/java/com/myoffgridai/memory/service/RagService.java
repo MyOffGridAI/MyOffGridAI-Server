@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Central RAG pipeline coordinator. Assembles context from user memories
@@ -31,6 +32,7 @@ public class RagService {
     private final MemoryService memoryService;
     private final SemanticSearchService semanticSearchService;
     private final SystemConfigService systemConfigService;
+    private final EmbeddingService embeddingService;
 
     /**
      * Constructs the RAG service.
@@ -38,13 +40,16 @@ public class RagService {
      * @param memoryService         the memory service for retrieving relevant memories
      * @param semanticSearchService the semantic search service for knowledge retrieval
      * @param systemConfigService   the system config service for dynamic AI settings
+     * @param embeddingService      the embedding service for generating query embeddings
      */
     public RagService(MemoryService memoryService,
                        SemanticSearchService semanticSearchService,
-                       SystemConfigService systemConfigService) {
+                       SystemConfigService systemConfigService,
+                       EmbeddingService embeddingService) {
         this.memoryService = memoryService;
         this.semanticSearchService = semanticSearchService;
         this.systemConfigService = systemConfigService;
+        this.embeddingService = embeddingService;
     }
 
     /**
@@ -63,26 +68,46 @@ public class RagService {
         int memoryTopK = aiSettings.memoryTopK();
         int ragTopK = memoryTopK; // use same top-K for knowledge retrieval
 
-        // Retrieve relevant memories
-        List<String> memorySnippets = new ArrayList<>();
+        // Embed once — shared by both memory and knowledge searches
+        float[] queryEmbedding;
         try {
-            List<Memory> memories = memoryService.findRelevantMemories(
-                    userId, queryText, memoryTopK);
-            for (Memory memory : memories) {
-                memorySnippets.add(memory.getContent());
-            }
+            queryEmbedding = embeddingService.embed(queryText);
         } catch (Exception e) {
-            log.warn("Failed to retrieve memories for RAG context: {}", e.getMessage());
+            log.warn("Failed to embed query for RAG context: {}. Returning empty context.", e.getMessage());
+            return new RagContext(List.of(), List.of(), false, 0);
         }
 
-        // Retrieve relevant knowledge chunks with source attribution
-        List<String> knowledgeSnippets = new ArrayList<>();
-        try {
-            knowledgeSnippets = semanticSearchService.searchForRagContext(
-                    userId, queryText, ragTopK);
-        } catch (Exception e) {
-            log.debug("No knowledge chunks available for RAG context: {}", e.getMessage());
-        }
+        // Launch both searches in parallel — total time = max(memory, knowledge) instead of sum
+        CompletableFuture<List<String>> memoryFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Memory> memories = memoryService.findRelevantMemories(
+                        userId, queryText, memoryTopK, queryEmbedding);
+                List<String> snippets = new ArrayList<>();
+                for (Memory memory : memories) {
+                    snippets.add(memory.getContent());
+                }
+                return snippets;
+            } catch (Exception e) {
+                log.warn("Failed to retrieve memories for RAG context: {}", e.getMessage());
+                return List.of();
+            }
+        });
+
+        CompletableFuture<List<String>> knowledgeFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return semanticSearchService.searchForRagContext(
+                        userId, queryText, ragTopK, queryEmbedding);
+            } catch (Exception e) {
+                log.debug("No knowledge chunks available for RAG context: {}", e.getMessage());
+                return List.of();
+            }
+        });
+
+        // Wait for both searches to complete
+        CompletableFuture.allOf(memoryFuture, knowledgeFuture).join();
+
+        List<String> memorySnippets = memoryFuture.join();
+        List<String> knowledgeSnippets = knowledgeFuture.join();
 
         boolean hasContext = !memorySnippets.isEmpty() || !knowledgeSnippets.isEmpty();
         int tokenEstimate = estimateContextTokens(memorySnippets, knowledgeSnippets);

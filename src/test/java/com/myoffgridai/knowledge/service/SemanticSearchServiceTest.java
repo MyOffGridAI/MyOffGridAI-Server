@@ -63,7 +63,6 @@ class SemanticSearchServiceTest {
         vd.setEmbedding(embedding);
         vd.setContent("Solar panels need sunlight");
 
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1,0.2]");
         when(embeddingService.embed(anyString())).thenReturn(embedding);
         when(embeddingService.cosineSimilarity(any(), any())).thenReturn(0.92f);
         when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
@@ -81,7 +80,6 @@ class SemanticSearchServiceTest {
 
     @Test
     void search_noResults_returnsEmpty() {
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1,0.2]");
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of());
@@ -98,7 +96,6 @@ class SemanticSearchServiceTest {
         vd.setSourceId(chunkId);
         vd.setEmbedding(new float[]{0.1f});
 
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1]");
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
@@ -114,7 +111,6 @@ class SemanticSearchServiceTest {
         VectorDocument vd = new VectorDocument();
         vd.setSourceId(null);
 
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1]");
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
@@ -143,7 +139,6 @@ class SemanticSearchServiceTest {
         vd.setSourceId(chunkId);
         vd.setEmbedding(new float[]{0.1f});
 
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1]");
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(embeddingService.cosineSimilarity(any(), any())).thenReturn(0.8f);
         when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
@@ -174,7 +169,6 @@ class SemanticSearchServiceTest {
         vd.setSourceId(chunkId);
         vd.setEmbedding(new float[]{0.1f});
 
-        when(embeddingService.embedAndFormat(anyString())).thenReturn("[0.1]");
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(embeddingService.cosineSimilarity(any(), any())).thenReturn(0.9f);
         when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))

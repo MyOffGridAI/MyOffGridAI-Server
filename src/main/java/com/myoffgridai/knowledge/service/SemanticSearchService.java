@@ -60,6 +60,8 @@ public class SemanticSearchService {
 
     /**
      * Searches the user's knowledge base for the most semantically similar chunks.
+     * Generates the embedding internally — use the overload accepting a pre-computed
+     * embedding to avoid redundant embed calls.
      *
      * @param userId    the user's ID
      * @param queryText the search query
@@ -68,15 +70,31 @@ public class SemanticSearchService {
      */
     @Transactional(readOnly = true)
     public List<KnowledgeSearchResultDto> search(UUID userId, String queryText, int topK) {
+        float[] queryEmbedding = embeddingService.embed(queryText);
+        return search(userId, queryText, topK, queryEmbedding);
+    }
+
+    /**
+     * Searches the user's knowledge base using a pre-computed embedding vector.
+     * Avoids redundant embedding calls when the caller has already embedded the query.
+     *
+     * @param userId              the user's ID
+     * @param queryText           the search query (used for logging)
+     * @param topK                the number of results to return
+     * @param precomputedEmbedding the pre-computed embedding vector
+     * @return a list of search result DTOs with similarity scores
+     */
+    @Transactional(readOnly = true)
+    public List<KnowledgeSearchResultDto> search(UUID userId, String queryText, int topK,
+                                                  float[] precomputedEmbedding) {
         log.debug("Semantic search for user {}: '{}' (topK={})", userId, queryText, topK);
 
-        String formattedEmbedding = embeddingService.embedAndFormat(queryText);
+        String formattedEmbedding = EmbeddingService.formatEmbedding(precomputedEmbedding);
         List<VectorDocument> vectorDocs = vectorDocumentRepository.findMostSimilar(
                 userId, VectorSourceType.KNOWLEDGE_CHUNK.name(),
                 formattedEmbedding, topK);
 
         List<KnowledgeSearchResultDto> results = new ArrayList<>();
-        float[] queryEmbedding = embeddingService.embed(queryText);
 
         for (VectorDocument vd : vectorDocs) {
             UUID chunkId = vd.getSourceId();
@@ -88,7 +106,7 @@ public class SemanticSearchService {
             KnowledgeChunk chunk = chunkOpt.get();
             KnowledgeDocument doc = chunk.getDocument();
 
-            float similarity = embeddingService.cosineSimilarity(queryEmbedding, vd.getEmbedding());
+            float similarity = embeddingService.cosineSimilarity(precomputedEmbedding, vd.getEmbedding());
 
             String documentName = doc.getDisplayName() != null
                     ? doc.getDisplayName() : doc.getFilename();
@@ -110,7 +128,7 @@ public class SemanticSearchService {
 
     /**
      * Retrieves knowledge snippets for RAG context injection, including
-     * source document attribution.
+     * source document attribution. Generates the embedding internally.
      *
      * @param userId    the user's ID
      * @param queryText the query text to search for
@@ -119,7 +137,24 @@ public class SemanticSearchService {
      */
     @Transactional(readOnly = true)
     public List<String> searchForRagContext(UUID userId, String queryText, int topK) {
-        List<KnowledgeSearchResultDto> results = search(userId, queryText, topK);
+        return searchForRagContext(userId, queryText, topK, embeddingService.embed(queryText));
+    }
+
+    /**
+     * Retrieves knowledge snippets for RAG context injection using a pre-computed
+     * embedding vector. Avoids redundant embedding calls when the caller has
+     * already embedded the query.
+     *
+     * @param userId              the user's ID
+     * @param queryText           the query text to search for
+     * @param topK                the number of results to return
+     * @param precomputedEmbedding the pre-computed embedding vector
+     * @return a list of formatted knowledge snippets with source attribution
+     */
+    @Transactional(readOnly = true)
+    public List<String> searchForRagContext(UUID userId, String queryText, int topK,
+                                            float[] precomputedEmbedding) {
+        List<KnowledgeSearchResultDto> results = search(userId, queryText, topK, precomputedEmbedding);
         List<String> snippets = new ArrayList<>();
 
         for (KnowledgeSearchResultDto result : results) {
