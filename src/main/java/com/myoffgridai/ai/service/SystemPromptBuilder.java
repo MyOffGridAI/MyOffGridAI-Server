@@ -80,6 +80,14 @@ public class SystemPromptBuilder {
 
                 %s
 
+                Format your responses using Markdown for readability:
+                - Use **bold** for emphasis and key terms
+                - Use headings (## and ###) to organize longer responses
+                - Use bullet points and numbered lists for multiple items
+                - Use `inline code` and fenced code blocks for code or commands
+                - Use tables when presenting structured data
+                - Use > blockquotes for callouts or important notes
+
                 Be helpful, concise, and accurate. If you don't know something, say so.""",
                 instanceName,
                 user.getDisplayName(),

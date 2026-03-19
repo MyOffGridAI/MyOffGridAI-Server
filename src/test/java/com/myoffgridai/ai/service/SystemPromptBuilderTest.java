@@ -71,6 +71,12 @@ class SystemPromptBuilderTest {
     }
 
     @Test
+    void build_containsMarkdownFormattingInstructions() {
+        String prompt = builder.build(testUser, "Homestead");
+        assertTrue(prompt.contains("Markdown"), "Prompt should contain Markdown formatting instructions");
+    }
+
+    @Test
     void build_withNullRagContext_noCommentMarkers() {
         String prompt = builder.build(testUser, "Homestead", null);
         assertFalse(prompt.contains("<!-- MEMORY_CONTEXT -->"));
