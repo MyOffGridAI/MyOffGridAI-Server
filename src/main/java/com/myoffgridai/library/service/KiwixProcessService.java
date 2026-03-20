@@ -276,76 +276,157 @@ public class KiwixProcessService implements DisposableBean {
     }
 
     /**
-     * Attempts to install kiwix-tools via the system package manager.
+     * Attempts to install kiwix-tools by downloading the binary from kiwix.org
+     * (macOS) or via apt-get (Linux).
      */
     void autoInstallBinary() {
         installationStatus = KiwixInstallationStatus.INSTALLING;
         installationError = null;
 
         String osName = System.getProperty("os.name", "").toLowerCase();
-        List<String> installCommand;
-
-        if (osName.contains("mac")) {
-            installCommand = List.of("brew", "install", "kiwix-tools");
-        } else if (osName.contains("linux")) {
-            installCommand = List.of("apt-get", "install", "-y", "kiwix-tools");
-        } else {
-            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
-            installationError = "Unsupported platform: " + osName + ". Please install kiwix-tools manually.";
-            log.error("Cannot auto-install kiwix-tools: {}", installationError);
-            return;
-        }
-
-        log.info("Installing kiwix-tools via: {}", String.join(" ", installCommand));
 
         try {
-            ProcessBuilder pb = processBuilderFactory.create(installCommand);
-            pb.redirectErrorStream(true);
-            Process installProcess = pb.start();
-
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(installProcess.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                    log.debug("kiwix-tools install: {}", line);
-                }
-            }
-
-            boolean finished = installProcess.waitFor(300, TimeUnit.SECONDS);
-            if (!finished) {
-                installProcess.destroyForcibly();
-                installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
-                installationError = "Installation timed out after 5 minutes";
-                log.error("kiwix-tools installation timed out");
-                return;
-            }
-
-            if (installProcess.exitValue() != 0) {
-                installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
-                installationError = "Installation failed (exit code " + installProcess.exitValue() + "): "
-                        + output.toString().trim();
-                log.error("kiwix-tools installation failed: {}", installationError);
-                return;
-            }
-
-            String discovered = discoverBinary();
-            if (discovered != null) {
-                kiwixProperties.setBinaryPath(discovered);
-                installationStatus = KiwixInstallationStatus.INSTALLED;
-                installationError = null;
-                log.info("kiwix-tools installed successfully — binary at: {}", discovered);
+            if (osName.contains("mac")) {
+                installOnMacOS();
+            } else if (osName.contains("linux")) {
+                installViaCommand(List.of("apt-get", "install", "-y", "kiwix-tools"));
             } else {
                 installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
-                installationError = "Installation command succeeded but kiwix-serve binary not found on PATH";
-                log.error("kiwix-tools install completed but binary not discoverable");
+                installationError = "Unsupported platform: " + osName + ". Please install kiwix-tools manually.";
+                log.error("Cannot auto-install kiwix-tools: {}", installationError);
+                return;
             }
         } catch (Exception e) {
             installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
             installationError = "Installation failed: " + e.getMessage();
             log.error("Failed to install kiwix-tools: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Downloads kiwix-tools binary from download.kiwix.org for macOS.
+     */
+    private void installOnMacOS() throws Exception {
+        String arch = System.getProperty("os.arch", "").toLowerCase();
+        String archSuffix = arch.contains("aarch64") || arch.contains("arm") ? "arm64" : "x86_64";
+        String version = "3.8.2";
+        String tarballName = "kiwix-tools_macos-" + archSuffix + "-" + version + ".tar.gz";
+        String downloadUrl = "https://download.kiwix.org/release/kiwix-tools/" + tarballName;
+
+        Path installDir = Path.of(libraryProperties.getZimDirectory()).getParent();
+        if (installDir == null) {
+            installDir = Path.of(libraryProperties.getZimDirectory());
+        }
+        Path binDir = installDir.resolve("kiwix-bin");
+        Files.createDirectories(binDir);
+
+        Path tarball = binDir.resolve(tarballName);
+
+        log.info("Downloading kiwix-tools from: {}", downloadUrl);
+
+        // Download the tarball
+        List<String> curlCmd = List.of("curl", "-fSL", "-o", tarball.toString(), downloadUrl);
+        ProcessBuilder curlPb = processBuilderFactory.create(curlCmd);
+        curlPb.redirectErrorStream(true);
+        Process curlProcess = curlPb.start();
+        String curlOutput = readProcessOutput(curlProcess);
+        boolean curlFinished = curlProcess.waitFor(300, TimeUnit.SECONDS);
+        if (!curlFinished || curlProcess.exitValue() != 0) {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Download failed: " + curlOutput;
+            log.error("kiwix-tools download failed: {}", curlOutput);
+            return;
+        }
+
+        // Extract the tarball
+        log.info("Extracting kiwix-tools to: {}", binDir);
+        List<String> tarCmd = List.of("tar", "xzf", tarball.toString(), "-C", binDir.toString(), "--strip-components=1");
+        ProcessBuilder tarPb = processBuilderFactory.create(tarCmd);
+        tarPb.redirectErrorStream(true);
+        Process tarProcess = tarPb.start();
+        String tarOutput = readProcessOutput(tarProcess);
+        boolean tarFinished = tarProcess.waitFor(60, TimeUnit.SECONDS);
+        if (!tarFinished || tarProcess.exitValue() != 0) {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Extraction failed: " + tarOutput;
+            log.error("kiwix-tools extraction failed: {}", tarOutput);
+            return;
+        }
+
+        // Clean up tarball
+        Files.deleteIfExists(tarball);
+
+        // Verify binary exists
+        Path binaryPath = binDir.resolve("kiwix-serve");
+        if (Files.exists(binaryPath)) {
+            kiwixProperties.setBinaryPath(binaryPath.toString());
+            installationStatus = KiwixInstallationStatus.INSTALLED;
+            installationError = null;
+            log.info("kiwix-tools installed successfully — binary at: {}", binaryPath);
+        } else {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Download succeeded but kiwix-serve binary not found in extracted files";
+            log.error("kiwix-serve not found after extraction in: {}", binDir);
+        }
+    }
+
+    /**
+     * Installs kiwix-tools via a system package manager command (e.g., apt-get).
+     */
+    private void installViaCommand(List<String> installCommand) throws Exception {
+        log.info("Installing kiwix-tools via: {}", String.join(" ", installCommand));
+
+        ProcessBuilder pb = processBuilderFactory.create(installCommand);
+        pb.redirectErrorStream(true);
+        Process installProcess = pb.start();
+        String output = readProcessOutput(installProcess);
+
+        boolean finished = installProcess.waitFor(300, TimeUnit.SECONDS);
+        if (!finished) {
+            installProcess.destroyForcibly();
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Installation timed out after 5 minutes";
+            log.error("kiwix-tools installation timed out");
+            return;
+        }
+
+        if (installProcess.exitValue() != 0) {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Installation failed (exit code " + installProcess.exitValue() + "): "
+                    + output.trim();
+            log.error("kiwix-tools installation failed: {}", installationError);
+            return;
+        }
+
+        String discovered = discoverBinary();
+        if (discovered != null) {
+            kiwixProperties.setBinaryPath(discovered);
+            installationStatus = KiwixInstallationStatus.INSTALLED;
+            installationError = null;
+            log.info("kiwix-tools installed successfully — binary at: {}", discovered);
+        } else {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Installation command succeeded but kiwix-serve binary not found on PATH";
+            log.error("kiwix-tools install completed but binary not discoverable");
+        }
+    }
+
+    /**
+     * Reads all output from a process into a string.
+     */
+    private String readProcessOutput(Process process) {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+                log.debug("kiwix-tools install: {}", line);
+            }
+        } catch (IOException e) {
+            log.debug("Error reading process output: {}", e.getMessage());
+        }
+        return sb.toString();
     }
 
     /**

@@ -203,72 +203,112 @@ class KiwixProcessServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void initialize_installsWhenBinaryMissing() throws Exception {
+        Path zimDir = tempDir.resolve("zim");
+        Files.createDirectories(zimDir);
+
         when(kiwixProperties.isEnabled()).thenReturn(true);
         when(kiwixProperties.getBinaryPath()).thenReturn("/nonexistent/kiwix-serve");
         when(kiwixProperties.isAutoInstall()).thenReturn(true);
+        when(libraryProperties.getZimDirectory()).thenReturn(zimDir.toString());
+
+        // Pre-create the binary where installOnMacOS will look for it after extraction
+        Path binDir = tempDir.resolve("kiwix-bin");
+        Files.createDirectories(binDir);
+        Files.createFile(binDir.resolve("kiwix-serve"));
 
         // Mock 'which kiwix-serve' returning not found
         Process whichProcess = mock(Process.class);
         ProcessBuilder whichPb = mock(ProcessBuilder.class);
-        when(processBuilderFactory.create(List.of("which", "kiwix-serve"))).thenReturn(whichPb);
         when(whichPb.redirectErrorStream(true)).thenReturn(whichPb);
         when(whichPb.start()).thenReturn(whichProcess);
         when(whichProcess.getInputStream()).thenReturn(new ByteArrayInputStream("".getBytes()));
         when(whichProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
         when(whichProcess.exitValue()).thenReturn(1);
 
-        // Mock 'brew install kiwix-tools' succeeding
-        Process installProcess = mock(Process.class);
-        ProcessBuilder installPb = mock(ProcessBuilder.class);
-        when(processBuilderFactory.create(List.of("brew", "install", "kiwix-tools"))).thenReturn(installPb);
-        when(installPb.redirectErrorStream(true)).thenReturn(installPb);
-        when(installPb.start()).thenReturn(installProcess);
-        when(installProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Installed".getBytes()));
-        when(installProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
-        when(installProcess.exitValue()).thenReturn(0);
+        // Mock curl download succeeding
+        Process curlProcess = mock(Process.class);
+        ProcessBuilder curlPb = mock(ProcessBuilder.class);
+        when(curlPb.redirectErrorStream(true)).thenReturn(curlPb);
+        when(curlPb.start()).thenReturn(curlProcess);
+        when(curlProcess.getInputStream()).thenReturn(new ByteArrayInputStream("OK".getBytes()));
+        when(curlProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(curlProcess.exitValue()).thenReturn(0);
 
-        // After install, 'which' still won't find it in this mock, so it should fail
-        // because discoverBinary is called again and returns null
+        // Mock tar extraction succeeding
+        Process tarProcess = mock(Process.class);
+        ProcessBuilder tarPb = mock(ProcessBuilder.class);
+        when(tarPb.redirectErrorStream(true)).thenReturn(tarPb);
+        when(tarPb.start()).thenReturn(tarProcess);
+        when(tarProcess.getInputStream()).thenReturn(new ByteArrayInputStream("OK".getBytes()));
+        when(tarProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(tarProcess.exitValue()).thenReturn(0);
+
+        // Route processBuilderFactory.create based on command
+        when(processBuilderFactory.create(any(List.class))).thenAnswer(invocation -> {
+            List<String> cmd = invocation.getArgument(0);
+            if ("which".equals(cmd.get(0))) return whichPb;
+            if ("curl".equals(cmd.get(0))) return curlPb;
+            if ("tar".equals(cmd.get(0))) return tarPb;
+            return processBuilder;
+        });
+
+        // No ZIM files in DB — start() won't be called after install
+        when(zimFileRepository.findAll()).thenReturn(List.of());
+
         service.initialize();
 
-        // Verify brew install was called
-        verify(processBuilderFactory).create(List.of("brew", "install", "kiwix-tools"));
+        // Verify curl was called for download
+        ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+        verify(processBuilderFactory, atLeast(2)).create(captor.capture());
+        List<List<String>> allCmds = captor.getAllValues();
+        assertThat(allCmds).anyMatch(cmd -> "curl".equals(cmd.get(0)));
 
-        // Since the post-install discovery also fails, status should be INSTALL_FAILED
-        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALL_FAILED);
+        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALLED);
+        assertThat(service.getInstallationError()).isNull();
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void initialize_setsFailedStatusOnInstallError() throws Exception {
+        Path zimDir = tempDir.resolve("zim");
+        Files.createDirectories(zimDir);
+
         when(kiwixProperties.isEnabled()).thenReturn(true);
         when(kiwixProperties.getBinaryPath()).thenReturn("/nonexistent/kiwix-serve");
         when(kiwixProperties.isAutoInstall()).thenReturn(true);
+        when(libraryProperties.getZimDirectory()).thenReturn(zimDir.toString());
 
         // Mock 'which kiwix-serve' returning not found
         Process whichProcess = mock(Process.class);
         ProcessBuilder whichPb = mock(ProcessBuilder.class);
-        when(processBuilderFactory.create(List.of("which", "kiwix-serve"))).thenReturn(whichPb);
         when(whichPb.redirectErrorStream(true)).thenReturn(whichPb);
         when(whichPb.start()).thenReturn(whichProcess);
         when(whichProcess.getInputStream()).thenReturn(new ByteArrayInputStream("".getBytes()));
         when(whichProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
         when(whichProcess.exitValue()).thenReturn(1);
 
-        // Mock 'brew install kiwix-tools' failing
-        Process installProcess = mock(Process.class);
-        ProcessBuilder installPb = mock(ProcessBuilder.class);
-        when(processBuilderFactory.create(List.of("brew", "install", "kiwix-tools"))).thenReturn(installPb);
-        when(installPb.redirectErrorStream(true)).thenReturn(installPb);
-        when(installPb.start()).thenReturn(installProcess);
-        when(installProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Error: formula not found".getBytes()));
-        when(installProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
-        when(installProcess.exitValue()).thenReturn(1);
+        // Mock curl download failing
+        Process curlProcess = mock(Process.class);
+        ProcessBuilder curlPb = mock(ProcessBuilder.class);
+        when(curlPb.redirectErrorStream(true)).thenReturn(curlPb);
+        when(curlPb.start()).thenReturn(curlProcess);
+        when(curlProcess.getInputStream()).thenReturn(
+                new ByteArrayInputStream("curl: (22) The requested URL returned error: 404".getBytes()));
+        when(curlProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(curlProcess.exitValue()).thenReturn(22);
+
+        // Route processBuilderFactory.create based on command
+        when(processBuilderFactory.create(any(List.class))).thenAnswer(invocation -> {
+            List<String> cmd = invocation.getArgument(0);
+            if ("which".equals(cmd.get(0))) return whichPb;
+            if ("curl".equals(cmd.get(0))) return curlPb;
+            return processBuilder;
+        });
 
         service.initialize();
 
         assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALL_FAILED);
-        assertThat(service.getInstallationError()).contains("exit code 1");
+        assertThat(service.getInstallationError()).contains("Download failed");
     }
 
     @Test
@@ -309,20 +349,29 @@ class KiwixProcessServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void installKiwix_retriesInstallation() throws Exception {
-        // Mock brew install failing
-        Process installProcess = mock(Process.class);
-        ProcessBuilder installPb = mock(ProcessBuilder.class);
-        when(processBuilderFactory.create(List.of("brew", "install", "kiwix-tools"))).thenReturn(installPb);
-        when(installPb.redirectErrorStream(true)).thenReturn(installPb);
-        when(installPb.start()).thenReturn(installProcess);
-        when(installProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Error".getBytes()));
-        when(installProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
-        when(installProcess.exitValue()).thenReturn(1);
+        Path zimDir = tempDir.resolve("zim");
+        Files.createDirectories(zimDir);
+
+        when(libraryProperties.getZimDirectory()).thenReturn(zimDir.toString());
+
+        // Mock curl download failing
+        Process curlProcess = mock(Process.class);
+        ProcessBuilder curlPb = mock(ProcessBuilder.class);
+        when(curlPb.redirectErrorStream(true)).thenReturn(curlPb);
+        when(curlPb.start()).thenReturn(curlProcess);
+        when(curlProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Error".getBytes()));
+        when(curlProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(curlProcess.exitValue()).thenReturn(1);
+
+        when(processBuilderFactory.create(any(List.class))).thenReturn(curlPb);
 
         service.installKiwix();
 
         assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALL_FAILED);
-        verify(processBuilderFactory).create(List.of("brew", "install", "kiwix-tools"));
+        // Verify curl was called
+        ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+        verify(processBuilderFactory, atLeastOnce()).create(captor.capture());
+        assertThat(captor.getAllValues()).anyMatch(cmd -> "curl".equals(cmd.get(0)));
     }
 
     @Test
