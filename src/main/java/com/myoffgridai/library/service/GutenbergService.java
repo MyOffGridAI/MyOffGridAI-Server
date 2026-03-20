@@ -197,7 +197,10 @@ public class GutenbergService {
         }
 
         try {
-            byte[] fileBytes = WebClient.create()
+            HttpClient downloadHttpClient = HttpClient.create().followRedirect(true);
+            byte[] fileBytes = WebClient.builder()
+                    .clientConnector(new ReactorClientHttpConnector(downloadHttpClient))
+                    .build()
                     .get()
                     .uri(downloadUrl)
                     .retrieve()
