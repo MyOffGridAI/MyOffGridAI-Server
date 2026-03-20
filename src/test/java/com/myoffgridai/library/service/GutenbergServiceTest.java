@@ -50,6 +50,7 @@ class GutenbergServiceTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         when(libraryProperties.getGutenbergApiUrl()).thenReturn("https://gutendex.com");
+        when(webClientBuilder.clientConnector(any())).thenReturn(webClientBuilder);
         when(webClientBuilder.baseUrl(anyString())).thenReturn(webClientBuilder);
         when(webClientBuilder.build()).thenReturn(webClient);
         gutenbergService = new GutenbergService(webClientBuilder, ebookRepository, libraryProperties);

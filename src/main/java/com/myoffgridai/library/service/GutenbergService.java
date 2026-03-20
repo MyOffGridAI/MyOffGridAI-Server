@@ -10,9 +10,11 @@ import com.myoffgridai.library.repository.EbookRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -47,7 +49,9 @@ public class GutenbergService {
     public GutenbergService(WebClient.Builder webClientBuilder,
                             EbookRepository ebookRepository,
                             LibraryProperties libraryProperties) {
+        HttpClient httpClient = HttpClient.create().followRedirect(true);
         this.webClient = webClientBuilder
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(libraryProperties.getGutenbergApiUrl())
                 .build();
         this.ebookRepository = ebookRepository;
