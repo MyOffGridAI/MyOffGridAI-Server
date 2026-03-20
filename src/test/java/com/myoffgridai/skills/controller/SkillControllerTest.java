@@ -9,6 +9,7 @@ import com.myoffgridai.config.CaptivePortalRedirectFilter;
 import com.myoffgridai.config.JwtAuthFilter;
 import com.myoffgridai.config.TestSecurityConfig;
 import com.myoffgridai.skills.dto.CreateInventoryItemRequest;
+import com.myoffgridai.skills.dto.CreateSkillRequest;
 import com.myoffgridai.skills.dto.SkillExecuteRequest;
 import com.myoffgridai.skills.dto.UpdateInventoryItemRequest;
 import com.myoffgridai.skills.model.*;
@@ -146,6 +147,70 @@ class SkillControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"enabled\": false}"))
                 .andExpect(status().isForbidden());
+    }
+
+    // ── Skill Creation ─────────────────────────────────────────────────
+
+    @Test
+    void createSkill_asOwner_returnsCreatedSkill() throws Exception {
+        when(skillRepository.save(any(Skill.class))).thenAnswer(i -> {
+            Skill saved = i.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            saved.setCreatedAt(Instant.now());
+            return saved;
+        });
+
+        CreateSkillRequest request = new CreateSkillRequest(
+                "my_custom_skill", "My Custom Skill", "Does custom things",
+                SkillCategory.CUSTOM, "1.0.0", null);
+
+        mockMvc.perform(post("/api/skills")
+                        .with(user(adminUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.name").value("my_custom_skill"))
+                .andExpect(jsonPath("$.data.displayName").value("My Custom Skill"))
+                .andExpect(jsonPath("$.data.isBuiltIn").value(false));
+    }
+
+    @Test
+    void createSkill_asMember_returns403() throws Exception {
+        CreateSkillRequest request = new CreateSkillRequest(
+                "my_skill", "My Skill", "A skill",
+                SkillCategory.CUSTOM, null, null);
+
+        mockMvc.perform(post("/api/skills")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void createSkill_missingName_returns400() throws Exception {
+        CreateSkillRequest request = new CreateSkillRequest(
+                "", "My Skill", "A skill",
+                SkillCategory.CUSTOM, null, null);
+
+        mockMvc.perform(post("/api/skills")
+                        .with(user(adminUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createSkill_unauthenticated_returns401() throws Exception {
+        CreateSkillRequest request = new CreateSkillRequest(
+                "my_skill", "My Skill", "A skill",
+                SkillCategory.CUSTOM, null, null);
+
+        mockMvc.perform(post("/api/skills")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
     }
 
     // ── Skill Execution ──────────────────────────────────────────────────

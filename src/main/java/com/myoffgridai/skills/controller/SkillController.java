@@ -111,6 +111,31 @@ public class SkillController {
                 "Skill " + (enabled ? "enabled" : "disabled")));
     }
 
+    /**
+     * Creates a new custom skill. Requires OWNER or ADMIN role.
+     *
+     * @param request the create skill request
+     * @return the created skill DTO
+     */
+    @PostMapping
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<SkillDto>> createSkill(
+            @Valid @RequestBody CreateSkillRequest request) {
+        Skill skill = new Skill();
+        skill.setName(request.name());
+        skill.setDisplayName(request.displayName());
+        skill.setDescription(request.description());
+        skill.setCategory(request.category());
+        skill.setVersion(request.version() != null ? request.version() : "1.0.0");
+        skill.setAuthor("user");
+        skill.setIsEnabled(true);
+        skill.setIsBuiltIn(false);
+        skill.setParametersSchema(request.parametersSchema());
+        skill = skillRepository.save(skill);
+        log.info("Created custom skill '{}'", skill.getName());
+        return ResponseEntity.ok(ApiResponse.success(SkillDto.from(skill), "Skill created"));
+    }
+
     // ── Skill Execution ──────────────────────────────────────────────────
 
     /**
