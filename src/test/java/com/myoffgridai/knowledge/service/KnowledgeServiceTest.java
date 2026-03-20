@@ -17,10 +17,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Optional;
@@ -41,17 +44,26 @@ class KnowledgeServiceTest {
     @Mock private OcrService ocrService;
     @Mock private ChunkingService chunkingService;
     @Mock private EmbeddingService embeddingService;
+    @Mock private ApplicationContext applicationContext;
 
     private KnowledgeService knowledgeService;
     private UUID userId;
 
     @BeforeEach
     void setUp() {
+        TransactionSynchronizationManager.initSynchronization();
         knowledgeService = new KnowledgeService(
                 documentRepository, chunkRepository, vectorDocumentRepository,
                 fileStorageService, ingestionService, ocrService,
-                chunkingService, embeddingService);
+                chunkingService, embeddingService, applicationContext);
         userId = UUID.randomUUID();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test

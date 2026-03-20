@@ -12,6 +12,7 @@ import com.myoffgridai.knowledge.model.KnowledgeDocument;
 import com.myoffgridai.knowledge.repository.KnowledgeDocumentRepository;
 import com.myoffgridai.knowledge.service.FileStorageService;
 import com.myoffgridai.knowledge.service.KnowledgeService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -52,6 +55,7 @@ class ChatExportServiceTest {
 
     @BeforeEach
     void setUp() {
+        TransactionSynchronizationManager.initSynchronization();
         userId = UUID.randomUUID();
         conversationId = UUID.randomUUID();
 
@@ -65,6 +69,13 @@ class ChatExportServiceTest {
         testConversation.setTitle("Test Conversation");
         testConversation.setCreatedAt(Instant.now());
         testConversation.setUpdatedAt(Instant.now());
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -152,7 +163,12 @@ class ChatExportServiceTest {
         assertEquals("application/pdf", captured.getMimeType());
         assertEquals(DocumentStatus.PENDING, captured.getStatus());
 
-        // Verify async processing was triggered
+        // Verify async processing is scheduled for after commit
+        // (no longer called directly — deferred via TransactionSynchronization)
+        verify(knowledgeService, never()).processDocumentAsync(any());
+        // Simulate transaction commit to trigger the registered synchronization
+        TransactionSynchronizationManager.getSynchronizations()
+                .forEach(TransactionSynchronization::afterCommit);
         verify(knowledgeService).processDocumentAsync(savedDoc.getId());
     }
 

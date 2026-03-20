@@ -20,6 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -202,7 +204,14 @@ public class ChatExportService {
         log.info("Saved conversation {} to library as document {} ({})",
                 conversationId, doc.getId(), filename);
 
-        knowledgeService.processDocumentAsync(doc.getId());
+        final UUID documentId = doc.getId();
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        knowledgeService.processDocumentAsync(documentId);
+                    }
+                });
 
         return knowledgeService.toDto(doc);
     }

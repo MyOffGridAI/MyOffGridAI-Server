@@ -19,11 +19,14 @@ import com.myoffgridai.memory.repository.VectorDocumentRepository;
 import com.myoffgridai.memory.service.EmbeddingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -54,6 +57,7 @@ public class KnowledgeService {
     private final OcrService ocrService;
     private final ChunkingService chunkingService;
     private final EmbeddingService embeddingService;
+    private final ApplicationContext applicationContext;
 
     /**
      * Constructs the knowledge service.
@@ -66,6 +70,7 @@ public class KnowledgeService {
      * @param ocrService               the OCR service
      * @param chunkingService          the chunking service
      * @param embeddingService         the embedding service
+     * @param applicationContext       the Spring application context for proxy lookup
      */
     public KnowledgeService(KnowledgeDocumentRepository documentRepository,
                             KnowledgeChunkRepository chunkRepository,
@@ -74,7 +79,8 @@ public class KnowledgeService {
                             IngestionService ingestionService,
                             OcrService ocrService,
                             ChunkingService chunkingService,
-                            EmbeddingService embeddingService) {
+                            EmbeddingService embeddingService,
+                            ApplicationContext applicationContext) {
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.vectorDocumentRepository = vectorDocumentRepository;
@@ -83,6 +89,7 @@ public class KnowledgeService {
         this.ocrService = ocrService;
         this.chunkingService = chunkingService;
         this.embeddingService = embeddingService;
+        this.applicationContext = applicationContext;
     }
 
     /**
@@ -118,7 +125,7 @@ public class KnowledgeService {
         doc = documentRepository.save(doc);
         log.info("Uploaded document: {} ({}), id={}", filename, mimeType, doc.getId());
 
-        processDocumentAsync(doc.getId());
+        scheduleProcessingAfterCommit(doc.getId());
 
         return toDto(doc);
     }
@@ -297,7 +304,7 @@ public class KnowledgeService {
         doc = documentRepository.save(doc);
         log.info("Retrying document processing: {}", documentId);
 
-        processDocumentAsync(doc.getId());
+        scheduleProcessingAfterCommit(doc.getId());
 
         return toDto(doc);
     }
@@ -404,7 +411,7 @@ public class KnowledgeService {
         doc = documentRepository.save(doc);
         log.info("Created editor document: {} ({}), id={}", title, filename, doc.getId());
 
-        processDocumentAsync(doc.getId());
+        scheduleProcessingAfterCommit(doc.getId());
 
         return toDto(doc);
     }
@@ -448,7 +455,7 @@ public class KnowledgeService {
         doc = documentRepository.save(doc);
         log.info("Updated content for document {}, re-processing", documentId);
 
-        processDocumentAsync(doc.getId());
+        scheduleProcessingAfterCommit(doc.getId());
 
         return toDto(doc);
     }
@@ -477,6 +484,26 @@ public class KnowledgeService {
         }
         documentRepository.deleteByUserId(userId);
         log.info("Deleted all knowledge data for user {}", userId);
+    }
+
+    /**
+     * Schedules async document processing to run after the current transaction commits.
+     *
+     * <p>Uses {@link TransactionSynchronization#afterCommit()} to ensure the document
+     * row is visible to the async thread. Invokes the {@code @Async} method through the
+     * Spring proxy to ensure the AOP advice (async execution) is applied.</p>
+     *
+     * @param documentId the ID of the document to process
+     */
+    private void scheduleProcessingAfterCommit(UUID documentId) {
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        applicationContext.getBean(KnowledgeService.class)
+                                .processDocumentAsync(documentId);
+                    }
+                });
     }
 
     private KnowledgeDocument findDocumentForUser(UUID documentId, UUID userId) {
