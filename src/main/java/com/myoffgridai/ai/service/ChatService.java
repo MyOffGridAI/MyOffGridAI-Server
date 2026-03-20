@@ -288,6 +288,12 @@ public class ChatService {
             generateTitle(conversationId, userContent);
         }
 
+        // Store frontier knowledge if response was enhanced by a cloud provider
+        if (sourceTag == SourceTag.ENHANCED) {
+            memoryExtractionService.storeFrontierKnowledge(
+                    userId, conversationId, userContent, finalResponse);
+        }
+
         // Trigger async memory extraction
         memoryExtractionService.extractAndStore(
                 userId, conversationId, userContent, finalResponse);
@@ -444,6 +450,12 @@ public class ChatService {
 
             if (isFirstExchange) {
                 generateTitle(conversationId, userContent);
+            }
+
+            // Store frontier knowledge if response was enhanced by a cloud provider
+            if (sourceTag == SourceTag.ENHANCED) {
+                memoryExtractionService.storeFrontierKnowledge(
+                        userId, conversationId, userContent, finalResponse);
             }
 
             memoryExtractionService.extractAndStore(

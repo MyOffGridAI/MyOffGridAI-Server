@@ -54,6 +54,37 @@ public class MemoryExtractionService {
     }
 
     /**
+     * Stores frontier-enhanced knowledge as a persistent memory for future RAG retrieval.
+     *
+     * <p>When the Judge triggers a frontier API call and gets an enhanced response,
+     * this method stores the user query and enhanced answer as a HIGH importance
+     * memory. This effectively expands the local offline model's knowledge by
+     * making frontier responses available through the RAG pipeline for similar
+     * future queries.</p>
+     *
+     * <p>Runs asynchronously — does not block the chat response.</p>
+     *
+     * @param userId           the user's ID
+     * @param conversationId   the source conversation ID
+     * @param userQuery        the original user query
+     * @param enhancedResponse the frontier-enhanced response content
+     */
+    @Async
+    public void storeFrontierKnowledge(UUID userId, UUID conversationId,
+                                        String userQuery, String enhancedResponse) {
+        log.info("Storing frontier knowledge for user: {} from conversation: {}", userId, conversationId);
+        try {
+            String content = "Q: " + userQuery.trim() + "\nA: " + enhancedResponse.trim();
+            memoryService.createMemory(userId, content, MemoryImportance.HIGH,
+                    "frontier,enhanced", conversationId);
+            log.info("Stored frontier knowledge memory for conversation: {}", conversationId);
+        } catch (Exception e) {
+            log.warn("Failed to store frontier knowledge for conversation {}: {}",
+                    conversationId, e.getMessage());
+        }
+    }
+
+    /**
      * Extracts memorable facts from a conversation exchange and stores them.
      *
      * <p>Runs asynchronously — does not block the chat response. If extraction

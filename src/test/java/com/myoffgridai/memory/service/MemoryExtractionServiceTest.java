@@ -116,6 +116,48 @@ class MemoryExtractionServiceTest {
                 eq(userId), eq("fact"), eq(MemoryImportance.MEDIUM), eq(""), eq(conversationId));
     }
 
+    // ── storeFrontierKnowledge tests ────────────────────────────────────
+
+    @Test
+    void storeFrontierKnowledge_storesHighImportanceMemory() {
+        extractionService.storeFrontierKnowledge(
+                userId, conversationId,
+                "How do I set up a rain catchment system?",
+                "To set up a rain catchment system, you need gutters, a first-flush diverter, and storage tanks.");
+
+        verify(memoryService).createMemory(
+                eq(userId),
+                eq("Q: How do I set up a rain catchment system?\n"
+                        + "A: To set up a rain catchment system, you need gutters, "
+                        + "a first-flush diverter, and storage tanks."),
+                eq(MemoryImportance.HIGH),
+                eq("frontier,enhanced"),
+                eq(conversationId));
+    }
+
+    @Test
+    void storeFrontierKnowledge_handlesMemoryServiceFailure_gracefully() {
+        doThrow(new RuntimeException("DB error"))
+                .when(memoryService).createMemory(any(), anyString(), any(), any(), any());
+
+        assertDoesNotThrow(() ->
+                extractionService.storeFrontierKnowledge(
+                        userId, conversationId, "query", "response"));
+    }
+
+    @Test
+    void storeFrontierKnowledge_trimsWhitespace() {
+        extractionService.storeFrontierKnowledge(
+                userId, conversationId, "  padded query  ", "  padded response  ");
+
+        verify(memoryService).createMemory(
+                eq(userId),
+                eq("Q: padded query\nA: padded response"),
+                eq(MemoryImportance.HIGH),
+                eq("frontier,enhanced"),
+                eq(conversationId));
+    }
+
     @Test
     void extractAndStore_markdownCodeFence_parsesCorrectly() {
         String jsonResponse = """

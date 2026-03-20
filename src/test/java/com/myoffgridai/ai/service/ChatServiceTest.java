@@ -852,6 +852,83 @@ class ChatServiceTest {
     }
 
     @Test
+    void sendMessage_judgeEnabled_storesFrontierKnowledge_whenEnhanced() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "how to compost?")));
+        OllamaChatResponse ollamaResponse = new OllamaChatResponse(
+                new OllamaMessage("assistant", "local response"), true, 1000L, 5);
+        when(ollamaService.chat(any())).thenReturn(ollamaResponse);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        when(externalApiSettingsService.getSettings())
+                .thenReturn(new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false,
+                        false, false,
+                        false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "judge.gguf", 7.5
+                ));
+        when(judgeInferenceService.isAvailable()).thenReturn(true);
+        when(judgeInferenceService.evaluate(anyString(), anyString()))
+                .thenReturn(Optional.of(new JudgeResult(4.0, "Needs improvement", true)));
+        when(frontierApiRouter.isAnyAvailable()).thenReturn(true);
+        when(frontierApiRouter.complete(anyString(), anyString()))
+                .thenReturn(Optional.of("enhanced composting guide"));
+
+        chatService.sendMessage(conversationId, userId, "how to compost?");
+
+        verify(memoryExtractionService).storeFrontierKnowledge(
+                eq(userId), eq(conversationId),
+                eq("how to compost?"), eq("enhanced composting guide"));
+    }
+
+    @Test
+    void sendMessage_judgeEnabled_doesNotStoreFrontierKnowledge_whenScoreAboveThreshold() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "hello")));
+        OllamaChatResponse ollamaResponse = new OllamaChatResponse(
+                new OllamaMessage("assistant", "good response"), true, 1000L, 5);
+        when(ollamaService.chat(any())).thenReturn(ollamaResponse);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        when(externalApiSettingsService.getSettings())
+                .thenReturn(new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false,
+                        false, false,
+                        false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "judge.gguf", 7.5
+                ));
+        when(judgeInferenceService.isAvailable()).thenReturn(true);
+        when(judgeInferenceService.evaluate(anyString(), anyString()))
+                .thenReturn(Optional.of(new JudgeResult(9.0, "Excellent", false)));
+
+        chatService.sendMessage(conversationId, userId, "hello");
+
+        verify(memoryExtractionService, never()).storeFrontierKnowledge(any(), any(), any(), any());
+    }
+
+    @Test
     void sendMessage_judgeDisabled_skipsEvaluation() {
         when(conversationRepository.findByIdAndUserId(conversationId, userId))
                 .thenReturn(Optional.of(testConversation));
@@ -874,5 +951,77 @@ class ChatServiceTest {
         assertNull(result.getJudgeScore());
         verifyNoInteractions(judgeInferenceService);
         verifyNoInteractions(frontierApiRouter);
+    }
+
+    @Test
+    void sendMessage_judgeDisabled_doesNotStoreFrontierKnowledge() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("system prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "hello")));
+        OllamaChatResponse ollamaResponse = new OllamaChatResponse(
+                new OllamaMessage("assistant", "local response"), true, 1000L, 5);
+        when(ollamaService.chat(any())).thenReturn(ollamaResponse);
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> {
+            Message m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        chatService.sendMessage(conversationId, userId, "hello");
+
+        verify(memoryExtractionService, never()).storeFrontierKnowledge(any(), any(), any(), any());
+        verify(memoryExtractionService).extractAndStore(
+                eq(userId), eq(conversationId), eq("hello"), anyString());
+    }
+
+    // ── judge pipeline tests (streamMessage) — frontier knowledge ────────
+
+    @Test
+    void streamMessage_judgeEnabled_storesFrontierKnowledge_whenEnhanced() {
+        when(conversationRepository.findByIdAndUserId(conversationId, userId))
+                .thenReturn(Optional.of(testConversation));
+        when(systemPromptBuilder.build(any(User.class), anyString(), any())).thenReturn("prompt");
+        when(contextWindowService.prepareMessages(any(), anyString(), anyString()))
+                .thenReturn(List.of(new OllamaMessage("user", "solar panel advice")));
+
+        InferenceChunk contentChunk = new InferenceChunk(ChunkType.CONTENT, "local answer", null);
+        InferenceChunk doneChunk = new InferenceChunk(ChunkType.DONE, null,
+                new InferenceMetadata(10, 5.0, 2.0, "stop"));
+        when(inferenceService.streamChatWithThinking(any(), any()))
+                .thenReturn(Flux.just(contentChunk, doneChunk));
+        when(messageRepository.save(any(Message.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(conversationRepository.save(any(Conversation.class))).thenReturn(testConversation);
+
+        when(externalApiSettingsService.getSettings())
+                .thenReturn(new ExternalApiSettingsDto(
+                        false, "claude-sonnet-4-20250514", false,
+                        false, false, 512, 5,
+                        false, false,
+                        false, false,
+                        false, false,
+                        FrontierProvider.CLAUDE,
+                        true, "judge.gguf", 7.5
+                ));
+        when(judgeInferenceService.isAvailable()).thenReturn(true);
+        when(judgeInferenceService.evaluate(anyString(), anyString()))
+                .thenReturn(Optional.of(new JudgeResult(3.0, "Poor quality", true)));
+        when(frontierApiRouter.isAnyAvailable()).thenReturn(true);
+        when(frontierApiRouter.complete(anyString(), anyString()))
+                .thenReturn(Optional.of("enhanced solar guide"));
+
+        Flux<String> result = chatService.streamMessage(conversationId, userId, "solar panel advice");
+
+        List<String> events = new java.util.ArrayList<>();
+        StepVerifier.create(result)
+                .recordWith(() -> events)
+                .thenConsumeWhile(e -> true)
+                .verifyComplete();
+
+        verify(memoryExtractionService).storeFrontierKnowledge(
+                eq(userId), eq(conversationId),
+                eq("solar panel advice"), eq("enhanced solar guide"));
     }
 }
