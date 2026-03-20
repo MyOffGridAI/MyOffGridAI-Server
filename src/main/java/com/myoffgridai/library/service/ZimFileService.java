@@ -185,16 +185,20 @@ public class ZimFileService {
     public KiwixStatusDto getKiwixStatus() {
         int bookCount = (int) zimFileRepository.count();
         boolean processManaged = kiwixProperties.isManageProcess();
+        String installStatus = kiwixProcessService.getInstallationStatus().name();
+        String installError = kiwixProcessService.getInstallationError();
         try {
             webClient.get()
                     .uri(libraryProperties.getKiwixUrl())
                     .retrieve()
                     .toBodilessEntity()
                     .block(Duration.ofSeconds(5));
-            return new KiwixStatusDto(true, libraryProperties.getKiwixUrl(), bookCount, processManaged);
+            return new KiwixStatusDto(true, libraryProperties.getKiwixUrl(), bookCount,
+                    processManaged, installStatus, installError);
         } catch (Exception e) {
             log.warn("Kiwix server unreachable at {}: {}", libraryProperties.getKiwixUrl(), e.getMessage());
-            return new KiwixStatusDto(false, libraryProperties.getKiwixUrl(), bookCount, processManaged);
+            return new KiwixStatusDto(false, libraryProperties.getKiwixUrl(), bookCount,
+                    processManaged, installStatus, installError);
         }
     }
 }

@@ -3,13 +3,19 @@ package com.myoffgridai.library.service;
 import com.myoffgridai.ai.service.ProcessBuilderFactory;
 import com.myoffgridai.library.config.KiwixProperties;
 import com.myoffgridai.library.config.LibraryProperties;
+import com.myoffgridai.library.dto.KiwixInstallationStatus;
 import com.myoffgridai.library.repository.ZimFileRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.file.Files;
@@ -20,12 +26,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
- * Manages the kiwix-serve process lifecycle (start, stop, restart).
+ * Manages the kiwix-serve process lifecycle (start, stop, restart)
+ * and auto-installation of kiwix-tools.
  *
- * <p>Follows the {@code JudgeModelProcessService} pattern. Builds a command
- * from configured binary path, port, threads, and all ZIM file paths found
- * in the ZIM directory and database. Implements {@link DisposableBean} to
- * stop the process on application shutdown.</p>
+ * <p>On application startup, checks for the kiwix-serve binary and
+ * optionally auto-installs it via the system package manager.
+ * Implements {@link DisposableBean} to stop the process on shutdown.</p>
  */
 @Service
 public class KiwixProcessService implements DisposableBean {
@@ -38,6 +44,8 @@ public class KiwixProcessService implements DisposableBean {
     private final ProcessBuilderFactory processBuilderFactory;
 
     private volatile Process process;
+    private volatile KiwixInstallationStatus installationStatus = KiwixInstallationStatus.NOT_CHECKED;
+    private volatile String installationError = null;
 
     /**
      * Constructs the Kiwix process service.
@@ -55,6 +63,76 @@ public class KiwixProcessService implements DisposableBean {
         this.libraryProperties = libraryProperties;
         this.zimFileRepository = zimFileRepository;
         this.processBuilderFactory = processBuilderFactory;
+    }
+
+    /**
+     * Post-startup initialization: discovers or installs kiwix-serve,
+     * then auto-starts if ZIM files exist.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Async
+    public void initialize() {
+        if (!kiwixProperties.isEnabled()) {
+            log.info("Kiwix process management is disabled — skipping initialization");
+            installationStatus = KiwixInstallationStatus.NOT_INSTALLED;
+            return;
+        }
+
+        installationStatus = KiwixInstallationStatus.CHECKING;
+        log.info("Checking for kiwix-serve binary...");
+
+        String discovered = discoverBinary();
+        if (discovered != null) {
+            kiwixProperties.setBinaryPath(discovered);
+            installationStatus = KiwixInstallationStatus.INSTALLED;
+            log.info("kiwix-serve found at: {}", discovered);
+        } else if (kiwixProperties.isAutoInstall()) {
+            autoInstallBinary();
+        } else {
+            installationStatus = KiwixInstallationStatus.NOT_INSTALLED;
+            log.warn("kiwix-serve not found and auto-install is disabled");
+        }
+
+        if (installationStatus == KiwixInstallationStatus.INSTALLED) {
+            List<String> zimPaths = collectZimPaths();
+            if (!zimPaths.isEmpty()) {
+                log.info("ZIM files found — auto-starting kiwix-serve");
+                start();
+            } else {
+                log.info("No ZIM files found — kiwix-serve installed but not started");
+            }
+        }
+    }
+
+    /**
+     * Manually triggers kiwix-tools installation (retry after failure).
+     */
+    public void installKiwix() {
+        autoInstallBinary();
+        if (installationStatus == KiwixInstallationStatus.INSTALLED) {
+            List<String> zimPaths = collectZimPaths();
+            if (!zimPaths.isEmpty()) {
+                start();
+            }
+        }
+    }
+
+    /**
+     * Returns the current installation status.
+     *
+     * @return the installation status enum value
+     */
+    public KiwixInstallationStatus getInstallationStatus() {
+        return installationStatus;
+    }
+
+    /**
+     * Returns the installation error message, if any.
+     *
+     * @return the error message or null
+     */
+    public String getInstallationError() {
+        return installationError;
     }
 
     /**
@@ -162,6 +240,113 @@ public class KiwixProcessService implements DisposableBean {
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
+
+    /**
+     * Discovers the kiwix-serve binary by checking the configured path
+     * and then falling back to {@code which kiwix-serve}.
+     *
+     * @return the absolute path to the binary, or null if not found
+     */
+    String discoverBinary() {
+        String configured = kiwixProperties.getBinaryPath();
+        if (configured != null && Files.exists(Path.of(configured))) {
+            return configured;
+        }
+
+        try {
+            ProcessBuilder pb = processBuilderFactory.create(List.of("which", "kiwix-serve"));
+            pb.redirectErrorStream(true);
+            Process whichProcess = pb.start();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(whichProcess.getInputStream()))) {
+                String line = reader.readLine();
+                boolean finished = whichProcess.waitFor(5, TimeUnit.SECONDS);
+                if (finished && whichProcess.exitValue() == 0 && line != null && !line.isBlank()) {
+                    String path = line.trim();
+                    if (Files.exists(Path.of(path))) {
+                        return path;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to run 'which kiwix-serve': {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempts to install kiwix-tools via the system package manager.
+     */
+    void autoInstallBinary() {
+        installationStatus = KiwixInstallationStatus.INSTALLING;
+        installationError = null;
+
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        List<String> installCommand;
+
+        if (osName.contains("mac")) {
+            installCommand = List.of("brew", "install", "kiwix-tools");
+        } else if (osName.contains("linux")) {
+            installCommand = List.of("apt-get", "install", "-y", "kiwix-tools");
+        } else {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Unsupported platform: " + osName + ". Please install kiwix-tools manually.";
+            log.error("Cannot auto-install kiwix-tools: {}", installationError);
+            return;
+        }
+
+        log.info("Installing kiwix-tools via: {}", String.join(" ", installCommand));
+
+        try {
+            ProcessBuilder pb = processBuilderFactory.create(installCommand);
+            pb.redirectErrorStream(true);
+            Process installProcess = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(installProcess.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                    log.debug("kiwix-tools install: {}", line);
+                }
+            }
+
+            boolean finished = installProcess.waitFor(300, TimeUnit.SECONDS);
+            if (!finished) {
+                installProcess.destroyForcibly();
+                installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+                installationError = "Installation timed out after 5 minutes";
+                log.error("kiwix-tools installation timed out");
+                return;
+            }
+
+            if (installProcess.exitValue() != 0) {
+                installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+                installationError = "Installation failed (exit code " + installProcess.exitValue() + "): "
+                        + output.toString().trim();
+                log.error("kiwix-tools installation failed: {}", installationError);
+                return;
+            }
+
+            String discovered = discoverBinary();
+            if (discovered != null) {
+                kiwixProperties.setBinaryPath(discovered);
+                installationStatus = KiwixInstallationStatus.INSTALLED;
+                installationError = null;
+                log.info("kiwix-tools installed successfully — binary at: {}", discovered);
+            } else {
+                installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+                installationError = "Installation command succeeded but kiwix-serve binary not found on PATH";
+                log.error("kiwix-tools install completed but binary not discoverable");
+            }
+        } catch (Exception e) {
+            installationStatus = KiwixInstallationStatus.INSTALL_FAILED;
+            installationError = "Installation failed: " + e.getMessage();
+            log.error("Failed to install kiwix-tools: {}", e.getMessage(), e);
+        }
+    }
 
     /**
      * Collects all ZIM file paths from both the database and the ZIM directory on disk.

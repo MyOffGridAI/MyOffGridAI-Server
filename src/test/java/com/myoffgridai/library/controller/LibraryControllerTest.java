@@ -168,7 +168,7 @@ class LibraryControllerTest {
 
     @Test
     void kiwixStatus_authenticated_returnsOk() throws Exception {
-        KiwixStatusDto status = new KiwixStatusDto(true, "http://localhost:8888", 3, true);
+        KiwixStatusDto status = new KiwixStatusDto(true, "http://localhost:8888", 3, true, "INSTALLED", null);
         when(zimFileService.getKiwixStatus()).thenReturn(status);
 
         mockMvc.perform(get("/api/library/kiwix/status")
@@ -176,7 +176,8 @@ class LibraryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.available").value(true))
                 .andExpect(jsonPath("$.data.bookCount").value(3))
-                .andExpect(jsonPath("$.data.processManaged").value(true));
+                .andExpect(jsonPath("$.data.processManaged").value(true))
+                .andExpect(jsonPath("$.data.installationStatus").value("INSTALLED"));
     }
 
     @Test
@@ -441,6 +442,29 @@ class LibraryControllerTest {
         mockMvc.perform(post("/api/library/kiwix/stop")
                         .with(user(memberUser)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void installKiwix_asOwner_returnsOk() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/install")
+                        .with(user(ownerUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(kiwixProcessService).installKiwix();
+    }
+
+    @Test
+    void installKiwix_asMember_returns403() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/install")
+                        .with(user(memberUser)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void installKiwix_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/install"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

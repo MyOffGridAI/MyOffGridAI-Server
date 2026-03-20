@@ -2,6 +2,7 @@ package com.myoffgridai.library.service;
 
 import com.myoffgridai.library.config.KiwixProperties;
 import com.myoffgridai.library.config.LibraryProperties;
+import com.myoffgridai.library.dto.KiwixInstallationStatus;
 import com.myoffgridai.library.dto.KiwixStatusDto;
 import com.myoffgridai.library.dto.ZimFileDto;
 import com.myoffgridai.library.model.ZimFile;
@@ -160,6 +161,8 @@ class ZimFileServiceTest {
         when(libraryProperties.getKiwixUrl()).thenReturn("http://localhost:8888");
         when(zimFileRepository.count()).thenReturn(3L);
         when(kiwixProperties.isManageProcess()).thenReturn(true);
+        when(kiwixProcessService.getInstallationStatus()).thenReturn(KiwixInstallationStatus.INSTALLED);
+        when(kiwixProcessService.getInstallationError()).thenReturn(null);
 
         WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
         WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
@@ -182,6 +185,8 @@ class ZimFileServiceTest {
         when(libraryProperties.getKiwixUrl()).thenReturn("http://localhost:8888");
         when(zimFileRepository.count()).thenReturn(2L);
         when(kiwixProperties.isManageProcess()).thenReturn(false);
+        when(kiwixProcessService.getInstallationStatus()).thenReturn(KiwixInstallationStatus.NOT_INSTALLED);
+        when(kiwixProcessService.getInstallationError()).thenReturn(null);
 
         when(webClient.get()).thenThrow(new RuntimeException("Connection refused"));
 

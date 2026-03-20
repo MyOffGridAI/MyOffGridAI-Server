@@ -19,6 +19,7 @@ public class KiwixProperties {
     private int timeoutSeconds = 15;
     private int threads = 4;
     private boolean manageProcess = true;
+    private boolean autoInstall = true;
     private String catalogBaseUrl = "https://library.kiwix.org";
 
     /** @return whether kiwix process management is enabled */
@@ -73,6 +74,15 @@ public class KiwixProperties {
 
     public void setManageProcess(boolean manageProcess) {
         this.manageProcess = manageProcess;
+    }
+
+    /** @return whether to auto-install kiwix-tools if missing */
+    public boolean isAutoInstall() {
+        return autoInstall;
+    }
+
+    public void setAutoInstall(boolean autoInstall) {
+        this.autoInstall = autoInstall;
     }
 
     /** @return base URL for the Kiwix online catalog (OPDS) */

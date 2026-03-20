@@ -148,6 +148,19 @@ public class LibraryController {
     }
 
     /**
+     * Manually triggers kiwix-tools installation (retry after failure).
+     *
+     * @return 200 OK with status message
+     */
+    @PostMapping("/kiwix/install")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> installKiwix() {
+        log.info("Kiwix install request");
+        kiwixProcessService.installKiwix();
+        return ResponseEntity.ok(ApiResponse.success(null, "Kiwix installation requested"));
+    }
+
+    /**
      * Starts the kiwix-serve process.
      *
      * @return 200 OK with status message

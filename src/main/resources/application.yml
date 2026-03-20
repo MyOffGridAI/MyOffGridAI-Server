@@ -116,12 +116,13 @@ app:
     gutenberg-api-url: https://gutendex.com
     max-upload-size-mb: 2048
   kiwix:
-    enabled: false
+    enabled: true
     binary-path: /opt/homebrew/bin/kiwix-serve
     port: 8888
     timeout-seconds: 15
     threads: 4
     manage-process: true
+    auto-install: true
     catalog-base-url: https://library.kiwix.org
 
 ---

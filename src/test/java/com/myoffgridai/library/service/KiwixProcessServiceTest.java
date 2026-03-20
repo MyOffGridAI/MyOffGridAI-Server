@@ -3,6 +3,7 @@ package com.myoffgridai.library.service;
 import com.myoffgridai.ai.service.ProcessBuilderFactory;
 import com.myoffgridai.library.config.KiwixProperties;
 import com.myoffgridai.library.config.LibraryProperties;
+import com.myoffgridai.library.dto.KiwixInstallationStatus;
 import com.myoffgridai.library.model.ZimFile;
 import com.myoffgridai.library.repository.ZimFileRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -178,6 +179,175 @@ class KiwixProcessServiceTest {
     void destroy_callsStop() {
         service.destroy();
         // No exception - graceful shutdown
+    }
+
+    // ── Auto-install tests ──────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void initialize_skipsInstallWhenBinaryExists() throws Exception {
+        Path binaryPath = tempDir.resolve("kiwix-serve");
+        Files.createFile(binaryPath);
+
+        when(kiwixProperties.isEnabled()).thenReturn(true);
+        when(kiwixProperties.getBinaryPath()).thenReturn(binaryPath.toString());
+        when(zimFileRepository.findAll()).thenReturn(List.of());
+        when(libraryProperties.getZimDirectory()).thenReturn(tempDir.toString());
+
+        service.initialize();
+
+        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALLED);
+        assertThat(service.getInstallationError()).isNull();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void initialize_installsWhenBinaryMissing() throws Exception {
+        when(kiwixProperties.isEnabled()).thenReturn(true);
+        when(kiwixProperties.getBinaryPath()).thenReturn("/nonexistent/kiwix-serve");
+        when(kiwixProperties.isAutoInstall()).thenReturn(true);
+
+        // Mock 'which kiwix-serve' returning not found
+        Process whichProcess = mock(Process.class);
+        ProcessBuilder whichPb = mock(ProcessBuilder.class);
+        when(processBuilderFactory.create(List.of("which", "kiwix-serve"))).thenReturn(whichPb);
+        when(whichPb.redirectErrorStream(true)).thenReturn(whichPb);
+        when(whichPb.start()).thenReturn(whichProcess);
+        when(whichProcess.getInputStream()).thenReturn(new ByteArrayInputStream("".getBytes()));
+        when(whichProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(whichProcess.exitValue()).thenReturn(1);
+
+        // Mock 'brew install kiwix-tools' succeeding
+        Process installProcess = mock(Process.class);
+        ProcessBuilder installPb = mock(ProcessBuilder.class);
+        when(processBuilderFactory.create(List.of("brew", "install", "kiwix-tools"))).thenReturn(installPb);
+        when(installPb.redirectErrorStream(true)).thenReturn(installPb);
+        when(installPb.start()).thenReturn(installProcess);
+        when(installProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Installed".getBytes()));
+        when(installProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(installProcess.exitValue()).thenReturn(0);
+
+        // After install, 'which' still won't find it in this mock, so it should fail
+        // because discoverBinary is called again and returns null
+        service.initialize();
+
+        // Verify brew install was called
+        verify(processBuilderFactory).create(List.of("brew", "install", "kiwix-tools"));
+
+        // Since the post-install discovery also fails, status should be INSTALL_FAILED
+        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALL_FAILED);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void initialize_setsFailedStatusOnInstallError() throws Exception {
+        when(kiwixProperties.isEnabled()).thenReturn(true);
+        when(kiwixProperties.getBinaryPath()).thenReturn("/nonexistent/kiwix-serve");
+        when(kiwixProperties.isAutoInstall()).thenReturn(true);
+
+        // Mock 'which kiwix-serve' returning not found
+        Process whichProcess = mock(Process.class);
+        ProcessBuilder whichPb = mock(ProcessBuilder.class);
+        when(processBuilderFactory.create(List.of("which", "kiwix-serve"))).thenReturn(whichPb);
+        when(whichPb.redirectErrorStream(true)).thenReturn(whichPb);
+        when(whichPb.start()).thenReturn(whichProcess);
+        when(whichProcess.getInputStream()).thenReturn(new ByteArrayInputStream("".getBytes()));
+        when(whichProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(whichProcess.exitValue()).thenReturn(1);
+
+        // Mock 'brew install kiwix-tools' failing
+        Process installProcess = mock(Process.class);
+        ProcessBuilder installPb = mock(ProcessBuilder.class);
+        when(processBuilderFactory.create(List.of("brew", "install", "kiwix-tools"))).thenReturn(installPb);
+        when(installPb.redirectErrorStream(true)).thenReturn(installPb);
+        when(installPb.start()).thenReturn(installProcess);
+        when(installProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Error: formula not found".getBytes()));
+        when(installProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(installProcess.exitValue()).thenReturn(1);
+
+        service.initialize();
+
+        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALL_FAILED);
+        assertThat(service.getInstallationError()).contains("exit code 1");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void initialize_autoStartsWhenZimFilesExist() throws Exception {
+        Path binaryPath = tempDir.resolve("kiwix-serve");
+        Files.createFile(binaryPath);
+
+        Path zimPath = tempDir.resolve("test.zim");
+        Files.createFile(zimPath);
+
+        ZimFile zf = new ZimFile();
+        zf.setId(UUID.randomUUID());
+        zf.setFilename("test.zim");
+        zf.setFilePath(zimPath.toString());
+
+        when(kiwixProperties.isEnabled()).thenReturn(true);
+        when(kiwixProperties.getBinaryPath()).thenReturn(binaryPath.toString());
+        when(kiwixProperties.getPort()).thenReturn(8888);
+        when(kiwixProperties.getThreads()).thenReturn(4);
+        when(kiwixProperties.getTimeoutSeconds()).thenReturn(1);
+        when(zimFileRepository.findAll()).thenReturn(List.of(zf));
+        when(libraryProperties.getZimDirectory()).thenReturn(tempDir.toString());
+
+        when(processBuilderFactory.create(any(List.class))).thenReturn(processBuilder);
+        when(processBuilder.redirectErrorStream(true)).thenReturn(processBuilder);
+        when(processBuilder.start()).thenReturn(process);
+        when(process.isAlive()).thenReturn(false);
+        when(process.exitValue()).thenReturn(1);
+
+        service.initialize();
+
+        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALLED);
+        // Verify start() was triggered (processBuilderFactory.create was called for start)
+        verify(processBuilderFactory).create(any(List.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void installKiwix_retriesInstallation() throws Exception {
+        // Mock brew install failing
+        Process installProcess = mock(Process.class);
+        ProcessBuilder installPb = mock(ProcessBuilder.class);
+        when(processBuilderFactory.create(List.of("brew", "install", "kiwix-tools"))).thenReturn(installPb);
+        when(installPb.redirectErrorStream(true)).thenReturn(installPb);
+        when(installPb.start()).thenReturn(installProcess);
+        when(installProcess.getInputStream()).thenReturn(new ByteArrayInputStream("Error".getBytes()));
+        when(installProcess.waitFor(300, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(installProcess.exitValue()).thenReturn(1);
+
+        service.installKiwix();
+
+        assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALL_FAILED);
+        verify(processBuilderFactory).create(List.of("brew", "install", "kiwix-tools"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void discoverBinary_findsViaWhich() throws Exception {
+        Path binaryPath = tempDir.resolve("kiwix-serve");
+        Files.createFile(binaryPath);
+
+        // Configured path doesn't exist
+        when(kiwixProperties.getBinaryPath()).thenReturn("/nonexistent/kiwix-serve");
+
+        // 'which kiwix-serve' returns the real path
+        Process whichProcess = mock(Process.class);
+        ProcessBuilder whichPb = mock(ProcessBuilder.class);
+        when(processBuilderFactory.create(List.of("which", "kiwix-serve"))).thenReturn(whichPb);
+        when(whichPb.redirectErrorStream(true)).thenReturn(whichPb);
+        when(whichPb.start()).thenReturn(whichProcess);
+        when(whichProcess.getInputStream()).thenReturn(
+                new ByteArrayInputStream(binaryPath.toString().getBytes()));
+        when(whichProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        when(whichProcess.exitValue()).thenReturn(0);
+
+        String result = service.discoverBinary();
+
+        assertThat(result).isEqualTo(binaryPath.toString());
     }
 
     private ZimFile createZimFile(Path dir) throws IOException {
