@@ -55,6 +55,8 @@ class KiwixDownloadServiceTest {
         // Status will be QUEUED or DOWNLOADING depending on async timing
         assertThat(progress.get().filename()).isEqualTo("test.zim");
         assertThat(progress.get().id()).isEqualTo(downloadId);
+        assertThat(progress.get().speedBytesPerSecond()).isGreaterThanOrEqualTo(0);
+        assertThat(progress.get().estimatedSecondsRemaining()).isGreaterThanOrEqualTo(0);
     }
 
     @Test

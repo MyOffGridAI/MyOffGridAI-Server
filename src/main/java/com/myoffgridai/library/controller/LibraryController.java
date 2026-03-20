@@ -264,6 +264,20 @@ public class LibraryController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Cancels an in-progress Kiwix download.
+     *
+     * @param id the download identifier
+     * @return 200 OK with confirmation message
+     */
+    @DeleteMapping("/kiwix/downloads/{id}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> cancelKiwixDownload(@PathVariable String id) {
+        log.info("Kiwix download cancel request: {}", id);
+        kiwixDownloadService.cancelDownload(id);
+        return ResponseEntity.ok(ApiResponse.success(null, "Download cancel requested"));
+    }
+
     // ── eBook Endpoints ──────────────────────────────────────────────────────
 
     /**

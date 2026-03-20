@@ -7,5 +7,6 @@ public enum KiwixDownloadState {
     QUEUED,
     DOWNLOADING,
     COMPLETE,
-    FAILED
+    FAILED,
+    CANCELLED
 }

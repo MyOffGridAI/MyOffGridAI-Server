@@ -546,7 +546,7 @@ class LibraryControllerTest {
     void listKiwixDownloads_authenticated_returnsOk() throws Exception {
         when(kiwixDownloadService.getAllDownloads()).thenReturn(List.of(
                 new KiwixDownloadStatusDto("dl-1", "test.zim", 1024000, 512000,
-                        50.0, KiwixDownloadState.DOWNLOADING, null)));
+                        50.0, KiwixDownloadState.DOWNLOADING, null, 1048576.0, 120)));
 
         mockMvc.perform(get("/api/library/kiwix/downloads")
                         .with(user(memberUser)))
@@ -565,7 +565,7 @@ class LibraryControllerTest {
     void getKiwixDownloadProgress_found_returnsOk() throws Exception {
         when(kiwixDownloadService.getProgress("dl-1")).thenReturn(java.util.Optional.of(
                 new KiwixDownloadStatusDto("dl-1", "test.zim", 1024, 1024,
-                        100.0, KiwixDownloadState.COMPLETE, null)));
+                        100.0, KiwixDownloadState.COMPLETE, null, 0, 0)));
 
         mockMvc.perform(get("/api/library/kiwix/downloads/dl-1")
                         .with(user(memberUser)))
@@ -580,6 +580,42 @@ class LibraryControllerTest {
         mockMvc.perform(get("/api/library/kiwix/downloads/nonexistent")
                         .with(user(memberUser)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void cancelKiwixDownload_asOwner_returnsOk() throws Exception {
+        mockMvc.perform(delete("/api/library/kiwix/downloads/dl-1")
+                        .with(user(ownerUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(kiwixDownloadService).cancelDownload("dl-1");
+    }
+
+    @Test
+    void cancelKiwixDownload_asMember_returns403() throws Exception {
+        mockMvc.perform(delete("/api/library/kiwix/downloads/dl-1")
+                        .with(user(memberUser)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cancelKiwixDownload_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(delete("/api/library/kiwix/downloads/dl-1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listKiwixDownloads_includesSpeedAndEta() throws Exception {
+        when(kiwixDownloadService.getAllDownloads()).thenReturn(List.of(
+                new KiwixDownloadStatusDto("dl-1", "test.zim", 2048000, 1024000,
+                        50.0, KiwixDownloadState.DOWNLOADING, null, 524288.0, 60)));
+
+        mockMvc.perform(get("/api/library/kiwix/downloads")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].speedBytesPerSecond").value(524288.0))
+                .andExpect(jsonPath("$.data[0].estimatedSecondsRemaining").value(60));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

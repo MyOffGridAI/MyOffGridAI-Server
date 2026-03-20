@@ -85,7 +85,7 @@ public class KiwixDownloadService {
 
         KiwixDownloadStatusDto initial = new KiwixDownloadStatusDto(
                 downloadId, request.filename(), request.sizeBytes(),
-                0, 0.0, KiwixDownloadState.QUEUED, null
+                0, 0.0, KiwixDownloadState.QUEUED, null, 0, 0
         );
         downloads.put(downloadId, initial);
         cancelFlags.put(downloadId, new AtomicBoolean(false));
@@ -140,32 +140,61 @@ public class KiwixDownloadService {
             Files.createDirectories(zimDir);
             Path target = zimDir.resolve(request.filename());
 
+            // Detect partial file for resume
+            long existingSize = Files.exists(target) ? Files.size(target) : 0;
+
             downloads.put(downloadId, new KiwixDownloadStatusDto(
                     downloadId, request.filename(), request.sizeBytes(),
-                    0, 0.0, KiwixDownloadState.DOWNLOADING, null
+                    existingSize, 0.0, KiwixDownloadState.DOWNLOADING, null, 0, 0
             ));
 
-            Flux<DataBuffer> body = webClient.get()
-                    .uri(request.downloadUrl())
-                    .exchangeToFlux(response -> {
-                        long contentLength = response.headers().contentLength().orElse(-1);
-                        long totalBytes = contentLength > 0 ? contentLength : request.sizeBytes();
-                        downloads.put(downloadId, new KiwixDownloadStatusDto(
-                                downloadId, request.filename(), totalBytes,
-                                0, 0.0, KiwixDownloadState.DOWNLOADING, null
-                        ));
-                        return response.bodyToFlux(DataBuffer.class);
-                    });
+            var requestSpec = webClient.get().uri(request.downloadUrl());
+            if (existingSize > 0) {
+                requestSpec = requestSpec.header("Range", "bytes=" + existingSize + "-");
+                log.info("Resuming Kiwix download {} from byte {}", downloadId, existingSize);
+            }
 
-            AsynchronousFileChannel channel = AsynchronousFileChannel.open(
-                    target,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING
-            );
+            long[] resumeOffset = {existingSize};
 
-            long[] bytesWritten = {0};
+            Flux<DataBuffer> body = requestSpec.exchangeToFlux(response -> {
+                int statusCode = response.statusCode().value();
+                // If server returns 200 (not 206) despite Range header, restart from 0
+                if (existingSize > 0 && statusCode == 200) {
+                    resumeOffset[0] = 0;
+                    log.info("Server does not support Range — restarting download {}", downloadId);
+                }
+
+                long contentLength = response.headers().contentLength().orElse(-1);
+                long totalBytes = contentLength > 0 ? contentLength + resumeOffset[0] : request.sizeBytes();
+
+                // Parse Content-Range header for accurate total
+                String contentRange = response.headers().header("Content-Range")
+                        .stream().findFirst().orElse(null);
+                if (contentRange != null && contentRange.contains("/")) {
+                    String total = contentRange.substring(contentRange.lastIndexOf('/') + 1);
+                    try {
+                        totalBytes = Long.parseLong(total);
+                    } catch (NumberFormatException ignored) {}
+                }
+
+                long finalTotal = totalBytes;
+                downloads.put(downloadId, new KiwixDownloadStatusDto(
+                        downloadId, request.filename(), finalTotal,
+                        resumeOffset[0], 0.0, KiwixDownloadState.DOWNLOADING, null, 0, 0
+                ));
+                return response.bodyToFlux(DataBuffer.class);
+            });
+
+            // Open with APPEND when resuming, TRUNCATE_EXISTING when starting fresh
+            StandardOpenOption[] options = resumeOffset[0] > 0
+                    ? new StandardOpenOption[]{StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND}
+                    : new StandardOpenOption[]{StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING};
+
+            AsynchronousFileChannel channel = AsynchronousFileChannel.open(target, options);
+
+            long[] bytesWritten = {resumeOffset[0]};
             long[] lastEmitTime = {System.currentTimeMillis()};
+            long startTime = System.currentTimeMillis();
 
             body.doOnNext(buffer -> {
                 try {
@@ -185,10 +214,14 @@ public class KiwixDownloadService {
                         KiwixDownloadStatusDto current = downloads.get(downloadId);
                         long total = current != null ? current.totalBytes() : request.sizeBytes();
                         double pct = total > 0 ? (double) bytesWritten[0] / total * 100 : 0;
+                        double elapsedSec = (now - startTime) / 1000.0;
+                        double speed = elapsedSec > 0 ? (bytesWritten[0] - resumeOffset[0]) / elapsedSec : 0;
+                        long eta = speed > 0 ? (long) ((total - bytesWritten[0]) / speed) : 0;
 
                         downloads.put(downloadId, new KiwixDownloadStatusDto(
                                 downloadId, request.filename(), total,
-                                bytesWritten[0], pct, KiwixDownloadState.DOWNLOADING, null
+                                bytesWritten[0], pct, KiwixDownloadState.DOWNLOADING, null,
+                                speed, eta
                         ));
                     }
 
@@ -211,7 +244,7 @@ public class KiwixDownloadService {
             long total = current != null ? current.totalBytes() : bytesWritten[0];
             downloads.put(downloadId, new KiwixDownloadStatusDto(
                     downloadId, request.filename(), total,
-                    bytesWritten[0], 100.0, KiwixDownloadState.COMPLETE, null
+                    bytesWritten[0], 100.0, KiwixDownloadState.COMPLETE, null, 0, 0
             ));
 
             ZimFile zimFile = new ZimFile();
@@ -237,7 +270,7 @@ public class KiwixDownloadService {
             String errorMsg = e.getMessage();
             AtomicBoolean flag = cancelFlags.get(downloadId);
             KiwixDownloadState state = (flag != null && flag.get())
-                    ? KiwixDownloadState.FAILED : KiwixDownloadState.FAILED;
+                    ? KiwixDownloadState.CANCELLED : KiwixDownloadState.FAILED;
 
             KiwixDownloadStatusDto current = downloads.get(downloadId);
             downloads.put(downloadId, new KiwixDownloadStatusDto(
@@ -247,10 +280,15 @@ public class KiwixDownloadService {
                     current != null ? current.downloadedBytes() : 0,
                     current != null ? current.percentComplete() : 0,
                     state,
-                    errorMsg
+                    errorMsg,
+                    0, 0
             ));
 
-            log.error("Kiwix download failed: {} — {}", downloadId, errorMsg);
+            if (state == KiwixDownloadState.CANCELLED) {
+                log.info("Kiwix download cancelled: {}", downloadId);
+            } else {
+                log.error("Kiwix download failed: {} — {}", downloadId, errorMsg);
+            }
         } finally {
             cancelFlags.remove(downloadId);
         }
