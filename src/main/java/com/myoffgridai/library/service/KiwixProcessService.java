@@ -152,15 +152,32 @@ public class KiwixProcessService implements DisposableBean {
             return;
         }
 
+        String binary = kiwixProperties.getBinaryPath();
+        if (binary == null || !Files.exists(Path.of(binary))) {
+            log.warn("kiwix-serve binary not found: {} — cannot start kiwix process", binary);
+            return;
+        }
+
         List<String> zimPaths = collectZimPaths();
         if (zimPaths.isEmpty()) {
             log.info("No ZIM files found — cannot start kiwix-serve");
             return;
         }
 
-        String binary = kiwixProperties.getBinaryPath();
-        if (binary == null || !Files.exists(Path.of(binary))) {
-            log.warn("kiwix-serve binary not found: {} — cannot start kiwix process", binary);
+        // Validate each ZIM by attempting a dry-run with kiwix-serve.
+        // Some ZIM files use a format version newer than the installed binary
+        // and cause kiwix-serve to exit immediately with code 1.
+        List<String> validPaths = new ArrayList<>();
+        for (String zimPath : zimPaths) {
+            if (validateZimFile(binary, zimPath)) {
+                validPaths.add(zimPath);
+            } else {
+                log.warn("Skipping incompatible ZIM file: {}", zimPath);
+            }
+        }
+
+        if (validPaths.isEmpty()) {
+            log.warn("No compatible ZIM files found — cannot start kiwix-serve");
             return;
         }
 
@@ -170,13 +187,29 @@ public class KiwixProcessService implements DisposableBean {
         command.add(String.valueOf(kiwixProperties.getPort()));
         command.add("--threads");
         command.add(String.valueOf(kiwixProperties.getThreads()));
-        command.addAll(zimPaths);
+        command.addAll(validPaths);
 
         try {
             ProcessBuilder pb = processBuilderFactory.create(command);
             pb.redirectErrorStream(true);
             process = pb.start();
             log.info("kiwix-serve started with PID {} — serving {} ZIM files", process.pid(), zimPaths.size());
+
+            // Capture process output in a background thread for diagnostics
+            final Process proc = process;
+            Thread outputReader = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(proc.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        log.info("kiwix-serve: {}", line);
+                    }
+                } catch (IOException e) {
+                    log.debug("kiwix-serve output stream closed: {}", e.getMessage());
+                }
+            }, "kiwix-output-reader");
+            outputReader.setDaemon(true);
+            outputReader.start();
 
             if (waitForHealthy()) {
                 log.info("kiwix-serve is healthy on port {}", kiwixProperties.getPort());
@@ -430,6 +463,50 @@ public class KiwixProcessService implements DisposableBean {
     }
 
     /**
+     * Validates a ZIM file by attempting a quick kiwix-serve dry-run.
+     *
+     * <p>Starts kiwix-serve on an ephemeral port with just this ZIM file
+     * and checks whether the process stays alive for 2 seconds. If it exits
+     * immediately with a non-zero code, the ZIM is incompatible.</p>
+     *
+     * @param binary  path to the kiwix-serve binary
+     * @param zimPath path to the ZIM file to validate
+     * @return true if the ZIM is loadable by kiwix-serve
+     */
+    private boolean validateZimFile(String binary, String zimPath) {
+        try {
+            // Use a random high port for validation
+            int testPort = 19000 + (int) (Math.random() * 1000);
+            List<String> cmd = List.of(binary, "--port", String.valueOf(testPort), "--threads", "1", zimPath);
+            ProcessBuilder pb = processBuilderFactory.create(cmd);
+            pb.redirectErrorStream(true);
+            Process testProcess = pb.start();
+
+            // Give it 2 seconds to either start or crash
+            boolean exited = testProcess.waitFor(2, TimeUnit.SECONDS);
+            if (exited && testProcess.exitValue() != 0) {
+                // Read output for diagnostics
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(testProcess.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        log.warn("ZIM validation [{}]: {}", zimPath, line);
+                    }
+                }
+                return false;
+            }
+
+            // Process is still running or exited successfully — ZIM is valid
+            testProcess.destroyForcibly();
+            testProcess.waitFor(5, TimeUnit.SECONDS);
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to validate ZIM file {}: {}", zimPath, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Collects all ZIM file paths from both the database and the ZIM directory on disk.
      */
     private List<String> collectZimPaths() {
@@ -484,7 +561,7 @@ public class KiwixProcessService implements DisposableBean {
     private boolean checkHealth() {
         try {
             HttpURLConnection conn = (HttpURLConnection) URI.create(
-                    "http://localhost:" + kiwixProperties.getPort() + "/"
+                    "http://127.0.0.1:" + kiwixProperties.getPort() + "/"
             ).toURL().openConnection();
             conn.setConnectTimeout(2000);
             conn.setReadTimeout(2000);

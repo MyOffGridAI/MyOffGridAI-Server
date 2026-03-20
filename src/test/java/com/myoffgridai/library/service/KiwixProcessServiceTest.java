@@ -60,7 +60,11 @@ class KiwixProcessServiceTest {
 
     @Test
     void start_whenNoZimFiles_doesNotStartProcess() throws IOException {
+        Path binaryPath = tempDir.resolve("kiwix-serve");
+        Files.createFile(binaryPath);
+
         when(kiwixProperties.isEnabled()).thenReturn(true);
+        when(kiwixProperties.getBinaryPath()).thenReturn(binaryPath.toString());
         when(zimFileRepository.findAll()).thenReturn(List.of());
         when(libraryProperties.getZimDirectory()).thenReturn(tempDir.toString());
 
@@ -70,11 +74,8 @@ class KiwixProcessServiceTest {
     }
 
     @Test
-    void start_whenBinaryNotFound_doesNotStartProcess() throws IOException {
+    void start_whenBinaryNotFound_doesNotStartProcess() {
         when(kiwixProperties.isEnabled()).thenReturn(true);
-        ZimFile zf = createZimFile(tempDir);
-        when(zimFileRepository.findAll()).thenReturn(List.of(zf));
-        when(libraryProperties.getZimDirectory()).thenReturn(tempDir.toString());
         when(kiwixProperties.getBinaryPath()).thenReturn("/nonexistent/kiwix-serve");
 
         service.start();
@@ -107,18 +108,27 @@ class KiwixProcessServiceTest {
         when(processBuilderFactory.create(any(List.class))).thenReturn(processBuilder);
         when(processBuilder.redirectErrorStream(true)).thenReturn(processBuilder);
         when(processBuilder.start()).thenReturn(process);
+        // Validation: waitFor(2s) returns false (still running = valid ZIM)
+        when(process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(false);
+        when(process.destroyForcibly()).thenReturn(process);
+        when(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        // Main start: process output reader + health check
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.pid()).thenReturn(1234L);
         when(process.isAlive()).thenReturn(false);
         when(process.exitValue()).thenReturn(1);
 
         service.start();
 
         ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
-        verify(processBuilderFactory).create(captor.capture());
+        verify(processBuilderFactory, atLeast(2)).create(captor.capture());
 
-        List<String> command = captor.getValue();
-        assertThat(command.get(0)).isEqualTo(binaryPath.toString());
-        assertThat(command).contains("--port", "8888", "--threads", "4");
-        assertThat(command).contains(zimPath.toString());
+        // The last create() call is the real start command (first is validation)
+        List<List<String>> allCmds = captor.getAllValues();
+        List<String> startCmd = allCmds.get(allCmds.size() - 1);
+        assertThat(startCmd.get(0)).isEqualTo(binaryPath.toString());
+        assertThat(startCmd).contains("--port", "8888", "--threads", "4");
+        assertThat(startCmd).contains(zimPath.toString());
     }
 
     @Test
@@ -151,6 +161,13 @@ class KiwixProcessServiceTest {
         when(processBuilderFactory.create(any(List.class))).thenReturn(processBuilder);
         when(processBuilder.redirectErrorStream(true)).thenReturn(processBuilder);
         when(processBuilder.start()).thenReturn(process);
+        // Validation: ZIM is valid (process stays alive)
+        when(process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(false);
+        when(process.destroyForcibly()).thenReturn(process);
+        when(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        // Main start
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.pid()).thenReturn(1234L);
         when(process.isAlive()).thenReturn(false);
         when(process.exitValue()).thenReturn(1);
 
@@ -336,14 +353,21 @@ class KiwixProcessServiceTest {
         when(processBuilderFactory.create(any(List.class))).thenReturn(processBuilder);
         when(processBuilder.redirectErrorStream(true)).thenReturn(processBuilder);
         when(processBuilder.start()).thenReturn(process);
+        // Validation: ZIM is valid
+        when(process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(false);
+        when(process.destroyForcibly()).thenReturn(process);
+        when(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)).thenReturn(true);
+        // Main start
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
+        when(process.pid()).thenReturn(1234L);
         when(process.isAlive()).thenReturn(false);
         when(process.exitValue()).thenReturn(1);
 
         service.initialize();
 
         assertThat(service.getInstallationStatus()).isEqualTo(KiwixInstallationStatus.INSTALLED);
-        // Verify start() was triggered (processBuilderFactory.create was called for start)
-        verify(processBuilderFactory).create(any(List.class));
+        // Verify start() was triggered (processBuilderFactory.create was called for validation + start)
+        verify(processBuilderFactory, atLeast(2)).create(any(List.class));
     }
 
     @Test

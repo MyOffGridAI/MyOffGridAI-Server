@@ -22,7 +22,7 @@ app:
   library:
     zim-directory: ${java.io.tmpdir}/myoffgridai-test/zim
     ebook-directory: ${java.io.tmpdir}/myoffgridai-test/ebooks
-    kiwix-url: http://localhost:8888
+    kiwix-url: http://127.0.0.1:8888
     calibre-content-server-url: http://localhost:8081
     gutenberg-api-url: https://gutendex.com
     max-upload-size-mb: 2048
