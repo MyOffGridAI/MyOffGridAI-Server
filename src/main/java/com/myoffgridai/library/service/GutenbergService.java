@@ -55,18 +55,31 @@ public class GutenbergService {
     /**
      * Constructs the Gutenberg service.
      *
-     * @param webClientBuilder  the WebClient builder
+     * <p>Uses a standalone {@code WebClient.builder()} rather than Spring's
+     * auto-configured builder to ensure the Reactor Netty {@code followRedirect(true)}
+     * setting is not overridden by Spring Boot customizers.</p>
+     *
      * @param ebookRepository   the eBook repository
      * @param libraryProperties the library configuration properties
      */
-    public GutenbergService(WebClient.Builder webClientBuilder,
-                            EbookRepository ebookRepository,
+    public GutenbergService(EbookRepository ebookRepository,
                             LibraryProperties libraryProperties) {
         HttpClient httpClient = HttpClient.create().followRedirect(true);
-        this.webClient = webClientBuilder
+        this.webClient = WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(libraryProperties.getGutenbergApiUrl())
                 .build();
+        this.ebookRepository = ebookRepository;
+        this.libraryProperties = libraryProperties;
+    }
+
+    /**
+     * Test-only constructor allowing injection of a pre-built WebClient.
+     */
+    GutenbergService(WebClient webClient,
+                     EbookRepository ebookRepository,
+                     LibraryProperties libraryProperties) {
+        this.webClient = webClient;
         this.ebookRepository = ebookRepository;
         this.libraryProperties = libraryProperties;
     }
