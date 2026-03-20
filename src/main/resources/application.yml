@@ -115,6 +115,14 @@ app:
     calibre-content-server-url: http://localhost:8081
     gutenberg-api-url: https://gutendex.com
     max-upload-size-mb: 2048
+  kiwix:
+    enabled: false
+    binary-path: /opt/homebrew/bin/kiwix-serve
+    port: 8888
+    timeout-seconds: 15
+    threads: 4
+    manage-process: true
+    catalog-base-url: https://library.kiwix.org
 
 ---
 spring:

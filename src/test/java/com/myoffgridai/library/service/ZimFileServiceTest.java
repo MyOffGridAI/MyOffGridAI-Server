@@ -1,5 +1,6 @@
 package com.myoffgridai.library.service;
 
+import com.myoffgridai.library.config.KiwixProperties;
 import com.myoffgridai.library.config.LibraryProperties;
 import com.myoffgridai.library.dto.KiwixStatusDto;
 import com.myoffgridai.library.dto.ZimFileDto;
@@ -38,6 +39,8 @@ class ZimFileServiceTest {
 
     @Mock private ZimFileRepository zimFileRepository;
     @Mock private LibraryProperties libraryProperties;
+    @Mock private KiwixProperties kiwixProperties;
+    @Mock private KiwixProcessService kiwixProcessService;
     @Mock private WebClient.Builder webClientBuilder;
     @Mock private WebClient webClient;
 
@@ -49,7 +52,8 @@ class ZimFileServiceTest {
     @BeforeEach
     void setUp() {
         when(webClientBuilder.build()).thenReturn(webClient);
-        zimFileService = new ZimFileService(zimFileRepository, libraryProperties, webClientBuilder);
+        zimFileService = new ZimFileService(zimFileRepository, libraryProperties,
+                kiwixProperties, kiwixProcessService, webClientBuilder);
     }
 
     @Test
@@ -155,6 +159,7 @@ class ZimFileServiceTest {
     void getKiwixStatus_serverAvailable_returnsAvailable() {
         when(libraryProperties.getKiwixUrl()).thenReturn("http://localhost:8888");
         when(zimFileRepository.count()).thenReturn(3L);
+        when(kiwixProperties.isManageProcess()).thenReturn(true);
 
         WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
         WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
@@ -169,12 +174,14 @@ class ZimFileServiceTest {
 
         assertThat(result.available()).isTrue();
         assertThat(result.bookCount()).isEqualTo(3);
+        assertThat(result.processManaged()).isTrue();
     }
 
     @Test
     void getKiwixStatus_serverUnavailable_returnsUnavailable() {
         when(libraryProperties.getKiwixUrl()).thenReturn("http://localhost:8888");
         when(zimFileRepository.count()).thenReturn(2L);
+        when(kiwixProperties.isManageProcess()).thenReturn(false);
 
         when(webClient.get()).thenThrow(new RuntimeException("Connection refused"));
 
@@ -182,6 +189,7 @@ class ZimFileServiceTest {
 
         assertThat(result.available()).isFalse();
         assertThat(result.bookCount()).isEqualTo(2);
+        assertThat(result.processManaged()).isFalse();
     }
 
     private MultipartFile mockMultipartFile(String filename, long size) throws IOException {

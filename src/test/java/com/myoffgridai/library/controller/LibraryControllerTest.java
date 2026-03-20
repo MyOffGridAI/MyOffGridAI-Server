@@ -14,6 +14,9 @@ import com.myoffgridai.library.model.Ebook;
 import com.myoffgridai.library.model.EbookFormat;
 import com.myoffgridai.library.service.EbookService;
 import com.myoffgridai.library.service.GutenbergService;
+import com.myoffgridai.library.service.KiwixCatalogService;
+import com.myoffgridai.library.service.KiwixDownloadService;
+import com.myoffgridai.library.service.KiwixProcessService;
 import com.myoffgridai.library.service.ZimFileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +52,9 @@ class LibraryControllerTest {
     @MockitoBean private ZimFileService zimFileService;
     @MockitoBean private EbookService ebookService;
     @MockitoBean private GutenbergService gutenbergService;
+    @MockitoBean private KiwixProcessService kiwixProcessService;
+    @MockitoBean private KiwixCatalogService kiwixCatalogService;
+    @MockitoBean private KiwixDownloadService kiwixDownloadService;
     @MockitoBean private LibraryProperties libraryProperties;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private JwtAuthFilter jwtAuthFilter;
@@ -162,14 +168,15 @@ class LibraryControllerTest {
 
     @Test
     void kiwixStatus_authenticated_returnsOk() throws Exception {
-        KiwixStatusDto status = new KiwixStatusDto(true, "http://localhost:8888", 3);
+        KiwixStatusDto status = new KiwixStatusDto(true, "http://localhost:8888", 3, true);
         when(zimFileService.getKiwixStatus()).thenReturn(status);
 
         mockMvc.perform(get("/api/library/kiwix/status")
                         .with(user(memberUser)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.available").value(true))
-                .andExpect(jsonPath("$.data.bookCount").value(3));
+                .andExpect(jsonPath("$.data.bookCount").value(3))
+                .andExpect(jsonPath("$.data.processManaged").value(true));
     }
 
     @Test
@@ -392,6 +399,163 @@ class LibraryControllerTest {
     void importGutenberg_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/api/library/gutenberg/1342/import"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ── Kiwix Process Management Endpoints ─────────────────────────────────
+
+    @Test
+    void startKiwix_asOwner_returnsOk() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/start")
+                        .with(user(ownerUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(kiwixProcessService).start();
+    }
+
+    @Test
+    void startKiwix_asMember_returns403() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/start")
+                        .with(user(memberUser)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void startKiwix_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/start"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void stopKiwix_asOwner_returnsOk() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/stop")
+                        .with(user(ownerUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(kiwixProcessService).stop();
+    }
+
+    @Test
+    void stopKiwix_asMember_returns403() throws Exception {
+        mockMvc.perform(post("/api/library/kiwix/stop")
+                        .with(user(memberUser)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void browseKiwixCatalog_authenticated_returnsOk() throws Exception {
+        KiwixCatalogSearchResultDto result = new KiwixCatalogSearchResultDto(1, List.of(
+                new KiwixCatalogEntryDto("abc-123", "Wikipedia (English)", "English Wikipedia",
+                        "eng", "wikipedia_en", "wikipedia", "wikipedia;english",
+                        6000000, 500000, 95000000000L,
+                        "https://download.kiwix.org/wikipedia_en.zim",
+                        "https://library.kiwix.org/catalog/v2/illustration/abc-123/?size=48")));
+        when(kiwixCatalogService.browse(null, null, 20, 0)).thenReturn(result);
+
+        mockMvc.perform(get("/api/library/kiwix/catalog/browse")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalCount").value(1))
+                .andExpect(jsonPath("$.data.entries[0].title").value("Wikipedia (English)"));
+    }
+
+    @Test
+    void browseKiwixCatalog_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/library/kiwix/catalog/browse"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void searchKiwixCatalog_authenticated_returnsOk() throws Exception {
+        KiwixCatalogSearchResultDto result = new KiwixCatalogSearchResultDto(1, List.of(
+                new KiwixCatalogEntryDto("abc-123", "Wikipedia", "English Wikipedia",
+                        "eng", "wikipedia_en", "wikipedia", null,
+                        6000000, 500000, 95000000000L, null, null)));
+        when(kiwixCatalogService.search("wikipedia", null, 20)).thenReturn(result);
+
+        mockMvc.perform(get("/api/library/kiwix/catalog/search")
+                        .param("q", "wikipedia")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalCount").value(1))
+                .andExpect(jsonPath("$.data.entries[0].title").value("Wikipedia"));
+    }
+
+    @Test
+    void searchKiwixCatalog_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/library/kiwix/catalog/search")
+                        .param("q", "test"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void downloadFromCatalog_asOwner_returnsOk() throws Exception {
+        KiwixCatalogDownloadRequest request = new KiwixCatalogDownloadRequest(
+                "https://download.kiwix.org/test.zim", "test.zim",
+                "Test Wikipedia", "wikipedia", "eng", 1024000);
+        when(kiwixDownloadService.startDownload(any(KiwixCatalogDownloadRequest.class), eq(ownerId)))
+                .thenReturn("download-123");
+
+        mockMvc.perform(post("/api/library/kiwix/catalog/download")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(user(ownerUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value("download-123"));
+    }
+
+    @Test
+    void downloadFromCatalog_asMember_returns403() throws Exception {
+        KiwixCatalogDownloadRequest request = new KiwixCatalogDownloadRequest(
+                "https://download.kiwix.org/test.zim", "test.zim",
+                "Test", "wikipedia", "eng", 1024);
+
+        mockMvc.perform(post("/api/library/kiwix/catalog/download")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(user(memberUser)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listKiwixDownloads_authenticated_returnsOk() throws Exception {
+        when(kiwixDownloadService.getAllDownloads()).thenReturn(List.of(
+                new KiwixDownloadStatusDto("dl-1", "test.zim", 1024000, 512000,
+                        50.0, KiwixDownloadState.DOWNLOADING, null)));
+
+        mockMvc.perform(get("/api/library/kiwix/downloads")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value("dl-1"))
+                .andExpect(jsonPath("$.data[0].percentComplete").value(50.0));
+    }
+
+    @Test
+    void listKiwixDownloads_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/library/kiwix/downloads"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getKiwixDownloadProgress_found_returnsOk() throws Exception {
+        when(kiwixDownloadService.getProgress("dl-1")).thenReturn(java.util.Optional.of(
+                new KiwixDownloadStatusDto("dl-1", "test.zim", 1024, 1024,
+                        100.0, KiwixDownloadState.COMPLETE, null)));
+
+        mockMvc.perform(get("/api/library/kiwix/downloads/dl-1")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETE"));
+    }
+
+    @Test
+    void getKiwixDownloadProgress_notFound_returns404() throws Exception {
+        when(kiwixDownloadService.getProgress("nonexistent")).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/api/library/kiwix/downloads/nonexistent")
+                        .with(user(memberUser)))
+                .andExpect(status().isNotFound());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

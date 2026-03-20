@@ -8,7 +8,11 @@ import com.myoffgridai.library.model.Ebook;
 import com.myoffgridai.library.model.EbookFormat;
 import com.myoffgridai.library.service.EbookService;
 import com.myoffgridai.library.service.GutenbergService;
+import com.myoffgridai.library.service.KiwixCatalogService;
+import com.myoffgridai.library.service.KiwixDownloadService;
+import com.myoffgridai.library.service.KiwixProcessService;
 import com.myoffgridai.library.service.ZimFileService;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.InputStreamResource;
@@ -46,20 +50,32 @@ public class LibraryController {
     private final ZimFileService zimFileService;
     private final EbookService ebookService;
     private final GutenbergService gutenbergService;
+    private final KiwixProcessService kiwixProcessService;
+    private final KiwixCatalogService kiwixCatalogService;
+    private final KiwixDownloadService kiwixDownloadService;
 
     /**
      * Constructs the library controller.
      *
-     * @param zimFileService    the ZIM file management service
-     * @param ebookService      the eBook management service
-     * @param gutenbergService  the Project Gutenberg integration service
+     * @param zimFileService       the ZIM file management service
+     * @param ebookService         the eBook management service
+     * @param gutenbergService     the Project Gutenberg integration service
+     * @param kiwixProcessService  the kiwix-serve process manager
+     * @param kiwixCatalogService  the Kiwix online catalog service
+     * @param kiwixDownloadService the Kiwix download service
      */
     public LibraryController(ZimFileService zimFileService,
                              EbookService ebookService,
-                             GutenbergService gutenbergService) {
+                             GutenbergService gutenbergService,
+                             KiwixProcessService kiwixProcessService,
+                             KiwixCatalogService kiwixCatalogService,
+                             KiwixDownloadService kiwixDownloadService) {
         this.zimFileService = zimFileService;
         this.ebookService = ebookService;
         this.gutenbergService = gutenbergService;
+        this.kiwixProcessService = kiwixProcessService;
+        this.kiwixCatalogService = kiwixCatalogService;
+        this.kiwixDownloadService = kiwixDownloadService;
     }
 
     // ── ZIM File Endpoints ───────────────────────────────────────────────────
@@ -129,6 +145,110 @@ public class LibraryController {
     @GetMapping("/kiwix/url")
     public ResponseEntity<ApiResponse<String>> kiwixUrl() {
         return ResponseEntity.ok(ApiResponse.success(zimFileService.getKiwixServeUrl()));
+    }
+
+    /**
+     * Starts the kiwix-serve process.
+     *
+     * @return 200 OK with status message
+     */
+    @PostMapping("/kiwix/start")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> startKiwix() {
+        log.info("Kiwix start request");
+        kiwixProcessService.start();
+        return ResponseEntity.ok(ApiResponse.success(null, "Kiwix start requested"));
+    }
+
+    /**
+     * Stops the kiwix-serve process.
+     *
+     * @return 200 OK with status message
+     */
+    @PostMapping("/kiwix/stop")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> stopKiwix() {
+        log.info("Kiwix stop request");
+        kiwixProcessService.stop();
+        return ResponseEntity.ok(ApiResponse.success(null, "Kiwix stopped"));
+    }
+
+    /**
+     * Browses the Kiwix online catalog.
+     *
+     * @param lang     the language filter (optional)
+     * @param category the category filter (optional)
+     * @param count    the page size (default 20)
+     * @param start    the offset (default 0)
+     * @return 200 OK with catalog search results
+     */
+    @GetMapping("/kiwix/catalog/browse")
+    public ResponseEntity<ApiResponse<KiwixCatalogSearchResultDto>> browseKiwixCatalog(
+            @RequestParam(required = false) String lang,
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "20") int count,
+            @RequestParam(defaultValue = "0") int start) {
+        KiwixCatalogSearchResultDto result = kiwixCatalogService.browse(lang, category, count, start);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
+     * Searches the Kiwix online catalog.
+     *
+     * @param q     the search query
+     * @param lang  the language filter (optional)
+     * @param count the number of results (default 20)
+     * @return 200 OK with search results
+     */
+    @GetMapping("/kiwix/catalog/search")
+    public ResponseEntity<ApiResponse<KiwixCatalogSearchResultDto>> searchKiwixCatalog(
+            @RequestParam String q,
+            @RequestParam(required = false) String lang,
+            @RequestParam(defaultValue = "20") int count) {
+        KiwixCatalogSearchResultDto result = kiwixCatalogService.search(q, lang, count);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
+     * Starts a ZIM file download from the Kiwix catalog.
+     *
+     * @param principal the authenticated user
+     * @param request   the download request body
+     * @return 200 OK with the download ID
+     */
+    @PostMapping("/kiwix/catalog/download")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<String>> downloadFromCatalog(
+            @AuthenticationPrincipal User principal,
+            @Valid @RequestBody KiwixCatalogDownloadRequest request) {
+        log.info("Kiwix catalog download request from user {}: {}", principal.getId(), request.filename());
+        String downloadId = kiwixDownloadService.startDownload(request, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(downloadId, "Download started"));
+    }
+
+    /**
+     * Lists all active and recent Kiwix downloads.
+     *
+     * @return 200 OK with download status list
+     */
+    @GetMapping("/kiwix/downloads")
+    public ResponseEntity<ApiResponse<List<KiwixDownloadStatusDto>>> listKiwixDownloads() {
+        List<KiwixDownloadStatusDto> downloads = kiwixDownloadService.getAllDownloads();
+        return ResponseEntity.ok(ApiResponse.success(downloads));
+    }
+
+    /**
+     * Returns progress for a specific Kiwix download.
+     *
+     * @param id the download identifier
+     * @return 200 OK with download status, or 404 if not found
+     */
+    @GetMapping("/kiwix/downloads/{id}")
+    public ResponseEntity<ApiResponse<KiwixDownloadStatusDto>> getKiwixDownloadProgress(
+            @PathVariable String id) {
+        return kiwixDownloadService.getProgress(id)
+                .map(status -> ResponseEntity.ok(ApiResponse.success(status)))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     // ── eBook Endpoints ──────────────────────────────────────────────────────
