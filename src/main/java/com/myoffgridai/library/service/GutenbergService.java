@@ -21,7 +21,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service for integrating with the Gutendex API (Project Gutenberg catalog).
@@ -33,11 +35,22 @@ import java.util.*;
 public class GutenbergService {
 
     private static final Logger log = LoggerFactory.getLogger(GutenbergService.class);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration BROWSE_CACHE_TTL = Duration.ofHours(1);
 
     private final WebClient webClient;
     private final EbookRepository ebookRepository;
     private final LibraryProperties libraryProperties;
+    private final ConcurrentHashMap<String, CachedBrowseResult> browseCache = new ConcurrentHashMap<>();
+
+    /**
+     * Cached browse result with timestamp for TTL expiry.
+     */
+    private record CachedBrowseResult(GutenbergSearchResultDto result, Instant cachedAt) {
+        boolean isFresh() {
+            return Instant.now().isBefore(cachedAt.plus(BROWSE_CACHE_TTL));
+        }
+    }
 
     /**
      * Constructs the Gutenberg service.
@@ -61,16 +74,29 @@ public class GutenbergService {
     /**
      * Browses the Gutendex catalog without a search query.
      *
-     * <p>Returns books sorted by the given criteria. Valid sort values:
-     * {@code "popular"} (default, most downloaded), {@code "ascending"}
-     * (lowest ID first), {@code "descending"} (highest ID first, ≈ newest).</p>
+     * <p>Results are cached in memory for one hour. If the cache is expired and
+     * the Gutendex API is slow or unreachable, stale cached data is returned
+     * rather than failing. Only the first request (cold cache) blocks on the
+     * external API.</p>
+     *
+     * <p>Valid sort values: {@code "popular"} (default, most downloaded),
+     * {@code "ascending"} (lowest ID first), {@code "descending"}
+     * (highest ID first, ≈ newest).</p>
      *
      * @param sort  the sort order (popular, ascending, or descending)
      * @param limit the maximum number of results (page size)
      * @return the browse result DTO
-     * @throws RuntimeException if the Gutendex API is unreachable
+     * @throws RuntimeException if the Gutendex API is unreachable and no cached data exists
      */
     public GutenbergSearchResultDto browse(String sort, int limit) {
+        String cacheKey = sort + ":" + limit;
+        CachedBrowseResult cached = browseCache.get(cacheKey);
+
+        if (cached != null && cached.isFresh()) {
+            log.debug("Gutenberg browse cache hit for key '{}'", cacheKey);
+            return cached.result();
+        }
+
         try {
             Map<String, Object> response = webClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -86,9 +112,18 @@ public class GutenbergService {
                 return new GutenbergSearchResultDto(0, null, null, List.of());
             }
 
-            return mapSearchResponse(response);
+            GutenbergSearchResultDto result = mapSearchResponse(response);
+            browseCache.put(cacheKey, new CachedBrowseResult(result, Instant.now()));
+            log.debug("Gutenberg browse cache updated for key '{}'", cacheKey);
+            return result;
         } catch (Exception e) {
-            log.error("Gutendex API browse failed (sort='{}'): {}", sort, e.getMessage());
+            if (cached != null) {
+                log.warn("Gutendex API browse failed (sort='{}'), serving stale cache: {}",
+                        sort, e.getMessage());
+                return cached.result();
+            }
+            log.error("Gutendex API browse failed (sort='{}'), no cache available: {}",
+                    sort, e.getMessage());
             throw new RuntimeException("Project Gutenberg browse unavailable: " + e.getMessage(), e);
         }
     }
