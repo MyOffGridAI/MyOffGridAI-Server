@@ -100,8 +100,7 @@ public class GutenbergService {
      *
      * @param sort  the sort order (popular, ascending, or descending)
      * @param limit the maximum number of results (page size)
-     * @return the browse result DTO
-     * @throws RuntimeException if the Gutendex API is unreachable and no cached data exists
+     * @return the browse result DTO, or an empty result if the API is unreachable and no cached data exists
      */
     public GutenbergSearchResultDto browse(String sort, int limit) {
         String cacheKey = sort + ":" + limit;
@@ -137,9 +136,9 @@ public class GutenbergService {
                         sort, e.getMessage());
                 return cached.result();
             }
-            log.error("Gutendex API browse failed (sort='{}'), no cache available: {}",
+            log.warn("Gutendex API browse failed (sort='{}'), no cache available — returning empty: {}",
                     sort, e.getMessage());
-            throw new RuntimeException("Project Gutenberg browse unavailable: " + e.getMessage(), e);
+            return new GutenbergSearchResultDto(0, null, null, List.of());
         }
     }
 
@@ -168,8 +167,8 @@ public class GutenbergService {
 
             return mapSearchResponse(response);
         } catch (Exception e) {
-            log.error("Gutendex API search failed for query '{}': {}", query, e.getMessage());
-            throw new RuntimeException("Project Gutenberg search unavailable: " + e.getMessage(), e);
+            log.warn("Gutendex API search failed for query '{}' — returning empty: {}", query, e.getMessage());
+            return new GutenbergSearchResultDto(0, null, null, List.of());
         }
     }
 

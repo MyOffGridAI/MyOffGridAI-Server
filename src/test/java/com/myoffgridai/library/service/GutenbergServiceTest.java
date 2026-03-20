@@ -97,7 +97,7 @@ class GutenbergServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void browse_apiUnavailable_throwsRuntime() {
+    void browse_apiUnavailable_noCacheReturnsEmpty() {
         WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
         WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
         WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
@@ -108,9 +108,10 @@ class GutenbergServiceTest {
         when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                 .thenReturn(Mono.error(new RuntimeException("Connection refused")));
 
-        assertThatThrownBy(() -> gutenbergService.browse("popular", 10))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("browse unavailable");
+        GutenbergSearchResultDto result = gutenbergService.browse("popular", 10);
+
+        assertThat(result.count()).isEqualTo(0);
+        assertThat(result.results()).isEmpty();
     }
 
     @Test
@@ -258,7 +259,7 @@ class GutenbergServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void search_apiUnavailable_throwsRuntime() {
+    void search_apiUnavailable_returnsEmpty() {
         WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
         WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
         WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
@@ -269,9 +270,10 @@ class GutenbergServiceTest {
         when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                 .thenReturn(Mono.error(new RuntimeException("Connection refused")));
 
-        assertThatThrownBy(() -> gutenbergService.search("test", 20))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("search unavailable");
+        GutenbergSearchResultDto result = gutenbergService.search("test", 20);
+
+        assertThat(result.count()).isEqualTo(0);
+        assertThat(result.results()).isEmpty();
     }
 
     @Test
