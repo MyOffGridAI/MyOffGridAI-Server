@@ -53,6 +53,8 @@ class OllamaInferenceServiceTest {
         userId = UUID.randomUUID();
         defaultSettings = new AiSettingsDto("test-model", 0.7, 0.45, 5, 2048, 4096, 20);
         lenient().when(systemConfigService.getAiSettings()).thenReturn(defaultSettings);
+        // Default: model does not support native thinking (safe fallback)
+        lenient().when(ollamaService.getModelCapabilities(anyString())).thenReturn(List.of("completion"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -250,6 +252,56 @@ class OllamaInferenceServiceTest {
         assertEquals(1, contentCount);
         assertEquals("valid", chunks.get(0).text());
         assertEquals(ChunkType.DONE, chunks.get(1).type());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  thinking capability auto-detection tests
+    // ══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void streamChatWithThinking_modelSupportsThinking_sendsThinkTrue() {
+        when(ollamaService.getModelCapabilities("test-model"))
+                .thenReturn(List.of("completion", "thinking"));
+        // Need a fresh service so the cache is empty
+        service = new OllamaInferenceService(
+                ollamaService, systemConfigService, "default-model", "nomic-embed-text");
+
+        OllamaChatChunk chunk = new OllamaChatChunk(new OllamaMessage("assistant", "ok"), false);
+        OllamaChatChunk done = new OllamaChatChunk(null, true);
+        when(ollamaService.chatStream(any(OllamaChatRequest.class)))
+                .thenReturn(Flux.just(chunk, done));
+
+        List<OllamaMessage> messages = List.of(new OllamaMessage("user", "hello"));
+        StepVerifier.create(service.streamChatWithThinking(messages, userId))
+                .thenConsumeWhile(c -> true)
+                .verifyComplete();
+
+        ArgumentCaptor<OllamaChatRequest> captor = ArgumentCaptor.forClass(OllamaChatRequest.class);
+        verify(ollamaService).chatStream(captor.capture());
+        assertEquals(Boolean.TRUE, captor.getValue().think());
+    }
+
+    @Test
+    void streamChatWithThinking_modelDoesNotSupportThinking_omitsThink() {
+        when(ollamaService.getModelCapabilities("test-model"))
+                .thenReturn(List.of("completion"));
+        // Need a fresh service so the cache is empty
+        service = new OllamaInferenceService(
+                ollamaService, systemConfigService, "default-model", "nomic-embed-text");
+
+        OllamaChatChunk chunk = new OllamaChatChunk(new OllamaMessage("assistant", "ok"), false);
+        OllamaChatChunk done = new OllamaChatChunk(null, true);
+        when(ollamaService.chatStream(any(OllamaChatRequest.class)))
+                .thenReturn(Flux.just(chunk, done));
+
+        List<OllamaMessage> messages = List.of(new OllamaMessage("user", "hello"));
+        StepVerifier.create(service.streamChatWithThinking(messages, userId))
+                .thenConsumeWhile(c -> true)
+                .verifyComplete();
+
+        ArgumentCaptor<OllamaChatRequest> captor = ArgumentCaptor.forClass(OllamaChatRequest.class);
+        verify(ollamaService).chatStream(captor.capture());
+        assertNull(captor.getValue().think());
     }
 
     // ══════════════════════════════════════════════════════════════════════════

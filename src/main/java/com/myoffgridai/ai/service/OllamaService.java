@@ -262,6 +262,41 @@ public class OllamaService {
     }
 
     /**
+     * Queries Ollama's {@code POST /api/show} endpoint to retrieve model capabilities.
+     *
+     * <p>The response contains a {@code capabilities} array indicating what features
+     * the model supports (e.g. {@code "completion"}, {@code "thinking"}, {@code "vision"},
+     * {@code "tools"}). This is used to determine whether {@code think: true} can be
+     * safely sent in chat requests.</p>
+     *
+     * @param modelName the Ollama model name (e.g. {@code "qwen3.5:35b"})
+     * @return the list of capability strings, or an empty list on error
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getModelCapabilities(String modelName) {
+        log.debug("Fetching capabilities for model: {}", modelName);
+        try {
+            Map<String, Object> response = restClient.post()
+                    .uri("/api/show")
+                    .body(Map.of("name", modelName))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response != null && response.containsKey("capabilities")) {
+                List<String> capabilities = (List<String>) response.get("capabilities");
+                log.info("Model '{}' capabilities: {}", modelName, capabilities);
+                return capabilities;
+            }
+
+            log.info("Model '{}' returned no capabilities array", modelName);
+            return List.of();
+        } catch (Exception e) {
+            log.warn("Failed to fetch capabilities for model '{}': {}", modelName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
      * Queries Ollama /api/ps to log currently loaded models and their status.
      * Used for diagnostics only.
      */

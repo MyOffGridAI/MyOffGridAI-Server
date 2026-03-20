@@ -6,6 +6,7 @@ import com.myoffgridai.config.AppConstants;
 import com.myoffgridai.system.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -29,6 +30,7 @@ public class ModelPreloadService {
 
     private final OllamaService ollamaService;
     private final SystemConfigService systemConfigService;
+    private OllamaInferenceService ollamaInferenceService;
 
     /**
      * Constructs the model preload service.
@@ -40,6 +42,19 @@ public class ModelPreloadService {
                                 SystemConfigService systemConfigService) {
         this.ollamaService = ollamaService;
         this.systemConfigService = systemConfigService;
+    }
+
+    /**
+     * Optionally injects the Ollama inference service for thinking-cache warming.
+     *
+     * <p>Uses setter injection because {@link OllamaInferenceService} is conditional
+     * on {@code app.inference.provider=ollama} and may not be present.</p>
+     *
+     * @param ollamaInferenceService the Ollama inference service (may be absent)
+     */
+    @Autowired(required = false)
+    public void setOllamaInferenceService(OllamaInferenceService ollamaInferenceService) {
+        this.ollamaInferenceService = ollamaInferenceService;
     }
 
     /**
@@ -93,6 +108,12 @@ public class ModelPreloadService {
             ollamaService.chat(request);
             long elapsed = System.currentTimeMillis() - start;
             log.info("Chat model '{}' preloaded in {}ms", model, elapsed);
+
+            // Eagerly warm the thinking-capability cache so the first chat
+            // request does not incur a /api/show round-trip.
+            if (ollamaInferenceService != null) {
+                ollamaInferenceService.warmThinkingCache(model);
+            }
         } catch (Exception e) {
             log.warn("Failed to preload chat model: {}", e.getMessage());
         }

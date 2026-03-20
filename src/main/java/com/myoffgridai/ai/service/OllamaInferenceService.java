@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -52,6 +53,7 @@ public class OllamaInferenceService implements InferenceService {
     private final SystemConfigService systemConfigService;
     private final String modelName;
     private final String embedModelName;
+    private final ConcurrentHashMap<String, Boolean> supportsThinkingCache = new ConcurrentHashMap<>();
 
     /**
      * Constructs the Ollama inference wrapper.
@@ -129,12 +131,19 @@ public class OllamaInferenceService implements InferenceService {
         // Check what Ollama currently has loaded before we send the request
         ollamaService.logLoadedModels();
 
+        // Auto-detect native thinking support via /api/show capabilities.
+        // Only models that advertise "thinking" in their capabilities array
+        // get think:true — others rely on the <think> tag parser below.
+        String resolvedModel = aiSettings.modelName() != null ? aiSettings.modelName() : modelName;
+        boolean nativeThink = supportsThinkingCache.computeIfAbsent(resolvedModel,
+                name -> ollamaService.getModelCapabilities(name).contains("thinking"));
+
         var request = new OllamaChatRequest(
-                aiSettings.modelName() != null ? aiSettings.modelName() : modelName,
+                resolvedModel,
                 messages, true,
                 Map.of("num_ctx", aiSettings.contextSize(),
                         "temperature", aiSettings.temperature()),
-                true);
+                nativeThink ? Boolean.TRUE : null);
 
         AtomicReference<ThinkState> thinkState = new AtomicReference<>(ThinkState.OUTSIDE_THINK);
         StringBuilder tagBuffer = new StringBuilder();
@@ -213,6 +222,20 @@ public class OllamaInferenceService implements InferenceService {
     @Override
     public InferenceModelInfo getActiveModel() {
         return new InferenceModelInfo(modelName, modelName, null, null, null);
+    }
+
+    /**
+     * Eagerly warms the thinking-capability cache for the given model.
+     *
+     * <p>Called at startup to avoid a latency hit on the first chat request
+     * while the server queries {@code /api/show}.</p>
+     *
+     * @param model the Ollama model name to probe
+     */
+    public void warmThinkingCache(String model) {
+        boolean supports = supportsThinkingCache.computeIfAbsent(model,
+                name -> ollamaService.getModelCapabilities(name).contains("thinking"));
+        log.info("Thinking cache warmed for '{}': nativeThinking={}", model, supports);
     }
 
     // ── Think-tag state machine ──────────────────────────────────────────

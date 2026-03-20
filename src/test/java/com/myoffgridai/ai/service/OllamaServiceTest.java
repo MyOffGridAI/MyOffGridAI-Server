@@ -188,6 +188,49 @@ class OllamaServiceTest {
 
     // ── listModels tests ─────────────────────────────────────────────────
 
+    // ── getModelCapabilities tests ──────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void getModelCapabilities_returnsCapabilities() {
+        Map<String, Object> response = Map.of(
+                "capabilities", List.of("completion", "vision", "tools", "thinking"));
+
+        RestClient.ResponseSpec resp = stubPost();
+        when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
+
+        List<String> result = ollamaService.getModelCapabilities("qwen3.5:35b");
+        assertEquals(4, result.size());
+        assertTrue(result.contains("thinking"));
+        assertTrue(result.contains("completion"));
+    }
+
+    @Test
+    void getModelCapabilities_onError_returnsEmptyList() {
+        RestClient.ResponseSpec resp = stubPost();
+        when(resp.body(any(ParameterizedTypeReference.class)))
+                .thenThrow(new RuntimeException("Connection refused"));
+
+        List<String> result = ollamaService.getModelCapabilities("bad-model");
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void getModelCapabilities_noCapabilitiesField_returnsEmptyList() {
+        Map<String, Object> response = Map.of("modelfile", "FROM qwen");
+
+        RestClient.ResponseSpec resp = stubPost();
+        when(resp.body(any(ParameterizedTypeReference.class))).thenReturn(response);
+
+        List<String> result = ollamaService.getModelCapabilities("some-model");
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    // ── listModels tests ─────────────────────────────────────────────────
+
     @SuppressWarnings("unchecked")
     @Test
     void listModels_returnsModelList() {
