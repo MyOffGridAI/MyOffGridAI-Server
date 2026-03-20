@@ -2,6 +2,7 @@ package com.myoffgridai.library.service;
 
 import com.myoffgridai.library.config.LibraryProperties;
 import com.myoffgridai.library.dto.EbookDto;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.myoffgridai.library.dto.GutenbergBookDto;
 import com.myoffgridai.library.dto.GutenbergSearchResultDto;
 import com.myoffgridai.library.model.Ebook;
@@ -62,6 +63,7 @@ public class GutenbergService {
      * @param ebookRepository   the eBook repository
      * @param libraryProperties the library configuration properties
      */
+    @Autowired
     public GutenbergService(EbookRepository ebookRepository,
                             LibraryProperties libraryProperties) {
         HttpClient httpClient = HttpClient.create().followRedirect(true);
