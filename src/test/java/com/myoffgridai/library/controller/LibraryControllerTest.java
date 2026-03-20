@@ -285,6 +285,53 @@ class LibraryControllerTest {
     // ── Gutenberg Endpoints ──────────────────────────────────────────────────
 
     @Test
+    void browseGutenberg_authenticated_returnsOk() throws Exception {
+        GutenbergSearchResultDto result = new GutenbergSearchResultDto(
+                2, null, null, List.of(
+                new GutenbergBookDto(1342, "Pride and Prejudice",
+                        List.of("Austen, Jane"), List.of("Fiction"),
+                        List.of("en"), 80000,
+                        Map.of("application/epub+zip", "https://gutenberg.org/1342.epub")),
+                new GutenbergBookDto(84, "Frankenstein",
+                        List.of("Shelley, Mary"), List.of("Science fiction"),
+                        List.of("en"), 100000,
+                        Map.of("application/epub+zip", "https://gutenberg.org/84.epub"))));
+        when(gutenbergService.browse("popular", 10)).thenReturn(result);
+
+        mockMvc.perform(get("/api/library/gutenberg/browse")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.count").value(2))
+                .andExpect(jsonPath("$.data.results[0].title").value("Pride and Prejudice"))
+                .andExpect(jsonPath("$.data.results[1].title").value("Frankenstein"));
+    }
+
+    @Test
+    void browseGutenberg_withSortParam_returnsOk() throws Exception {
+        GutenbergSearchResultDto result = new GutenbergSearchResultDto(
+                1, null, null, List.of(
+                new GutenbergBookDto(99999, "Newest Book",
+                        List.of("Modern Author"), List.of("Fiction"),
+                        List.of("en"), 100,
+                        Map.of())));
+        when(gutenbergService.browse("descending", 5)).thenReturn(result);
+
+        mockMvc.perform(get("/api/library/gutenberg/browse")
+                        .param("sort", "descending")
+                        .param("limit", "5")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.count").value(1))
+                .andExpect(jsonPath("$.data.results[0].title").value("Newest Book"));
+    }
+
+    @Test
+    void browseGutenberg_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/library/gutenberg/browse"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void searchGutenberg_authenticated_returnsOk() throws Exception {
         GutenbergSearchResultDto result = new GutenbergSearchResultDto(
                 1, null, null, List.of(

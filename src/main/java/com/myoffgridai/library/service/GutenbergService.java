@@ -55,6 +55,41 @@ public class GutenbergService {
     }
 
     /**
+     * Browses the Gutendex catalog without a search query.
+     *
+     * <p>Returns books sorted by the given criteria. Valid sort values:
+     * {@code "popular"} (default, most downloaded), {@code "ascending"}
+     * (lowest ID first), {@code "descending"} (highest ID first, ≈ newest).</p>
+     *
+     * @param sort  the sort order (popular, ascending, or descending)
+     * @param limit the maximum number of results (page size)
+     * @return the browse result DTO
+     * @throws RuntimeException if the Gutendex API is unreachable
+     */
+    public GutenbergSearchResultDto browse(String sort, int limit) {
+        try {
+            Map<String, Object> response = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/books")
+                            .queryParam("sort", sort)
+                            .queryParam("page_size", limit)
+                            .build())
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block(REQUEST_TIMEOUT);
+
+            if (response == null) {
+                return new GutenbergSearchResultDto(0, null, null, List.of());
+            }
+
+            return mapSearchResponse(response);
+        } catch (Exception e) {
+            log.error("Gutendex API browse failed (sort='{}'): {}", sort, e.getMessage());
+            throw new RuntimeException("Project Gutenberg browse unavailable: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Searches the Gutendex API for books matching the query.
      *
      * @param query the search query

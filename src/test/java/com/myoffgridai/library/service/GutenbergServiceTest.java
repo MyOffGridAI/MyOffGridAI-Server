@@ -57,6 +57,88 @@ class GutenbergServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void browse_popularSort_returnsResults() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("count", 2);
+        response.put("next", null);
+        response.put("previous", null);
+
+        Map<String, Object> book1 = new LinkedHashMap<>();
+        book1.put("id", 1342);
+        book1.put("title", "Pride and Prejudice");
+        book1.put("authors", List.of(Map.of("name", "Austen, Jane")));
+        book1.put("subjects", List.of("Fiction"));
+        book1.put("languages", List.of("en"));
+        book1.put("download_count", 80000);
+        book1.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/1342.epub"));
+
+        Map<String, Object> book2 = new LinkedHashMap<>();
+        book2.put("id", 84);
+        book2.put("title", "Frankenstein");
+        book2.put("authors", List.of(Map.of("name", "Shelley, Mary")));
+        book2.put("subjects", List.of("Science fiction"));
+        book2.put("languages", List.of("en"));
+        book2.put("download_count", 100000);
+        book2.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/84.epub"));
+
+        response.put("results", List.of(book1, book2));
+
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.just(response));
+
+        GutenbergSearchResultDto result = gutenbergService.browse("popular", 10);
+
+        assertThat(result.count()).isEqualTo(2);
+        assertThat(result.results()).hasSize(2);
+        assertThat(result.results().getFirst().title()).isEqualTo("Pride and Prejudice");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void browse_apiUnavailable_throwsRuntime() {
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.error(new RuntimeException("Connection refused")));
+
+        assertThatThrownBy(() -> gutenbergService.browse("popular", 10))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("browse unavailable");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void browse_nullResponse_returnsEmptyResult() {
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.empty());
+
+        GutenbergSearchResultDto result = gutenbergService.browse("descending", 10);
+
+        assertThat(result.count()).isEqualTo(0);
+        assertThat(result.results()).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void search_validQuery_returnsResults() {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("count", 1);

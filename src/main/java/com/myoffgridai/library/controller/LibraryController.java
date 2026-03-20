@@ -238,6 +238,21 @@ public class LibraryController {
     // ── Gutenberg Endpoints ──────────────────────────────────────────────────
 
     /**
+     * Browses the Project Gutenberg catalog without a search query.
+     *
+     * @param sort  the sort order: popular (default), ascending, or descending
+     * @param limit the maximum results (default 10)
+     * @return 200 OK with browse results
+     */
+    @GetMapping("/gutenberg/browse")
+    public ResponseEntity<ApiResponse<GutenbergSearchResultDto>> browseGutenberg(
+            @RequestParam(defaultValue = "popular") String sort,
+            @RequestParam(defaultValue = "10") int limit) {
+        GutenbergSearchResultDto results = gutenbergService.browse(sort, limit);
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    /**
      * Searches the Project Gutenberg catalog via Gutendex.
      *
      * @param query the search query
