@@ -4,10 +4,12 @@ import com.myoffgridai.ai.dto.*;
 import com.myoffgridai.ai.model.Conversation;
 import com.myoffgridai.ai.model.Message;
 import com.myoffgridai.ai.repository.MessageRepository;
+import com.myoffgridai.ai.service.ChatExportService;
 import com.myoffgridai.ai.service.ChatService;
 import com.myoffgridai.auth.model.User;
 import com.myoffgridai.common.response.ApiResponse;
 import com.myoffgridai.config.AppConstants;
+import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,16 +40,21 @@ public class ChatController {
 
     private final ChatService chatService;
     private final MessageRepository messageRepository;
+    private final ChatExportService chatExportService;
 
     /**
      * Constructs the chat controller.
      *
      * @param chatService       the chat service
      * @param messageRepository the message repository for message listing
+     * @param chatExportService the chat export service for PDF generation and library save
      */
-    public ChatController(ChatService chatService, MessageRepository messageRepository) {
+    public ChatController(ChatService chatService,
+                          MessageRepository messageRepository,
+                          ChatExportService chatExportService) {
         this.chatService = chatService;
         this.messageRepository = messageRepository;
+        this.chatExportService = chatExportService;
     }
 
     /**
@@ -358,6 +365,54 @@ public class ChatController {
                 conversationId, messageId, principal.getId(), title);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(toConversationDto(branched)));
+    }
+
+    /**
+     * Exports a conversation as a PDF document.
+     *
+     * <p>Generates a PDF from the conversation's messages and returns the
+     * raw bytes with {@code application/pdf} content type for download or
+     * printing.</p>
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the conversation ID to export
+     * @return the PDF document bytes
+     */
+    @GetMapping("/conversations/{conversationId}/export-pdf")
+    public ResponseEntity<byte[]> exportPdf(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId) {
+        log.info("Exporting PDF for conversation {} for user: {}",
+                conversationId, principal.getUsername());
+        byte[] pdfBytes = chatExportService.generateConversationPdf(
+                conversationId, principal.getId());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header("Content-Disposition",
+                        "attachment; filename=\"chat-export.pdf\"")
+                .body(pdfBytes);
+    }
+
+    /**
+     * Saves a conversation to the Knowledge Library as a PDF document.
+     *
+     * <p>Generates a PDF from the conversation's messages, stores it, and
+     * triggers asynchronous knowledge processing for RAG search indexing.</p>
+     *
+     * @param principal      the authenticated user
+     * @param conversationId the conversation ID to export
+     * @return the created knowledge document
+     */
+    @PostMapping("/conversations/{conversationId}/save-to-library")
+    public ResponseEntity<ApiResponse<KnowledgeDocumentDto>> saveToLibrary(
+            @AuthenticationPrincipal User principal,
+            @PathVariable UUID conversationId) {
+        log.info("Saving conversation {} to library for user: {}",
+                conversationId, principal.getUsername());
+        KnowledgeDocumentDto doc = chatExportService.saveConversationToLibrary(
+                conversationId, principal.getId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(doc));
     }
 
     /**

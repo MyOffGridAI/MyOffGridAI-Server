@@ -7,9 +7,12 @@ import com.myoffgridai.ai.model.Conversation;
 import com.myoffgridai.ai.model.Message;
 import com.myoffgridai.ai.model.MessageRole;
 import com.myoffgridai.ai.repository.MessageRepository;
+import com.myoffgridai.ai.service.ChatExportService;
 import com.myoffgridai.ai.service.ChatService;
 import com.myoffgridai.auth.model.Role;
 import com.myoffgridai.auth.model.User;
+import com.myoffgridai.knowledge.dto.KnowledgeDocumentDto;
+import com.myoffgridai.knowledge.model.DocumentStatus;
 import com.myoffgridai.auth.service.AuthService;
 import com.myoffgridai.auth.service.JwtService;
 import com.myoffgridai.config.CaptivePortalRedirectFilter;
@@ -54,6 +57,7 @@ class ChatControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private ChatService chatService;
+    @MockitoBean private ChatExportService chatExportService;
     @MockitoBean private MessageRepository messageRepository;
     @MockitoBean private JwtService jwtService;
     @MockitoBean private AuthService authService;
@@ -391,6 +395,59 @@ class ChatControllerTest {
 
         mockMvc.perform(post("/api/chat/conversations/" + conversationId
                         + "/messages/" + messageId + "/regenerate"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── Export PDF tests ──────────────────────────────────────────────
+
+    @Test
+    void exportPdf_authenticated_returnsPdfBytes() throws Exception {
+        byte[] pdfBytes = "%PDF-test".getBytes();
+        when(chatExportService.generateConversationPdf(conversationId, userId))
+                .thenReturn(pdfBytes);
+
+        mockMvc.perform(get("/api/chat/conversations/" + conversationId + "/export-pdf")
+                        .with(authentication(createAuth(testUser))))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/pdf"))
+                .andExpect(content().bytes(pdfBytes));
+
+        verify(chatExportService).generateConversationPdf(conversationId, userId);
+    }
+
+    @Test
+    void exportPdf_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/chat/conversations/" + conversationId + "/export-pdf"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // ── Save to Library tests ──────────────────────────────────────────
+
+    @Test
+    void saveToLibrary_authenticated_returns201() throws Exception {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocumentDto dto = new KnowledgeDocumentDto(
+                docId, "Test_Conversation.pdf", "Test Conversation",
+                "application/pdf", 5000, DocumentStatus.PENDING, null, 0,
+                Instant.now(), null, false, false);
+
+        when(chatExportService.saveConversationToLibrary(conversationId, userId))
+                .thenReturn(dto);
+
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId + "/save-to-library")
+                        .with(authentication(createAuth(testUser))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.displayName").value("Test Conversation"))
+                .andExpect(jsonPath("$.data.mimeType").value("application/pdf"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        verify(chatExportService).saveConversationToLibrary(conversationId, userId);
+    }
+
+    @Test
+    void saveToLibrary_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/api/chat/conversations/" + conversationId + "/save-to-library"))
                 .andExpect(status().isUnauthorized());
     }
 
