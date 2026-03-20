@@ -8,14 +8,17 @@ import com.myoffgridai.library.repository.ZimFileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.TaskExecutor;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 
 /**
  * Unit tests for {@link KiwixDownloadService}.
@@ -26,13 +29,14 @@ class KiwixDownloadServiceTest {
     @Mock private LibraryProperties libraryProperties;
     @Mock private ZimFileRepository zimFileRepository;
     @Mock private KiwixProcessService kiwixProcessService;
+    @Mock private TaskExecutor taskExecutor;
 
     private KiwixDownloadService service;
 
     @BeforeEach
     void setUp() {
         service = new KiwixDownloadService(
-                libraryProperties, zimFileRepository, kiwixProcessService);
+                libraryProperties, zimFileRepository, kiwixProcessService, taskExecutor);
     }
 
     @Test
@@ -52,11 +56,30 @@ class KiwixDownloadServiceTest {
 
         Optional<KiwixDownloadStatusDto> progress = service.getProgress(downloadId);
         assertThat(progress).isPresent();
-        // Status will be QUEUED or DOWNLOADING depending on async timing
+        assertThat(progress.get().status()).isEqualTo(KiwixDownloadState.QUEUED);
         assertThat(progress.get().filename()).isEqualTo("test.zim");
         assertThat(progress.get().id()).isEqualTo(downloadId);
-        assertThat(progress.get().speedBytesPerSecond()).isGreaterThanOrEqualTo(0);
-        assertThat(progress.get().estimatedSecondsRemaining()).isGreaterThanOrEqualTo(0);
+        assertThat(progress.get().totalBytes()).isEqualTo(1024000);
+        assertThat(progress.get().speedBytesPerSecond()).isEqualTo(0);
+        assertThat(progress.get().estimatedSecondsRemaining()).isEqualTo(0);
+    }
+
+    @Test
+    void startDownload_dispatchesExecuteDownloadViaTaskExecutor() {
+        KiwixCatalogDownloadRequest request = new KiwixCatalogDownloadRequest(
+                "https://download.kiwix.org/test.zim",
+                "test.zim",
+                "Test Wikipedia",
+                "wikipedia",
+                "eng",
+                1024000
+        );
+
+        service.startDownload(request, UUID.randomUUID());
+
+        ArgumentCaptor<Runnable> captor = ArgumentCaptor.forClass(Runnable.class);
+        verify(taskExecutor).execute(captor.capture());
+        assertThat(captor.getValue()).isNotNull();
     }
 
     @Test

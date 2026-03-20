@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -25,6 +24,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.springframework.core.task.TaskExecutor;
 
 /**
  * Downloads ZIM files from the Kiwix catalog into the local ZIM directory.
@@ -46,6 +47,7 @@ public class KiwixDownloadService {
     private final LibraryProperties libraryProperties;
     private final ZimFileRepository zimFileRepository;
     private final KiwixProcessService kiwixProcessService;
+    private final TaskExecutor taskExecutor;
 
     private final ConcurrentHashMap<String, KiwixDownloadStatusDto> downloads = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> cancelFlags = new ConcurrentHashMap<>();
@@ -56,10 +58,12 @@ public class KiwixDownloadService {
      * @param libraryProperties    library configuration (ZIM directory path)
      * @param zimFileRepository    the ZIM file repository
      * @param kiwixProcessService  the kiwix process manager for restart on completion
+     * @param taskExecutor         the executor for dispatching async downloads
      */
     public KiwixDownloadService(LibraryProperties libraryProperties,
                                  ZimFileRepository zimFileRepository,
-                                 KiwixProcessService kiwixProcessService) {
+                                 KiwixProcessService kiwixProcessService,
+                                 TaskExecutor taskExecutor) {
         HttpClient httpClient = HttpClient.create()
                 .followRedirect(true)
                 .responseTimeout(java.time.Duration.ofHours(12));
@@ -70,6 +74,7 @@ public class KiwixDownloadService {
         this.libraryProperties = libraryProperties;
         this.zimFileRepository = zimFileRepository;
         this.kiwixProcessService = kiwixProcessService;
+        this.taskExecutor = taskExecutor;
     }
 
     /**
@@ -90,7 +95,7 @@ public class KiwixDownloadService {
         downloads.put(downloadId, initial);
         cancelFlags.put(downloadId, new AtomicBoolean(false));
 
-        executeDownload(downloadId, request, userId);
+        taskExecutor.execute(() -> executeDownload(downloadId, request, userId));
         return downloadId;
     }
 
@@ -127,14 +132,14 @@ public class KiwixDownloadService {
     }
 
     /**
-     * Executes the download in an async thread.
+     * Executes the download on the thread provided by the {@link TaskExecutor}.
+     * This method is dispatched asynchronously by {@link #startDownload}.
      *
      * @param downloadId the download identifier
      * @param request    the download request
      * @param userId     the user who initiated the download
      */
-    @Async
-    public void executeDownload(String downloadId, KiwixCatalogDownloadRequest request, UUID userId) {
+    void executeDownload(String downloadId, KiwixCatalogDownloadRequest request, UUID userId) {
         try {
             Path zimDir = Path.of(libraryProperties.getZimDirectory());
             Files.createDirectories(zimDir);
