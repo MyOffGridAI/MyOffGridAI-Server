@@ -6,6 +6,7 @@ import com.myoffgridai.library.dto.KiwixCatalogSearchResultDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.w3c.dom.Document;
@@ -56,6 +57,7 @@ public class KiwixCatalogService {
      *
      * @param kiwixProperties the kiwix configuration properties
      */
+    @Autowired
     public KiwixCatalogService(KiwixProperties kiwixProperties) {
         HttpClient httpClient = HttpClient.create().followRedirect(true);
         this.webClient = WebClient.builder()
