@@ -117,6 +117,26 @@ class ModelDownloadControllerTest {
     }
 
     @Test
+    void searchCatalog_noQuery_returns200_browseMode() throws Exception {
+        HfSearchResultDto result = new HfSearchResultDto(
+                List.of(new HfModelDto(
+                        "TheBloke/Llama-2-7B-GGUF", "Llama-2-7B-GGUF", "TheBloke",
+                        50000, 300, List.of("gguf"), "text-generation",
+                        false, Instant.now(), Collections.emptyList())),
+                1);
+
+        when(catalogService.searchModels(eq(""), eq("gguf"), eq(20))).thenReturn(result);
+
+        mockMvc.perform(get("/api/models/catalog/search")
+                        .with(authentication(createAuth(ownerUser))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalCount").value(1));
+
+        verify(catalogService).searchModels("", "gguf", 20);
+    }
+
+    @Test
     void searchCatalog_memberRole_returns200() throws Exception {
         when(catalogService.searchModels(anyString(), anyString(), anyInt()))
                 .thenReturn(new HfSearchResultDto(Collections.emptyList(), 0));

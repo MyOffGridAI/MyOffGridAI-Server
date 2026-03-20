@@ -66,14 +66,17 @@ public class ModelDownloadController {
     /**
      * Searches HuggingFace for models matching the query.
      *
-     * @param q      the search query (required)
+     * <p>When {@code q} is omitted or empty, returns top models sorted by
+     * downloads descending (browse mode).</p>
+     *
+     * @param q      the search query (optional; defaults to empty = browse mode)
      * @param format the format filter ("gguf", "mlx", or "all")
      * @param limit  the max number of results (default 20)
      * @return the search results
      */
     @GetMapping("/catalog/search")
     public ApiResponse<HfSearchResultDto> searchCatalog(
-            @RequestParam String q,
+            @RequestParam(defaultValue = "") String q,
             @RequestParam(defaultValue = "gguf") String format,
             @RequestParam(defaultValue = "" + AppConstants.HF_SEARCH_DEFAULT_LIMIT) int limit) {
         log.info("Catalog search: q='{}', format='{}', limit={}", q, format, limit);
