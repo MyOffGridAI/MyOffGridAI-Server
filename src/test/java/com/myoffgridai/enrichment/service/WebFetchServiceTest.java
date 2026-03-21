@@ -132,7 +132,8 @@ class WebFetchServiceTest {
         KnowledgeDocumentDto expectedDoc = new KnowledgeDocumentDto(
                 UUID.randomUUID(), "article_title.txt", "Article Title",
                 "application/x-quill-delta", 100L, DocumentStatus.PENDING,
-                null, 0, Instant.now(), null, true, true
+                null, 0, Instant.now(), null, true, true,
+                false, true, null
         );
         when(knowledgeService.createFromEditor(any(), any(), any())).thenReturn(expectedDoc);
 
@@ -156,7 +157,8 @@ class WebFetchServiceTest {
         KnowledgeDocumentDto expectedDoc = new KnowledgeDocumentDto(
                 UUID.randomUUID(), "page.txt", "Page",
                 "application/x-quill-delta", 50L, DocumentStatus.PENDING,
-                null, 0, Instant.now(), null, true, true
+                null, 0, Instant.now(), null, true, true,
+                false, true, null
         );
         when(knowledgeService.createFromEditor(any(), any(), any())).thenReturn(expectedDoc);
 

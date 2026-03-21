@@ -144,8 +144,9 @@ class ChatExportServiceTest {
         KnowledgeDocumentDto expectedDto = new KnowledgeDocumentDto(
                 savedDoc.getId(), "Test_Conversation.pdf", "Test Conversation",
                 "application/pdf", 1000, DocumentStatus.PENDING, null, 0,
-                null, null, false, false);
-        when(knowledgeService.toDto(savedDoc)).thenReturn(expectedDto);
+                null, null, false, false,
+                false, true, null);
+        when(knowledgeService.toDto(savedDoc, userId)).thenReturn(expectedDto);
 
         KnowledgeDocumentDto result = chatExportService.saveConversationToLibrary(conversationId, userId);
 
@@ -193,8 +194,9 @@ class ChatExportServiceTest {
         KnowledgeDocumentDto expectedDto = new KnowledgeDocumentDto(
                 savedDoc.getId(), "Chat_Export.pdf", "Chat Export",
                 "application/pdf", 500, DocumentStatus.PENDING, null, 0,
-                null, null, false, false);
-        when(knowledgeService.toDto(savedDoc)).thenReturn(expectedDto);
+                null, null, false, false,
+                false, true, null);
+        when(knowledgeService.toDto(savedDoc, userId)).thenReturn(expectedDto);
 
         KnowledgeDocumentDto result = chatExportService.saveConversationToLibrary(conversationId, userId);
 

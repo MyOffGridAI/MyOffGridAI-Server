@@ -1,5 +1,7 @@
 package com.myoffgridai.knowledge.service;
 
+import com.myoffgridai.auth.model.User;
+import com.myoffgridai.auth.repository.UserRepository;
 import com.myoffgridai.common.exception.EntityNotFoundException;
 import com.myoffgridai.common.exception.UnsupportedFileTypeException;
 import com.myoffgridai.knowledge.dto.DocumentContentDto;
@@ -45,6 +47,7 @@ class KnowledgeServiceTest {
     @Mock private ChunkingService chunkingService;
     @Mock private EmbeddingService embeddingService;
     @Mock private ApplicationContext applicationContext;
+    @Mock private UserRepository userRepository;
 
     private KnowledgeService knowledgeService;
     private UUID userId;
@@ -55,7 +58,7 @@ class KnowledgeServiceTest {
         knowledgeService = new KnowledgeService(
                 documentRepository, chunkRepository, vectorDocumentRepository,
                 fileStorageService, ingestionService, ocrService,
-                chunkingService, embeddingService, applicationContext);
+                chunkingService, embeddingService, applicationContext, userRepository);
         userId = UUID.randomUUID();
     }
 
@@ -247,7 +250,7 @@ class KnowledgeServiceTest {
         doc.setContent("[{\"insert\":\"some content\\n\"}]");
         doc.setMimeType("text/plain");
 
-        KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc, userId);
 
         assertThat(dto.id()).isEqualTo(doc.getId());
         assertThat(dto.filename()).isEqualTo(doc.getFilename());
@@ -258,6 +261,9 @@ class KnowledgeServiceTest {
         assertThat(dto.chunkCount()).isEqualTo(10);
         assertThat(dto.hasContent()).isTrue();
         assertThat(dto.editable()).isTrue();
+        assertThat(dto.isOwner()).isTrue();
+        assertThat(dto.isShared()).isFalse();
+        assertThat(dto.ownerDisplayName()).isNull();
     }
 
     @Test
@@ -265,7 +271,7 @@ class KnowledgeServiceTest {
         KnowledgeDocument doc = createTestDocument();
         doc.setId(UUID.randomUUID());
 
-        KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc, userId);
 
         assertThat(dto.hasContent()).isFalse();
     }
@@ -276,9 +282,31 @@ class KnowledgeServiceTest {
         doc.setId(UUID.randomUUID());
         doc.setMimeType("application/pdf");
 
-        KnowledgeDocumentDto dto = knowledgeService.toDto(doc);
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc, userId);
 
         assertThat(dto.editable()).isFalse();
+    }
+
+    @Test
+    void toDto_nonOwner_editableFalse_ownerDisplayNameSet() {
+        UUID otherUserId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(UUID.randomUUID());
+        doc.setUserId(otherUserId);
+        doc.setMimeType("text/plain");
+        doc.setShared(true);
+
+        User otherUser = new User();
+        otherUser.setId(otherUserId);
+        otherUser.setDisplayName("Other User");
+        when(userRepository.findById(otherUserId)).thenReturn(Optional.of(otherUser));
+
+        KnowledgeDocumentDto dto = knowledgeService.toDto(doc, userId);
+
+        assertThat(dto.isOwner()).isFalse();
+        assertThat(dto.editable()).isFalse();
+        assertThat(dto.ownerDisplayName()).isEqualTo("Other User");
+        assertThat(dto.isShared()).isTrue();
     }
 
     @Test
@@ -376,6 +404,125 @@ class KnowledgeServiceTest {
                 chunk.getId(), VectorSourceType.KNOWLEDGE_CHUNK);
         verify(chunkRepository).deleteByDocumentId(docId);
         verify(documentRepository).save(any(KnowledgeDocument.class));
+    }
+
+    @Test
+    void toggleSharing_ownerCanShare() {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        when(documentRepository.findByIdAndUserId(docId, userId))
+                .thenReturn(Optional.of(doc));
+        when(documentRepository.save(any(KnowledgeDocument.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        KnowledgeDocumentDto dto = knowledgeService.updateSharing(docId, userId, true);
+
+        assertThat(dto.isShared()).isTrue();
+        verify(documentRepository).save(any());
+    }
+
+    @Test
+    void toggleSharing_nonOwner_throwsEntityNotFound() {
+        UUID docId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        when(documentRepository.findByIdAndUserId(docId, otherUserId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> knowledgeService.updateSharing(docId, otherUserId, true))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void getDocument_sharedDocByNonOwner_returnsDto() {
+        UUID docId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setShared(true);
+        // Not found by owner query, but found by shared query
+        when(documentRepository.findByIdAndUserId(docId, otherUserId))
+                .thenReturn(Optional.empty());
+        when(documentRepository.findByIdAndIsSharedTrue(docId))
+                .thenReturn(Optional.of(doc));
+        User owner = new User();
+        owner.setId(userId);
+        owner.setDisplayName("Doc Owner");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(owner));
+
+        KnowledgeDocumentDto dto = knowledgeService.getDocument(docId, otherUserId);
+
+        assertThat(dto.id()).isEqualTo(docId);
+        assertThat(dto.isOwner()).isFalse();
+        assertThat(dto.ownerDisplayName()).isEqualTo("Doc Owner");
+    }
+
+    @Test
+    void getDocument_unsharedDocByNonOwner_throwsEntityNotFound() {
+        UUID docId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        when(documentRepository.findByIdAndUserId(docId, otherUserId))
+                .thenReturn(Optional.empty());
+        when(documentRepository.findByIdAndIsSharedTrue(docId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> knowledgeService.getDocument(docId, otherUserId))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void listDocuments_scopeShared_returnsOnlySharedFromOthers() {
+        UUID otherUserId = UUID.randomUUID();
+        KnowledgeDocument sharedDoc = createTestDocument();
+        sharedDoc.setId(UUID.randomUUID());
+        sharedDoc.setUserId(otherUserId);
+        sharedDoc.setShared(true);
+
+        User otherUser = new User();
+        otherUser.setId(otherUserId);
+        otherUser.setDisplayName("Other");
+        when(userRepository.findById(otherUserId)).thenReturn(Optional.of(otherUser));
+
+        Page<KnowledgeDocument> page = new PageImpl<>(List.of(sharedDoc));
+        when(documentRepository.findByIsSharedTrueAndUserIdNotOrderByUploadedAtDesc(eq(userId), any()))
+                .thenReturn(page);
+
+        Page<KnowledgeDocumentDto> result = knowledgeService.listDocuments(userId, "SHARED", PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).isOwner()).isFalse();
+        assertThat(result.getContent().get(0).isShared()).isTrue();
+    }
+
+    @Test
+    void getDocumentContent_sharedDoc_editableFalse() {
+        UUID docId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        KnowledgeDocument doc = createTestDocument();
+        doc.setId(docId);
+        doc.setMimeType("text/plain");
+        doc.setContent("[{\"insert\":\"hello\\n\"}]");
+        doc.setShared(true);
+        // Non-owner access via shared
+        when(documentRepository.findByIdAndUserId(docId, otherUserId))
+                .thenReturn(Optional.empty());
+        when(documentRepository.findByIdAndIsSharedTrue(docId))
+                .thenReturn(Optional.of(doc));
+
+        DocumentContentDto dto = knowledgeService.getDocumentContent(docId, otherUserId);
+
+        assertThat(dto.editable()).isFalse();
+    }
+
+    @Test
+    void deleteDocument_nonOwner_throwsEntityNotFound() {
+        UUID docId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        when(documentRepository.findByIdAndUserId(docId, otherUserId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> knowledgeService.deleteDocument(docId, otherUserId))
+                .isInstanceOf(EntityNotFoundException.class);
     }
 
     private KnowledgeDocument createTestDocument() {

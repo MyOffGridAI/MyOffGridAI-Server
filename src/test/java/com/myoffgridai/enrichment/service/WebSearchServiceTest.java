@@ -163,7 +163,8 @@ class WebSearchServiceTest {
         KnowledgeDocumentDto doc = new KnowledgeDocumentDto(
                 UUID.randomUUID(), "file.txt", "Title",
                 "application/x-quill-delta", 100L, DocumentStatus.PENDING,
-                null, 0, Instant.now(), null, true, true
+                null, 0, Instant.now(), null, true, true,
+                false, true, null
         );
         when(webFetchService.fetchAndStore(anyString(), any(), anyBoolean())).thenReturn(doc);
 

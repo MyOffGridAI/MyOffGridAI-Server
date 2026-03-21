@@ -27,6 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import com.myoffgridai.auth.model.User;
+import com.myoffgridai.auth.repository.UserRepository;
+import com.myoffgridai.knowledge.dto.UpdateSharingRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -58,6 +61,7 @@ public class KnowledgeService {
     private final ChunkingService chunkingService;
     private final EmbeddingService embeddingService;
     private final ApplicationContext applicationContext;
+    private final UserRepository userRepository;
 
     /**
      * Constructs the knowledge service.
@@ -71,6 +75,7 @@ public class KnowledgeService {
      * @param chunkingService          the chunking service
      * @param embeddingService         the embedding service
      * @param applicationContext       the Spring application context for proxy lookup
+     * @param userRepository           the user repository for owner display names
      */
     public KnowledgeService(KnowledgeDocumentRepository documentRepository,
                             KnowledgeChunkRepository chunkRepository,
@@ -80,7 +85,8 @@ public class KnowledgeService {
                             OcrService ocrService,
                             ChunkingService chunkingService,
                             EmbeddingService embeddingService,
-                            ApplicationContext applicationContext) {
+                            ApplicationContext applicationContext,
+                            UserRepository userRepository) {
         this.documentRepository = documentRepository;
         this.chunkRepository = chunkRepository;
         this.vectorDocumentRepository = vectorDocumentRepository;
@@ -90,6 +96,7 @@ public class KnowledgeService {
         this.chunkingService = chunkingService;
         this.embeddingService = embeddingService;
         this.applicationContext = applicationContext;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -127,7 +134,7 @@ public class KnowledgeService {
 
         scheduleProcessingAfterCommit(doc.getId());
 
-        return toDto(doc);
+        return toDto(doc, userId);
     }
 
     /**
@@ -212,22 +219,39 @@ public class KnowledgeService {
      */
     @Transactional(readOnly = true)
     public Page<KnowledgeDocumentDto> listDocuments(UUID userId, Pageable pageable) {
-        return documentRepository.findByUserIdOrderByUploadedAtDesc(userId, pageable)
-                .map(this::toDto);
+        return listDocuments(userId, "MINE", pageable);
     }
 
     /**
-     * Gets a single document by ID, verifying ownership.
+     * Lists documents for a user with pagination, filtered by scope.
+     *
+     * @param userId   the user's ID
+     * @param scope    "MINE" for user's own docs, "SHARED" for shared docs from other users
+     * @param pageable the pagination parameters
+     * @return a page of document DTOs
+     */
+    @Transactional(readOnly = true)
+    public Page<KnowledgeDocumentDto> listDocuments(UUID userId, String scope, Pageable pageable) {
+        if ("SHARED".equalsIgnoreCase(scope)) {
+            return documentRepository.findByIsSharedTrueAndUserIdNotOrderByUploadedAtDesc(userId, pageable)
+                    .map(doc -> toDto(doc, userId));
+        }
+        return documentRepository.findByUserIdOrderByUploadedAtDesc(userId, pageable)
+                .map(doc -> toDto(doc, userId));
+    }
+
+    /**
+     * Gets a single document by ID. Allows access if the user owns it or if it is shared.
      *
      * @param documentId the document ID
      * @param userId     the requesting user's ID
      * @return the document DTO
-     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     * @throws EntityNotFoundException if the document does not exist or is not accessible
      */
     @Transactional(readOnly = true)
     public KnowledgeDocumentDto getDocument(UUID documentId, UUID userId) {
-        KnowledgeDocument doc = findDocumentForUser(documentId, userId);
-        return toDto(doc);
+        KnowledgeDocument doc = findDocumentOrShared(documentId, userId);
+        return toDto(doc, userId);
     }
 
     /**
@@ -245,7 +269,7 @@ public class KnowledgeService {
         doc.setDisplayName(displayName);
         doc = documentRepository.save(doc);
         log.info("Updated display name for document {}: {}", documentId, displayName);
-        return toDto(doc);
+        return toDto(doc, userId);
     }
 
     /**
@@ -306,7 +330,7 @@ public class KnowledgeService {
 
         scheduleProcessingAfterCommit(doc.getId());
 
-        return toDto(doc);
+        return toDto(doc, userId);
     }
 
     /**
@@ -326,10 +350,19 @@ public class KnowledgeService {
     /**
      * Converts a {@link KnowledgeDocument} entity to its DTO representation.
      *
-     * @param doc the entity
-     * @return the DTO
+     * @param doc              the entity
+     * @param requestingUserId the ID of the user requesting the DTO
+     * @return the DTO with ownership and sharing information
      */
-    public KnowledgeDocumentDto toDto(KnowledgeDocument doc) {
+    public KnowledgeDocumentDto toDto(KnowledgeDocument doc, UUID requestingUserId) {
+        boolean isOwner = doc.getUserId().equals(requestingUserId);
+        boolean editable = isOwner && AppConstants.EDITABLE_MIME_TYPES.contains(doc.getMimeType());
+        String ownerDisplayName = null;
+        if (!isOwner) {
+            ownerDisplayName = userRepository.findById(doc.getUserId())
+                    .map(User::getDisplayName)
+                    .orElse("Unknown");
+        }
         return new KnowledgeDocumentDto(
                 doc.getId(),
                 doc.getFilename(),
@@ -342,42 +375,49 @@ public class KnowledgeService {
                 doc.getUploadedAt(),
                 doc.getProcessedAt(),
                 doc.getContent() != null && !doc.getContent().isBlank(),
-                AppConstants.EDITABLE_MIME_TYPES.contains(doc.getMimeType())
+                editable,
+                doc.isShared(),
+                isOwner,
+                ownerDisplayName
         );
     }
 
     /**
      * Retrieves the content of a document for viewing or editing.
+     * Allows access if the user owns the document or if the document is shared.
      *
      * @param documentId the document ID
      * @param userId     the requesting user's ID
      * @return the document content DTO
-     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     * @throws EntityNotFoundException if the document does not exist or is not accessible
      */
     @Transactional(readOnly = true)
     public DocumentContentDto getDocumentContent(UUID documentId, UUID userId) {
-        KnowledgeDocument doc = findDocumentForUser(documentId, userId);
+        KnowledgeDocument doc = findDocumentOrShared(documentId, userId);
+        boolean isOwner = doc.getUserId().equals(userId);
+        boolean editable = isOwner && AppConstants.EDITABLE_MIME_TYPES.contains(doc.getMimeType());
         String title = doc.getDisplayName() != null ? doc.getDisplayName() : doc.getFilename();
         return new DocumentContentDto(
                 doc.getId(),
                 title,
                 doc.getContent(),
                 doc.getMimeType(),
-                AppConstants.EDITABLE_MIME_TYPES.contains(doc.getMimeType())
+                editable
         );
     }
 
     /**
      * Retrieves a document entity for download (streaming the original file).
+     * Allows access if the user owns the document or if the document is shared.
      *
      * @param documentId the document ID
      * @param userId     the requesting user's ID
      * @return the knowledge document entity
-     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     * @throws EntityNotFoundException if the document does not exist or is not accessible
      */
     @Transactional(readOnly = true)
     public KnowledgeDocument getDocumentForDownload(UUID documentId, UUID userId) {
-        return findDocumentForUser(documentId, userId);
+        return findDocumentOrShared(documentId, userId);
     }
 
     /**
@@ -413,7 +453,7 @@ public class KnowledgeService {
 
         scheduleProcessingAfterCommit(doc.getId());
 
-        return toDto(doc);
+        return toDto(doc, userId);
     }
 
     /**
@@ -457,7 +497,7 @@ public class KnowledgeService {
 
         scheduleProcessingAfterCommit(doc.getId());
 
-        return toDto(doc);
+        return toDto(doc, userId);
     }
 
     /**
@@ -504,6 +544,39 @@ public class KnowledgeService {
                                 .processDocumentAsync(documentId);
                     }
                 });
+    }
+
+    /**
+     * Updates the sharing status of a document. Only the owner can change sharing.
+     *
+     * @param documentId the document ID
+     * @param userId     the requesting user's ID (must be the owner)
+     * @param shared     the new sharing status
+     * @return the updated document DTO
+     * @throws EntityNotFoundException if the document does not exist or belongs to another user
+     */
+    @Transactional
+    public KnowledgeDocumentDto updateSharing(UUID documentId, UUID userId, boolean shared) {
+        KnowledgeDocument doc = findDocumentForUser(documentId, userId);
+        doc.setShared(shared);
+        doc = documentRepository.save(doc);
+        log.info("Updated sharing for document {}: shared={}", documentId, shared);
+        return toDto(doc, userId);
+    }
+
+    /**
+     * Finds a document by ID, first checking ownership, then checking if shared.
+     *
+     * @param documentId the document ID
+     * @param userId     the requesting user's ID
+     * @return the document entity
+     * @throws EntityNotFoundException if the document is neither owned nor shared
+     */
+    private KnowledgeDocument findDocumentOrShared(UUID documentId, UUID userId) {
+        return documentRepository.findByIdAndUserId(documentId, userId)
+                .or(() -> documentRepository.findByIdAndIsSharedTrue(documentId))
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Document not found: " + documentId));
     }
 
     private KnowledgeDocument findDocumentForUser(UUID documentId, UUID userId) {

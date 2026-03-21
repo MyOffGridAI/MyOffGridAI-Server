@@ -15,7 +15,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "knowledge_documents", indexes = {
-        @Index(name = "idx_knowledge_doc_user_id", columnList = "user_id")
+        @Index(name = "idx_knowledge_doc_user_id", columnList = "user_id"),
+        @Index(name = "idx_knowledge_doc_shared", columnList = "is_shared")
 })
 @EntityListeners(AuditingEntityListener.class)
 public class KnowledgeDocument {
@@ -61,6 +62,9 @@ public class KnowledgeDocument {
 
     @Column(columnDefinition = "TEXT")
     private String content;
+
+    @Column(name = "is_shared", nullable = false)
+    private boolean isShared = false;
 
     public KnowledgeDocument() {
     }
@@ -112,4 +116,7 @@ public class KnowledgeDocument {
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public boolean isShared() { return isShared; }
+    public void setShared(boolean shared) { isShared = shared; }
 }

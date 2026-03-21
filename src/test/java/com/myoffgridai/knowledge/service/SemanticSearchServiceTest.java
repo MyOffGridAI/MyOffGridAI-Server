@@ -65,7 +65,7 @@ class SemanticSearchServiceTest {
 
         when(embeddingService.embed(anyString())).thenReturn(embedding);
         when(embeddingService.cosineSimilarity(any(), any())).thenReturn(0.92f);
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(vectorDocumentRepository.findMostSimilarIncludingShared(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
         when(chunkRepository.findById(chunkId)).thenReturn(Optional.of(chunk));
 
@@ -81,7 +81,7 @@ class SemanticSearchServiceTest {
     @Test
     void search_noResults_returnsEmpty() {
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(vectorDocumentRepository.findMostSimilarIncludingShared(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of());
 
         List<KnowledgeSearchResultDto> results = searchService.search(userId, "nothing", 5);
@@ -97,7 +97,7 @@ class SemanticSearchServiceTest {
         vd.setEmbedding(new float[]{0.1f});
 
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(vectorDocumentRepository.findMostSimilarIncludingShared(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
         when(chunkRepository.findById(chunkId)).thenReturn(Optional.empty());
 
@@ -112,7 +112,7 @@ class SemanticSearchServiceTest {
         vd.setSourceId(null);
 
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(vectorDocumentRepository.findMostSimilarIncludingShared(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
 
         List<KnowledgeSearchResultDto> results = searchService.search(userId, "test", 5);
@@ -141,7 +141,7 @@ class SemanticSearchServiceTest {
 
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(embeddingService.cosineSimilarity(any(), any())).thenReturn(0.8f);
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(vectorDocumentRepository.findMostSimilarIncludingShared(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
         when(chunkRepository.findById(chunkId)).thenReturn(Optional.of(chunk));
 
@@ -171,7 +171,7 @@ class SemanticSearchServiceTest {
 
         when(embeddingService.embed(anyString())).thenReturn(new float[]{0.1f});
         when(embeddingService.cosineSimilarity(any(), any())).thenReturn(0.9f);
-        when(vectorDocumentRepository.findMostSimilar(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
+        when(vectorDocumentRepository.findMostSimilarIncludingShared(eq(userId), eq("KNOWLEDGE_CHUNK"), anyString(), anyInt()))
                 .thenReturn(List.of(vd));
         when(chunkRepository.findById(chunkId)).thenReturn(Optional.of(chunk));
 

@@ -88,7 +88,8 @@ class EnrichmentControllerTest {
         KnowledgeDocumentDto doc = new KnowledgeDocumentDto(
                 UUID.randomUUID(), "page.txt", "Test Page",
                 "application/x-quill-delta", 500L, DocumentStatus.PENDING,
-                null, 0, Instant.now(), null, true, true
+                null, 0, Instant.now(), null, true, true,
+                false, true, null
         );
         when(webFetchService.fetchAndStore(anyString(), any(UUID.class), anyBoolean()))
                 .thenReturn(doc);

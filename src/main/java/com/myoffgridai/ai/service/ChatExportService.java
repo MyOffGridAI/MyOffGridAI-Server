@@ -213,7 +213,7 @@ public class ChatExportService {
                     }
                 });
 
-        return knowledgeService.toDto(doc);
+        return knowledgeService.toDto(doc, userId);
     }
 
     /**

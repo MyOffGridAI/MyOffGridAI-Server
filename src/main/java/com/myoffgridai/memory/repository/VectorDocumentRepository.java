@@ -86,4 +86,32 @@ public interface VectorDocumentRepository extends JpaRepository<VectorDocument, 
             @Param("embedding") String embedding,
             @Param("topK") int topK
     );
+
+    /**
+     * Finds the most similar vector documents including shared knowledge documents.
+     * Returns vectors owned by the user OR vectors whose source chunk belongs to a shared document.
+     *
+     * @param userId     the requesting user's ID
+     * @param sourceType the source type to filter by
+     * @param embedding  the query embedding in pgvector string format
+     * @param topK       the maximum number of results to return
+     * @return the most similar documents ordered by ascending cosine distance
+     */
+    @Query(value = """
+            SELECT * FROM vector_document
+            WHERE (user_id = :userId OR source_id IN (
+                SELECT kc.id FROM knowledge_chunks kc
+                JOIN knowledge_documents kd ON kc.document_id = kd.id
+                WHERE kd.is_shared = true
+            ))
+            AND source_type = :sourceType
+            ORDER BY embedding <=> CAST(:embedding AS vector)
+            LIMIT :topK
+            """, nativeQuery = true)
+    List<VectorDocument> findMostSimilarIncludingShared(
+            @Param("userId") UUID userId,
+            @Param("sourceType") String sourceType,
+            @Param("embedding") String embedding,
+            @Param("topK") int topK
+    );
 }

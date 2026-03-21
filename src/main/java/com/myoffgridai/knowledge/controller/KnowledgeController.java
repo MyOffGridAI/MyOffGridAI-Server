@@ -86,21 +86,23 @@ public class KnowledgeController {
     }
 
     /**
-     * Lists the authenticated user's knowledge documents with pagination.
+     * Lists knowledge documents with pagination, filtered by scope.
      *
      * @param principal the authenticated user
      * @param page      the page number (0-based, defaults to 0)
      * @param size      the page size (defaults to 20)
+     * @param scope     "MINE" for user's own docs (default), "SHARED" for shared docs from others
      * @return paginated list of document DTOs
      */
     @GetMapping
     public ResponseEntity<ApiResponse<List<KnowledgeDocumentDto>>> listDocuments(
             @AuthenticationPrincipal User principal,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "MINE") String scope) {
         size = Math.min(size, AppConstants.MAX_PAGE_SIZE);
         Page<KnowledgeDocumentDto> result = knowledgeService.listDocuments(
-                principal.getId(), PageRequest.of(page, size));
+                principal.getId(), scope, PageRequest.of(page, size));
         return ResponseEntity.ok(ApiResponse.paginated(
                 result.getContent(), result.getTotalElements(), page, size));
     }
@@ -136,6 +138,26 @@ public class KnowledgeController {
         KnowledgeDocumentDto dto = knowledgeService.updateDisplayName(
                 documentId, principal.getId(), request.displayName());
         return ResponseEntity.ok(ApiResponse.success(dto, "Display name updated"));
+    }
+
+    /**
+     * Updates the sharing status of a knowledge document. Only the owner can share/unshare.
+     *
+     * @param principal  the authenticated user
+     * @param documentId the document ID
+     * @param request    the request containing the new sharing status
+     * @return the updated document DTO
+     */
+    @PatchMapping("/{documentId}/sharing")
+    public ResponseEntity<ApiResponse<KnowledgeDocumentDto>> updateSharing(
+            @AuthenticationPrincipal User principal,
+            @PathVariable java.util.UUID documentId,
+            @Valid @RequestBody UpdateSharingRequest request) {
+        log.info("Update sharing request from user {} for document {}: shared={}",
+                principal.getId(), documentId, request.shared());
+        KnowledgeDocumentDto dto = knowledgeService.updateSharing(
+                documentId, principal.getId(), request.shared());
+        return ResponseEntity.ok(ApiResponse.success(dto, "Sharing updated"));
     }
 
     /**

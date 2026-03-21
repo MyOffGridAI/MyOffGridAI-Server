@@ -429,7 +429,8 @@ class ChatControllerTest {
         KnowledgeDocumentDto dto = new KnowledgeDocumentDto(
                 docId, "Test_Conversation.pdf", "Test Conversation",
                 "application/pdf", 5000, DocumentStatus.PENDING, null, 0,
-                Instant.now(), null, false, false);
+                Instant.now(), null, false, false,
+                false, true, null);
 
         when(chatExportService.saveConversationToLibrary(conversationId, userId))
                 .thenReturn(dto);

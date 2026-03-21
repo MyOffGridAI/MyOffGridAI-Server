@@ -90,7 +90,7 @@ public class SemanticSearchService {
         log.debug("Semantic search for user {}: '{}' (topK={})", userId, queryText, topK);
 
         String formattedEmbedding = EmbeddingService.formatEmbedding(precomputedEmbedding);
-        List<VectorDocument> vectorDocs = vectorDocumentRepository.findMostSimilar(
+        List<VectorDocument> vectorDocs = vectorDocumentRepository.findMostSimilarIncludingShared(
                 userId, VectorSourceType.KNOWLEDGE_CHUNK.name(),
                 formattedEmbedding, topK);
 

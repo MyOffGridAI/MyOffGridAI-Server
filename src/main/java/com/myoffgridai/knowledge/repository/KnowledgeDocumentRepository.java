@@ -61,4 +61,21 @@ public interface KnowledgeDocumentRepository extends JpaRepository<KnowledgeDocu
      * @return the document count
      */
     long countByUserId(UUID userId);
+
+    /**
+     * Finds all shared documents from other users, ordered by upload date descending.
+     *
+     * @param userId   the requesting user's ID (excluded from results)
+     * @param pageable pagination parameters
+     * @return a page of shared documents not owned by the requesting user
+     */
+    Page<KnowledgeDocument> findByIsSharedTrueAndUserIdNotOrderByUploadedAtDesc(UUID userId, Pageable pageable);
+
+    /**
+     * Finds a shared document by its ID, regardless of owner.
+     *
+     * @param id the document ID
+     * @return the document if it exists and is shared
+     */
+    Optional<KnowledgeDocument> findByIdAndIsSharedTrue(UUID id);
 }

@@ -102,7 +102,7 @@ class KnowledgeControllerTest {
     @Test
     void listDocuments_returnsPaginated() throws Exception {
         KnowledgeDocumentDto dto = createTestDto();
-        when(knowledgeService.listDocuments(eq(userId), any()))
+        when(knowledgeService.listDocuments(eq(userId), eq("MINE"), any()))
                 .thenReturn(new PageImpl<>(List.of(dto)));
 
         mockMvc.perform(get("/api/knowledge")
@@ -132,7 +132,7 @@ class KnowledgeControllerTest {
         KnowledgeDocumentDto dto = new KnowledgeDocumentDto(
                 docId, "test.pdf", "My Doc", "application/pdf",
                 1024, DocumentStatus.READY, null, 5, Instant.now(), Instant.now(),
-                true, false);
+                true, false, false, true, null);
         when(knowledgeService.updateDisplayName(docId, userId, "My Doc")).thenReturn(dto);
 
         mockMvc.perform(put("/api/knowledge/" + docId + "/display-name")
@@ -314,10 +314,80 @@ class KnowledgeControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void updateSharing_ownerCanShare_returnsOk() throws Exception {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocumentDto dto = createTestDto();
+        when(knowledgeService.updateSharing(docId, userId, true)).thenReturn(dto);
+
+        mockMvc.perform(patch("/api/knowledge/" + docId + "/sharing")
+                        .with(user(testUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"shared\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Sharing updated"));
+    }
+
+    @Test
+    void updateSharing_unauthenticated_returns401() throws Exception {
+        UUID docId = UUID.randomUUID();
+
+        mockMvc.perform(patch("/api/knowledge/" + docId + "/sharing")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"shared\":true}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listDocuments_scopeShared_passesToService() throws Exception {
+        when(knowledgeService.listDocuments(eq(userId), eq("SHARED"), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/api/knowledge")
+                        .param("scope", "SHARED")
+                        .with(user(testUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(knowledgeService).listDocuments(eq(userId), eq("SHARED"), any());
+    }
+
+    @Test
+    void listDocuments_defaultScope_usesMine() throws Exception {
+        KnowledgeDocumentDto dto = createTestDto();
+        when(knowledgeService.listDocuments(eq(userId), eq("MINE"), any()))
+                .thenReturn(new PageImpl<>(List.of(dto)));
+
+        mockMvc.perform(get("/api/knowledge")
+                        .with(user(testUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(knowledgeService).listDocuments(eq(userId), eq("MINE"), any());
+    }
+
+    @Test
+    void getDocument_sharedDocNonOwner_succeeds() throws Exception {
+        UUID docId = UUID.randomUUID();
+        KnowledgeDocumentDto dto = new KnowledgeDocumentDto(
+                docId, "shared.pdf", "Shared Doc", "application/pdf",
+                1024, DocumentStatus.READY, null, 5, Instant.now(), Instant.now(),
+                true, false, true, false, "Other User");
+        when(knowledgeService.getDocument(docId, userId)).thenReturn(dto);
+
+        mockMvc.perform(get("/api/knowledge/" + docId)
+                        .with(user(testUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.isShared").value(true))
+                .andExpect(jsonPath("$.data.isOwner").value(false))
+                .andExpect(jsonPath("$.data.ownerDisplayName").value("Other User"));
+    }
+
     private KnowledgeDocumentDto createTestDto() {
         return new KnowledgeDocumentDto(
                 UUID.randomUUID(), "test.pdf", null, "application/pdf",
                 1024, DocumentStatus.PENDING, null, 0, Instant.now(), null,
-                false, false);
+                false, false, false, true, null);
     }
 }
