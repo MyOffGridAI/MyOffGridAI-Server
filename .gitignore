@@ -44,3 +44,6 @@ apache-maven-*/
 
 ### Runtime data ###
 library/
+
+# Database backups
+backups/
