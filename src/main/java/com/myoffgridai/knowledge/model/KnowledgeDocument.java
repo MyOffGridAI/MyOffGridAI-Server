@@ -63,7 +63,7 @@ public class KnowledgeDocument {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Column(name = "is_shared", nullable = false)
+    @Column(name = "is_shared", nullable = false, columnDefinition = "boolean not null default false")
     private boolean isShared = false;
 
     public KnowledgeDocument() {
