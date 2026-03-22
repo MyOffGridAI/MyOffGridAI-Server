@@ -13,10 +13,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Manages the single-row system configuration for device-level settings.
+ *
+ * <p>The {@code system_config} table is a singleton table — exactly one row
+ * must exist at all times after first startup. This service enforces that
+ * invariant through synchronized access and automatic deduplication.</p>
+ *
+ * <p>Thread safety: {@link #getConfig()} is {@code synchronized} to prevent
+ * race conditions during startup when multiple {@code ApplicationReadyEvent}
+ * listeners (including {@code @Async} ones) call it concurrently on an
+ * empty table.</p>
  */
 @Service
 public class SystemConfigService {
@@ -37,14 +47,35 @@ public class SystemConfigService {
     /**
      * Fetches the single system config row, creating one with defaults if none exists.
      *
-     * @return the system configuration
+     * <p>This method is {@code synchronized} to prevent concurrent callers from
+     * each creating a new row when the table is empty (race condition observed
+     * between {@code ApModeStartupService} and {@code @Async ModelPreloadService}
+     * during startup).</p>
+     *
+     * <p>If duplicate rows are detected (e.g., from a previous race condition),
+     * the most recently updated row is kept and all others are deleted.</p>
+     *
+     * @return the system configuration (never null)
      */
-    public SystemConfig getConfig() {
-        return systemConfigRepository.findFirst()
-                .orElseGet(() -> {
-                    log.info("No system config found, creating default");
-                    return systemConfigRepository.save(new SystemConfig());
-                });
+    public synchronized SystemConfig getConfig() {
+        List<SystemConfig> allConfigs = systemConfigRepository.findAllOrderByUpdatedAtDesc();
+
+        if (allConfigs.isEmpty()) {
+            log.info("No system config found, creating default");
+            return systemConfigRepository.save(new SystemConfig());
+        }
+
+        if (allConfigs.size() > 1) {
+            log.warn("Found {} duplicate system_config rows — deduplicating, keeping most recent",
+                    allConfigs.size());
+            SystemConfig keeper = allConfigs.get(0);
+            List<SystemConfig> duplicates = allConfigs.subList(1, allConfigs.size());
+            systemConfigRepository.deleteAll(duplicates);
+            log.info("Deleted {} duplicate system_config rows, kept id={}", duplicates.size(), keeper.getId());
+            return keeper;
+        }
+
+        return allConfigs.get(0);
     }
 
     /**
