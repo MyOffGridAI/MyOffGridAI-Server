@@ -102,12 +102,30 @@ public class MemoryExtractionService {
 
         try {
             String prompt = String.format("""
-                    Extract 0-%d important facts about the user from this conversation exchange.
-                    Only extract facts that would be useful to remember long-term (preferences, possessions, \
-                    plans, personal details, homestead specifics). If there are no memorable facts, return empty.
+                    You are a fact extraction engine. Analyze the conversation exchange below and extract \
+                    EVERY distinct fact about the user as its own separate entry. Do NOT summarize or combine \
+                    multiple facts into one entry — each fact stands alone.
+
+                    Extract up to %d facts. Categories to look for (non-exhaustive):
+                    - Personal info: name, age, family members, relationships, occupation
+                    - Location: city, state, county, address, region, property description
+                    - Property: acreage, land features, structures, buildings, fencing
+                    - Vehicles: cars, trucks, ATVs, boats — make, model, year, condition
+                    - Equipment: tools, machinery, generators, solar panels, pumps
+                    - Animals: livestock, pets — species, breed, count, names
+                    - Infrastructure: water systems, septic, electrical, internet, HVAC
+                    - Hobbies & interests: activities, sports, crafts, collections
+                    - Certifications & licenses: professional, trade, permits
+                    - Plans & goals: future projects, purchases, improvements
+                    - Preferences: food, brands, routines, communication style
+                    - Systems & appliances: makes, models, capacities
+                    - Skills & experience: trades, expertise, background
+                    - Health & medical: conditions, medications, allergies (if voluntarily shared)
+
+                    If there are no memorable facts, return an empty array [].
 
                     Respond ONLY with a JSON array of objects, each with:
-                    - "content": the fact as a single sentence
+                    - "content": the fact as a single clear sentence
                     - "importance": one of LOW, MEDIUM, HIGH, CRITICAL
                     - "tags": comma-separated relevant tags
 
@@ -123,10 +141,10 @@ public class MemoryExtractionService {
                     List.of(new OllamaMessage("user", prompt)),
                     false,
                     Map.of("num_ctx", aiSettings.contextSize(),
-                            "num_predict", 512));
+                            "num_predict", 4096));
 
             OllamaChatResponse response = ollamaService.chat(request);
-            String responseText = response.message().content().trim();
+            String responseText = stripThinkTags(response.message().content()).trim();
 
             parseAndStoreMemories(userId, conversationId, responseText);
         } catch (Exception e) {
@@ -176,5 +194,16 @@ public class MemoryExtractionService {
         } catch (Exception e) {
             log.warn("Failed to parse memory extraction response: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Strips {@code <think>...</think>} blocks from non-streaming LLM responses.
+     *
+     * @param text the raw response text
+     * @return the text with thinking traces removed
+     */
+    private String stripThinkTags(String text) {
+        if (text == null) return "";
+        return text.replaceAll("(?s)<think>.*?</think>", "").trim();
     }
 }

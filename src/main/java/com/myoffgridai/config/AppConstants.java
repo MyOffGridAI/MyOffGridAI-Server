@@ -267,7 +267,7 @@ public final class AppConstants {
     public static final int RAG_MAX_CONTEXT_TOKENS = 2048;
 
     /** Maximum number of facts to extract per conversation exchange */
-    public static final int MEMORY_EXTRACTION_MAX_FACTS = 3;
+    public static final int MEMORY_EXTRACTION_MAX_FACTS = 50;
 
     /** Tag used for conversation summary memories */
     public static final String MEMORY_SUMMARIZATION_TAG = "conversation-summary";

@@ -201,6 +201,22 @@ public class MemoryService {
     }
 
     /**
+     * Updates the shared visibility of a memory.
+     *
+     * @param memoryId the memory ID
+     * @param userId   the caller's user ID (must be the owner)
+     * @param shared   the new shared status
+     * @return the updated Memory
+     */
+    @Transactional
+    public Memory updateShared(UUID memoryId, UUID userId, boolean shared) {
+        log.info("Updating shared status for memory: {} to {}", memoryId, shared);
+        Memory memory = getMemory(memoryId, userId);
+        memory.setShared(shared);
+        return memoryRepository.save(memory);
+    }
+
+    /**
      * Deletes a memory and its associated vector document.
      *
      * @param memoryId the memory ID
@@ -212,6 +228,54 @@ public class MemoryService {
         Memory memory = getMemory(memoryId, userId);
         vectorDocumentRepository.deleteBySourceIdAndSourceType(memoryId, VectorSourceType.MEMORY);
         memoryRepository.delete(memory);
+    }
+
+    /**
+     * Deletes a batch of memories and their associated vector documents.
+     *
+     * <p>Only memories owned by the caller are deleted; non-owned IDs are silently skipped.</p>
+     *
+     * @param ids    the list of memory IDs to delete
+     * @param userId the caller's user ID
+     * @return the number of memories actually deleted
+     */
+    @Transactional
+    public int deleteMemoriesBatch(List<UUID> ids, UUID userId) {
+        log.info("Batch-deleting {} memories for user: {}", ids.size(), userId);
+        List<Memory> owned = memoryRepository.findByIdInAndUserId(ids, userId);
+        if (owned.isEmpty()) {
+            return 0;
+        }
+        List<UUID> ownedIds = owned.stream().map(Memory::getId).toList();
+        vectorDocumentRepository.deleteBySourceIdInAndSourceType(ownedIds, VectorSourceType.MEMORY);
+        memoryRepository.deleteAll(owned);
+        log.info("Batch-deleted {} memories for user: {}", owned.size(), userId);
+        return owned.size();
+    }
+
+    /**
+     * Updates the shared visibility of a batch of memories.
+     *
+     * <p>Only memories owned by the caller are updated; non-owned IDs are silently skipped.</p>
+     *
+     * @param ids    the list of memory IDs to update
+     * @param userId the caller's user ID
+     * @param shared the new shared visibility value
+     * @return the number of memories actually updated
+     */
+    @Transactional
+    public int updateSharedBatch(List<UUID> ids, UUID userId, boolean shared) {
+        log.info("Batch-updating shared={} for {} memories, user: {}", shared, ids.size(), userId);
+        List<Memory> owned = memoryRepository.findByIdInAndUserId(ids, userId);
+        if (owned.isEmpty()) {
+            return 0;
+        }
+        for (Memory memory : owned) {
+            memory.setShared(shared);
+        }
+        memoryRepository.saveAll(owned);
+        log.info("Batch-updated shared={} for {} memories, user: {}", shared, owned.size(), userId);
+        return owned.size();
     }
 
     /**
@@ -253,7 +317,7 @@ public class MemoryService {
         if (tag != null && !tag.isBlank()) {
             return memoryRepository.findByUserIdAndTagsContaining(userId, tag, pageable);
         }
-        return memoryRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+        return memoryRepository.findByUserIdOrSharedTrueOrderByCreatedAtDesc(userId, pageable);
     }
 
     /**
@@ -264,10 +328,10 @@ public class MemoryService {
      */
     public MemoryDto toDto(Memory memory) {
         return new MemoryDto(
-                memory.getId(), memory.getContent(), memory.getImportance(),
+                memory.getId(), memory.getUserId(), memory.getContent(), memory.getImportance(),
                 memory.getTags(), memory.getSourceConversationId(),
                 memory.getCreatedAt(), memory.getUpdatedAt(),
-                memory.getLastAccessedAt(), memory.getAccessCount());
+                memory.getLastAccessedAt(), memory.getAccessCount(), memory.isShared());
     }
 
     private List<MemoryWithScore> findRelevantMemoriesInternal(UUID userId, String queryText, int topK,
@@ -285,7 +349,7 @@ public class MemoryService {
         }
 
         String formattedEmbedding = EmbeddingService.formatEmbedding(queryEmbedding);
-        List<VectorDocument> docs = vectorDocumentRepository.findMostSimilar(
+        List<VectorDocument> docs = vectorDocumentRepository.findMostSimilarIncludingSharedMemories(
                 userId, VectorSourceType.MEMORY.name(), formattedEmbedding, topK);
 
         if (docs.isEmpty()) {

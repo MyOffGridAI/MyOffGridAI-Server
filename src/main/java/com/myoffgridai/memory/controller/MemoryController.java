@@ -141,6 +141,57 @@ public class MemoryController {
     }
 
     /**
+     * Updates the shared visibility of a memory.
+     *
+     * @param principal the authenticated user
+     * @param id        the memory ID
+     * @param request   the new shared status
+     * @return the updated memory
+     */
+    @PutMapping("/{id}/shared")
+    public ResponseEntity<ApiResponse<MemoryDto>> updateShared(
+            @AuthenticationPrincipal User principal,
+            @PathVariable java.util.UUID id,
+            @Valid @RequestBody UpdateSharedRequest request) {
+        log.info("Updating shared status for memory: {}", id);
+        Memory updated = memoryService.updateShared(id, principal.getId(), request.shared());
+        return ResponseEntity.ok(ApiResponse.success(memoryService.toDto(updated)));
+    }
+
+    /**
+     * Batch-deletes memories and their associated vector documents.
+     *
+     * @param principal the authenticated user
+     * @param request   the batch of memory IDs to delete
+     * @return the count of deleted memories
+     */
+    @DeleteMapping("/batch")
+    public ResponseEntity<ApiResponse<Integer>> deleteMemoriesBatch(
+            @AuthenticationPrincipal User principal,
+            @Valid @RequestBody BatchMemoryRequest request) {
+        log.info("Batch-deleting {} memories for user: {}", request.ids().size(), principal.getUsername());
+        int deleted = memoryService.deleteMemoriesBatch(request.ids(), principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(deleted, deleted + " memories deleted"));
+    }
+
+    /**
+     * Batch-updates the shared visibility of memories.
+     *
+     * @param principal the authenticated user
+     * @param request   the batch of memory IDs and new shared value
+     * @return the count of updated memories
+     */
+    @PutMapping("/batch/shared")
+    public ResponseEntity<ApiResponse<Integer>> updateSharedBatch(
+            @AuthenticationPrincipal User principal,
+            @Valid @RequestBody BatchUpdateSharedRequest request) {
+        log.info("Batch-updating shared={} for {} memories, user: {}",
+                request.shared(), request.ids().size(), principal.getUsername());
+        int updated = memoryService.updateSharedBatch(request.ids(), principal.getId(), request.shared());
+        return ResponseEntity.ok(ApiResponse.success(updated, updated + " memories updated"));
+    }
+
+    /**
      * Searches memories using vector similarity.
      *
      * @param principal the authenticated user

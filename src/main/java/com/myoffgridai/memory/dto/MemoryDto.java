@@ -13,6 +13,7 @@ import java.util.UUID;
  */
 public record MemoryDto(
         UUID id,
+        UUID userId,
         String content,
         MemoryImportance importance,
         String tags,
@@ -20,5 +21,6 @@ public record MemoryDto(
         Instant createdAt,
         Instant updatedAt,
         Instant lastAccessedAt,
-        int accessCount
+        int accessCount,
+        boolean shared
 ) {}

@@ -53,6 +53,9 @@ public class Memory {
     @Column(name = "access_count", nullable = false)
     private int accessCount = 0;
 
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    private boolean shared = false;
+
     public Memory() {
     }
 
@@ -149,5 +152,13 @@ public class Memory {
 
     public void setAccessCount(int accessCount) {
         this.accessCount = accessCount;
+    }
+
+    public boolean isShared() {
+        return shared;
+    }
+
+    public void setShared(boolean shared) {
+        this.shared = shared;
     }
 }

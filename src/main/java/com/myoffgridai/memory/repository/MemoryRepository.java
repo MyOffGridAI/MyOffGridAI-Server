@@ -70,4 +70,22 @@ public interface MemoryRepository extends JpaRepository<Memory, UUID> {
      * @return the memory count
      */
     long countByUserId(UUID userId);
+
+    /**
+     * Fetches memories by a list of IDs that are owned by a specific user.
+     *
+     * @param ids    the memory IDs to look up
+     * @param userId the owning user's ID
+     * @return memories matching the IDs and owned by the user
+     */
+    List<Memory> findByIdInAndUserId(List<UUID> ids, UUID userId);
+
+    /**
+     * Returns paginated memories that are either owned by the user or shared by any user.
+     *
+     * @param userId   the requesting user's ID
+     * @param pageable pagination parameters
+     * @return a page of owned and shared memories
+     */
+    Page<Memory> findByUserIdOrSharedTrueOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 }

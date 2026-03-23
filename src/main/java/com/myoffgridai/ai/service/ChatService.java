@@ -771,7 +771,7 @@ public class ChatService {
             );
 
             OllamaChatResponse response = ollamaService.chat(request);
-            String title = response.message().content().trim();
+            String title = stripThinkTags(response.message().content()).trim();
 
             conversationRepository.findById(conversationId).ifPresent(conversation -> {
                 conversation.setTitle(title);
@@ -790,6 +790,17 @@ public class ChatService {
             log.warn("Failed to build RAG context: {}. Proceeding without context.", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Strips {@code <think>...</think>} blocks from non-streaming LLM responses.
+     *
+     * @param text the raw response text
+     * @return the text with thinking traces removed
+     */
+    private String stripThinkTags(String text) {
+        if (text == null) return "";
+        return text.replaceAll("(?s)<think>.*?</think>", "").trim();
     }
 
     /**

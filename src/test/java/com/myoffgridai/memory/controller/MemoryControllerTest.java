@@ -148,8 +148,8 @@ class MemoryControllerTest {
 
     @Test
     void searchMemories_returnsResults() throws Exception {
-        MemoryDto dto = new MemoryDto(UUID.randomUUID(), "fact", MemoryImportance.HIGH,
-                "tag", null, Instant.now(), Instant.now(), null, 0);
+        MemoryDto dto = new MemoryDto(UUID.randomUUID(), userId, "fact", MemoryImportance.HIGH,
+                "tag", null, Instant.now(), Instant.now(), null, 0, false);
         when(memoryService.searchMemoriesWithScores(eq(userId), anyString(), anyInt()))
                 .thenReturn(List.of(new MemorySearchResultDto(dto, 0.95f)));
 
@@ -186,9 +186,9 @@ class MemoryControllerTest {
     }
 
     private MemoryDto createTestDto(Memory memory) {
-        return new MemoryDto(memory.getId(), memory.getContent(), memory.getImportance(),
+        return new MemoryDto(memory.getId(), memory.getUserId(), memory.getContent(), memory.getImportance(),
                 memory.getTags(), memory.getSourceConversationId(),
                 memory.getCreatedAt(), memory.getUpdatedAt(),
-                memory.getLastAccessedAt(), memory.getAccessCount());
+                memory.getLastAccessedAt(), memory.getAccessCount(), memory.isShared());
     }
 }
