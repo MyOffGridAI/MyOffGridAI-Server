@@ -70,6 +70,7 @@ public class GutenbergService {
         this.webClient = WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(libraryProperties.getGutenbergApiUrl())
+                .defaultHeader("User-Agent", "MyOffGridAI/1.0")
                 .build();
         this.ebookRepository = ebookRepository;
         this.libraryProperties = libraryProperties;
@@ -249,6 +250,7 @@ public class GutenbergService {
             HttpClient downloadHttpClient = HttpClient.create().followRedirect(true);
             byte[] fileBytes = WebClient.builder()
                     .clientConnector(new ReactorClientHttpConnector(downloadHttpClient))
+                    .defaultHeader("User-Agent", "MyOffGridAI/1.0")
                     .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(-1))
                     .build()
                     .get()
