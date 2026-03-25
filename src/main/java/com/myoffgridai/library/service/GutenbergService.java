@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Service for integrating with the Gutendex API (Project Gutenberg catalog).
@@ -131,7 +132,7 @@ public class GutenbergService {
 
         if (cached != null && cached.isFresh()) {
             log.debug("Gutenberg browse cache hit for key '{}'", cacheKey);
-            return filterImportedBooks(cached.result());
+            return markImportedBooks(cached.result());
         }
 
         try {
@@ -146,22 +147,22 @@ public class GutenbergService {
                     .block(REQUEST_TIMEOUT);
 
             if (response == null) {
-                return new GutenbergSearchResultDto(0, null, null, List.of());
+                return new GutenbergSearchResultDto(0, null, null, List.of(), Set.of());
             }
 
             GutenbergSearchResultDto rawResult = mapSearchResponse(response);
             browseCache.put(cacheKey, new CachedBrowseResult(rawResult, Instant.now()));
             log.debug("Gutenberg browse cache updated for key '{}'", cacheKey);
-            return filterImportedBooks(rawResult);
+            return markImportedBooks(rawResult);
         } catch (Exception e) {
             if (cached != null) {
                 log.warn("Gutendex API browse failed (sort='{}'), serving stale cache: {}",
                         sort, e.getMessage());
-                return filterImportedBooks(cached.result());
+                return markImportedBooks(cached.result());
             }
             log.warn("Gutendex API browse failed (sort='{}'), no cache available — returning empty: {}",
                     sort, e.getMessage());
-            return new GutenbergSearchResultDto(0, null, null, List.of());
+            return new GutenbergSearchResultDto(0, null, null, List.of(), Set.of());
         }
     }
 
@@ -181,7 +182,7 @@ public class GutenbergService {
 
         if (cached != null && cached.isFresh()) {
             log.debug("Gutenberg search cache hit for key '{}'", cacheKey);
-            return filterImportedBooks(cached.result());
+            return markImportedBooks(cached.result());
         }
 
         try {
@@ -196,22 +197,22 @@ public class GutenbergService {
                     .block(REQUEST_TIMEOUT);
 
             if (response == null) {
-                return new GutenbergSearchResultDto(0, null, null, List.of());
+                return new GutenbergSearchResultDto(0, null, null, List.of(), Set.of());
             }
 
             GutenbergSearchResultDto rawResult = mapSearchResponse(response);
             searchCache.put(cacheKey, new CachedSearchResult(rawResult, Instant.now()));
             log.debug("Gutenberg search cache updated for key '{}'", cacheKey);
-            return filterImportedBooks(rawResult);
+            return markImportedBooks(rawResult);
         } catch (Exception e) {
             if (cached != null) {
                 log.warn("Gutendex API search failed for query '{}', serving stale cache: {}",
                         query, e.getMessage());
-                return filterImportedBooks(cached.result());
+                return markImportedBooks(cached.result());
             }
             log.warn("Gutendex API search failed for query '{}', no cache available — returning empty: {}",
                     query, e.getMessage());
-            return new GutenbergSearchResultDto(0, null, null, List.of());
+            return new GutenbergSearchResultDto(0, null, null, List.of(), Set.of());
         }
     }
 
@@ -385,23 +386,34 @@ public class GutenbergService {
     }
 
     /**
-     * Removes books whose Gutenberg ID already exists in the local library.
+     * Marks which books in the result have already been imported into the local library.
+     *
+     * <p>All books remain in the result list. The returned DTO includes
+     * {@code importedGutenbergIds} so the client can visually distinguish
+     * imported books without removing them.</p>
      *
      * @param dto the unfiltered search result
-     * @return a new result with imported books excluded and count adjusted
+     * @return a new result with {@code importedGutenbergIds} populated
      */
-    private GutenbergSearchResultDto filterImportedBooks(GutenbergSearchResultDto dto) {
-        Set<String> importedIds = new HashSet<>(ebookRepository.findAllGutenbergIds());
-        if (importedIds.isEmpty()) {
-            return dto;
+    private GutenbergSearchResultDto markImportedBooks(GutenbergSearchResultDto dto) {
+        List<String> importedIdStrings = ebookRepository.findAllGutenbergIds();
+        Set<Integer> importedIds = new HashSet<>();
+        for (String idStr : importedIdStrings) {
+            try {
+                importedIds.add(Integer.parseInt(idStr));
+            } catch (NumberFormatException ignored) {
+                // skip non-numeric IDs
+            }
         }
 
-        List<GutenbergBookDto> filtered = dto.results().stream()
-                .filter(book -> !importedIds.contains(String.valueOf(book.id())))
-                .toList();
+        // Only include IDs that are actually present in the result set
+        Set<Integer> resultIds = dto.results().stream()
+                .map(GutenbergBookDto::id)
+                .collect(Collectors.toSet());
+        importedIds.retainAll(resultIds);
 
         return new GutenbergSearchResultDto(
-                filtered.size(), dto.next(), dto.previous(), filtered);
+                dto.count(), dto.next(), dto.previous(), dto.results(), importedIds);
     }
 
     /**
@@ -420,7 +432,7 @@ public class GutenbergService {
                 .map(this::mapBook)
                 .toList();
 
-        return new GutenbergSearchResultDto(count, next, previous, results);
+        return new GutenbergSearchResultDto(count, next, previous, results, Set.of());
     }
 
     /**

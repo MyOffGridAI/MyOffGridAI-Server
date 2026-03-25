@@ -226,7 +226,7 @@ class GutenbergServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void browse_filtersOutImportedBooks() {
+    void browse_marksImportedBooks() {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("count", 2);
         response.put("next", null);
@@ -267,14 +267,16 @@ class GutenbergServiceTest {
 
         GutenbergSearchResultDto result = gutenbergService.browse("popular", 10);
 
-        assertThat(result.results()).hasSize(1);
-        assertThat(result.results().getFirst().title()).isEqualTo("Frankenstein");
-        assertThat(result.count()).isEqualTo(1);
+        // All books remain in results
+        assertThat(result.results()).hasSize(2);
+        assertThat(result.count()).isEqualTo(2);
+        // Imported IDs are marked
+        assertThat(result.importedGutenbergIds()).containsExactly(1342);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void search_filtersOutImportedBooks() {
+    void search_marksImportedBooks() {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("count", 2);
         response.put("next", null);
@@ -315,9 +317,11 @@ class GutenbergServiceTest {
 
         GutenbergSearchResultDto result = gutenbergService.search("fiction", 20);
 
-        assertThat(result.results()).hasSize(1);
-        assertThat(result.results().getFirst().title()).isEqualTo("Alice's Adventures in Wonderland");
-        assertThat(result.count()).isEqualTo(1);
+        // All books remain in results
+        assertThat(result.results()).hasSize(2);
+        assertThat(result.count()).isEqualTo(2);
+        // Imported IDs are marked
+        assertThat(result.importedGutenbergIds()).containsExactly(1342);
     }
 
     @Test

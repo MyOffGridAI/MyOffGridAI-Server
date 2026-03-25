@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -362,7 +363,8 @@ class LibraryControllerTest {
                 new GutenbergBookDto(84, "Frankenstein",
                         List.of("Shelley, Mary"), List.of("Science fiction"),
                         List.of("en"), 100000,
-                        Map.of("application/epub+zip", "https://gutenberg.org/84.epub"))));
+                        Map.of("application/epub+zip", "https://gutenberg.org/84.epub"))),
+                Set.of());
         when(gutenbergService.browse("popular", 10)).thenReturn(result);
 
         mockMvc.perform(get("/api/library/gutenberg/browse")
@@ -380,7 +382,8 @@ class LibraryControllerTest {
                 new GutenbergBookDto(99999, "Newest Book",
                         List.of("Modern Author"), List.of("Fiction"),
                         List.of("en"), 100,
-                        Map.of())));
+                        Map.of())),
+                Set.of());
         when(gutenbergService.browse("descending", 5)).thenReturn(result);
 
         mockMvc.perform(get("/api/library/gutenberg/browse")
@@ -405,7 +408,8 @@ class LibraryControllerTest {
                 new GutenbergBookDto(1342, "Pride and Prejudice",
                         List.of("Austen, Jane"), List.of("Fiction"),
                         List.of("en"), 50000,
-                        Map.of("application/epub+zip", "https://gutenberg.org/1342.epub"))));
+                        Map.of("application/epub+zip", "https://gutenberg.org/1342.epub"))),
+                Set.of());
         when(gutenbergService.search("pride", 20)).thenReturn(result);
 
         mockMvc.perform(get("/api/library/gutenberg/search")
