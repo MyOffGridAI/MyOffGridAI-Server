@@ -283,7 +283,7 @@ public class GutenbergService {
 
         GutenbergBookDto metadata = getBookMetadata(gutenbergId);
 
-        // Prefer EPUB, fallback to plain text
+        // Prefer EPUB > PDF > TXT > HTML, matching any charset variant
         String downloadUrl = null;
         EbookFormat format = null;
         String fileExtension = null;
@@ -293,14 +293,30 @@ public class GutenbergService {
                 downloadUrl = metadata.formats().get("application/epub+zip");
                 format = EbookFormat.EPUB;
                 fileExtension = "epub";
-            } else if (metadata.formats().containsKey("text/plain; charset=us-ascii")) {
-                downloadUrl = metadata.formats().get("text/plain; charset=us-ascii");
-                format = EbookFormat.TXT;
-                fileExtension = "txt";
-            } else if (metadata.formats().containsKey("text/plain")) {
-                downloadUrl = metadata.formats().get("text/plain");
-                format = EbookFormat.TXT;
-                fileExtension = "txt";
+            } else if (metadata.formats().containsKey("application/pdf")) {
+                downloadUrl = metadata.formats().get("application/pdf");
+                format = EbookFormat.PDF;
+                fileExtension = "pdf";
+            } else {
+                // Search for text/plain or text/html with any charset suffix
+                for (Map.Entry<String, String> entry : metadata.formats().entrySet()) {
+                    if (entry.getKey().startsWith("text/plain")) {
+                        downloadUrl = entry.getValue();
+                        format = EbookFormat.TXT;
+                        fileExtension = "txt";
+                        break;
+                    }
+                }
+                if (downloadUrl == null) {
+                    for (Map.Entry<String, String> entry : metadata.formats().entrySet()) {
+                        if (entry.getKey().startsWith("text/html")) {
+                            downloadUrl = entry.getValue();
+                            format = EbookFormat.HTML;
+                            fileExtension = "html";
+                            break;
+                        }
+                    }
+                }
             }
         }
 
