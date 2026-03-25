@@ -131,7 +131,7 @@ public class GutenbergService {
 
         if (cached != null && cached.isFresh()) {
             log.debug("Gutenberg browse cache hit for key '{}'", cacheKey);
-            return cached.result();
+            return filterImportedBooks(cached.result());
         }
 
         try {
@@ -149,15 +149,15 @@ public class GutenbergService {
                 return new GutenbergSearchResultDto(0, null, null, List.of());
             }
 
-            GutenbergSearchResultDto result = filterImportedBooks(mapSearchResponse(response));
-            browseCache.put(cacheKey, new CachedBrowseResult(result, Instant.now()));
+            GutenbergSearchResultDto rawResult = mapSearchResponse(response);
+            browseCache.put(cacheKey, new CachedBrowseResult(rawResult, Instant.now()));
             log.debug("Gutenberg browse cache updated for key '{}'", cacheKey);
-            return result;
+            return filterImportedBooks(rawResult);
         } catch (Exception e) {
             if (cached != null) {
                 log.warn("Gutendex API browse failed (sort='{}'), serving stale cache: {}",
                         sort, e.getMessage());
-                return cached.result();
+                return filterImportedBooks(cached.result());
             }
             log.warn("Gutendex API browse failed (sort='{}'), no cache available — returning empty: {}",
                     sort, e.getMessage());
@@ -181,7 +181,7 @@ public class GutenbergService {
 
         if (cached != null && cached.isFresh()) {
             log.debug("Gutenberg search cache hit for key '{}'", cacheKey);
-            return cached.result();
+            return filterImportedBooks(cached.result());
         }
 
         try {
@@ -199,15 +199,15 @@ public class GutenbergService {
                 return new GutenbergSearchResultDto(0, null, null, List.of());
             }
 
-            GutenbergSearchResultDto result = filterImportedBooks(mapSearchResponse(response));
-            searchCache.put(cacheKey, new CachedSearchResult(result, Instant.now()));
+            GutenbergSearchResultDto rawResult = mapSearchResponse(response);
+            searchCache.put(cacheKey, new CachedSearchResult(rawResult, Instant.now()));
             log.debug("Gutenberg search cache updated for key '{}'", cacheKey);
-            return result;
+            return filterImportedBooks(rawResult);
         } catch (Exception e) {
             if (cached != null) {
                 log.warn("Gutendex API search failed for query '{}', serving stale cache: {}",
                         query, e.getMessage());
-                return cached.result();
+                return filterImportedBooks(cached.result());
             }
             log.warn("Gutendex API search failed for query '{}', no cache available — returning empty: {}",
                     query, e.getMessage());
