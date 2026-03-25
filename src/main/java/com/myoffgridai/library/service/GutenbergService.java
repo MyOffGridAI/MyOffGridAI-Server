@@ -38,11 +38,15 @@ public class GutenbergService {
     private static final Logger log = LoggerFactory.getLogger(GutenbergService.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration BROWSE_CACHE_TTL = Duration.ofHours(1);
+    private static final Duration SEARCH_CACHE_TTL = Duration.ofMinutes(20);
+    private static final Duration METADATA_CACHE_TTL = Duration.ofHours(24);
 
     private final WebClient webClient;
     private final EbookRepository ebookRepository;
     private final LibraryProperties libraryProperties;
     private final ConcurrentHashMap<String, CachedBrowseResult> browseCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedSearchResult> searchCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedMetadataResult> metadataCache = new ConcurrentHashMap<>();
 
     /**
      * Cached browse result with timestamp for TTL expiry.
@@ -50,6 +54,24 @@ public class GutenbergService {
     private record CachedBrowseResult(GutenbergSearchResultDto result, Instant cachedAt) {
         boolean isFresh() {
             return Instant.now().isBefore(cachedAt.plus(BROWSE_CACHE_TTL));
+        }
+    }
+
+    /**
+     * Cached search result with timestamp for TTL expiry.
+     */
+    private record CachedSearchResult(GutenbergSearchResultDto result, Instant cachedAt) {
+        boolean isFresh() {
+            return Instant.now().isBefore(cachedAt.plus(SEARCH_CACHE_TTL));
+        }
+    }
+
+    /**
+     * Cached metadata result with timestamp for TTL expiry.
+     */
+    private record CachedMetadataResult(GutenbergBookDto result, Instant cachedAt) {
+        boolean isFresh() {
+            return Instant.now().isBefore(cachedAt.plus(METADATA_CACHE_TTL));
         }
     }
 
@@ -127,7 +149,7 @@ public class GutenbergService {
                 return new GutenbergSearchResultDto(0, null, null, List.of());
             }
 
-            GutenbergSearchResultDto result = mapSearchResponse(response);
+            GutenbergSearchResultDto result = filterImportedBooks(mapSearchResponse(response));
             browseCache.put(cacheKey, new CachedBrowseResult(result, Instant.now()));
             log.debug("Gutenberg browse cache updated for key '{}'", cacheKey);
             return result;
@@ -146,11 +168,22 @@ public class GutenbergService {
     /**
      * Searches the Gutendex API for books matching the query.
      *
+     * <p>Results are cached in memory for 20 minutes. If the cache is expired and
+     * the Gutendex API is unreachable, stale cached data is returned.</p>
+     *
      * @param query the search query
      * @param limit the maximum number of results (page size)
-     * @return the search result DTO, or an empty result if the API is unreachable
+     * @return the search result DTO, or an empty result if the API is unreachable and no cached data exists
      */
     public GutenbergSearchResultDto search(String query, int limit) {
+        String cacheKey = query + ":" + limit;
+        CachedSearchResult cached = searchCache.get(cacheKey);
+
+        if (cached != null && cached.isFresh()) {
+            log.debug("Gutenberg search cache hit for key '{}'", cacheKey);
+            return cached.result();
+        }
+
         try {
             Map<String, Object> response = webClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -166,9 +199,18 @@ public class GutenbergService {
                 return new GutenbergSearchResultDto(0, null, null, List.of());
             }
 
-            return mapSearchResponse(response);
+            GutenbergSearchResultDto result = filterImportedBooks(mapSearchResponse(response));
+            searchCache.put(cacheKey, new CachedSearchResult(result, Instant.now()));
+            log.debug("Gutenberg search cache updated for key '{}'", cacheKey);
+            return result;
         } catch (Exception e) {
-            log.warn("Gutendex API search failed for query '{}' — returning empty: {}", query, e.getMessage());
+            if (cached != null) {
+                log.warn("Gutendex API search failed for query '{}', serving stale cache: {}",
+                        query, e.getMessage());
+                return cached.result();
+            }
+            log.warn("Gutendex API search failed for query '{}', no cache available — returning empty: {}",
+                    query, e.getMessage());
             return new GutenbergSearchResultDto(0, null, null, List.of());
         }
     }
@@ -176,11 +218,23 @@ public class GutenbergService {
     /**
      * Fetches metadata for a single book from the Gutendex API.
      *
+     * <p>Results are cached in memory for 24 hours. If the cache is expired and
+     * the Gutendex API is unreachable, stale cached data is returned. If no
+     * cache exists, the exception is propagated.</p>
+     *
      * @param id the Gutenberg book ID
      * @return the book metadata DTO
-     * @throws RuntimeException if the API call fails
+     * @throws RuntimeException if the API call fails and no cached data exists
      */
     public GutenbergBookDto getBookMetadata(int id) {
+        String cacheKey = String.valueOf(id);
+        CachedMetadataResult cached = metadataCache.get(cacheKey);
+
+        if (cached != null && cached.isFresh()) {
+            log.debug("Gutenberg metadata cache hit for book {}", id);
+            return cached.result();
+        }
+
         try {
             Map<String, Object> response = webClient.get()
                     .uri("/books/" + id)
@@ -192,8 +246,16 @@ public class GutenbergService {
                 throw new RuntimeException("No response from Gutendex for book ID " + id);
             }
 
-            return mapBook(response);
+            GutenbergBookDto result = mapBook(response);
+            metadataCache.put(cacheKey, new CachedMetadataResult(result, Instant.now()));
+            log.debug("Gutenberg metadata cache updated for book {}", id);
+            return result;
         } catch (Exception e) {
+            if (cached != null) {
+                log.warn("Gutendex API metadata fetch failed for book {}, serving stale cache: {}",
+                        id, e.getMessage());
+                return cached.result();
+            }
             log.error("Gutendex API metadata fetch failed for book {}: {}", id, e.getMessage());
             throw new RuntimeException("Failed to fetch Gutenberg book metadata: " + e.getMessage(), e);
         }
@@ -300,6 +362,26 @@ public class GutenbergService {
             log.error("Failed to save Gutenberg book {} to disk: {}", gutenbergId, e.getMessage(), e);
             throw new RuntimeException("Failed to save imported book: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Removes books whose Gutenberg ID already exists in the local library.
+     *
+     * @param dto the unfiltered search result
+     * @return a new result with imported books excluded and count adjusted
+     */
+    private GutenbergSearchResultDto filterImportedBooks(GutenbergSearchResultDto dto) {
+        Set<String> importedIds = new HashSet<>(ebookRepository.findAllGutenbergIds());
+        if (importedIds.isEmpty()) {
+            return dto;
+        }
+
+        List<GutenbergBookDto> filtered = dto.results().stream()
+                .filter(book -> !importedIds.contains(String.valueOf(book.id())))
+                .toList();
+
+        return new GutenbergSearchResultDto(
+                filtered.size(), dto.next(), dto.previous(), filtered);
     }
 
     /**

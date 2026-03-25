@@ -87,6 +87,7 @@ class GutenbergServiceTest {
         when(headersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                 .thenReturn(Mono.just(response));
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of());
 
         GutenbergSearchResultDto result = gutenbergService.browse("popular", 10);
 
@@ -160,6 +161,7 @@ class GutenbergServiceTest {
         when(headersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                 .thenReturn(Mono.just(response));
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of());
 
         // First call — hits API
         GutenbergSearchResultDto first = gutenbergService.browse("popular", 10);
@@ -203,6 +205,7 @@ class GutenbergServiceTest {
         // First call succeeds — populates cache
         when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                 .thenReturn(Mono.just(response));
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of());
         GutenbergSearchResultDto cached = gutenbergService.browse("popular", 15);
         assertThat(cached.results()).hasSize(1);
 
@@ -219,6 +222,102 @@ class GutenbergServiceTest {
         assertThat(fromCache.results().getFirst().title()).isEqualTo("Frankenstein");
         // Only 1 API call made (the first one)
         verify(webClient, times(1)).get();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void browse_filtersOutImportedBooks() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("count", 2);
+        response.put("next", null);
+        response.put("previous", null);
+
+        Map<String, Object> book1 = new LinkedHashMap<>();
+        book1.put("id", 1342);
+        book1.put("title", "Pride and Prejudice");
+        book1.put("authors", List.of(Map.of("name", "Austen, Jane")));
+        book1.put("subjects", List.of("Fiction"));
+        book1.put("languages", List.of("en"));
+        book1.put("download_count", 80000);
+        book1.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/1342.epub"));
+
+        Map<String, Object> book2 = new LinkedHashMap<>();
+        book2.put("id", 84);
+        book2.put("title", "Frankenstein");
+        book2.put("authors", List.of(Map.of("name", "Shelley, Mary")));
+        book2.put("subjects", List.of("Science fiction"));
+        book2.put("languages", List.of("en"));
+        book2.put("download_count", 100000);
+        book2.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/84.epub"));
+
+        response.put("results", List.of(book1, book2));
+
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.just(response));
+
+        // Simulate Pride and Prejudice already imported
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of("1342"));
+
+        GutenbergSearchResultDto result = gutenbergService.browse("popular", 10);
+
+        assertThat(result.results()).hasSize(1);
+        assertThat(result.results().getFirst().title()).isEqualTo("Frankenstein");
+        assertThat(result.count()).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void search_filtersOutImportedBooks() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("count", 2);
+        response.put("next", null);
+        response.put("previous", null);
+
+        Map<String, Object> book1 = new LinkedHashMap<>();
+        book1.put("id", 1342);
+        book1.put("title", "Pride and Prejudice");
+        book1.put("authors", List.of(Map.of("name", "Austen, Jane")));
+        book1.put("subjects", List.of("Fiction"));
+        book1.put("languages", List.of("en"));
+        book1.put("download_count", 50000);
+        book1.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/1342.epub"));
+
+        Map<String, Object> book2 = new LinkedHashMap<>();
+        book2.put("id", 11);
+        book2.put("title", "Alice's Adventures in Wonderland");
+        book2.put("authors", List.of(Map.of("name", "Carroll, Lewis")));
+        book2.put("subjects", List.of("Fantasy"));
+        book2.put("languages", List.of("en"));
+        book2.put("download_count", 60000);
+        book2.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/11.epub"));
+
+        response.put("results", List.of(book1, book2));
+
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.just(response));
+
+        // Simulate Pride and Prejudice already imported
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of("1342"));
+
+        GutenbergSearchResultDto result = gutenbergService.search("fiction", 20);
+
+        assertThat(result.results()).hasSize(1);
+        assertThat(result.results().getFirst().title()).isEqualTo("Alice's Adventures in Wonderland");
+        assertThat(result.count()).isEqualTo(1);
     }
 
     @Test
@@ -248,6 +347,7 @@ class GutenbergServiceTest {
         when(headersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                 .thenReturn(Mono.just(response));
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of());
 
         GutenbergSearchResultDto result = gutenbergService.search("pride", 20);
 
@@ -302,6 +402,120 @@ class GutenbergServiceTest {
 
         assertThat(result.title()).isEqualTo("Frankenstein");
         assertThat(result.id()).isEqualTo(84);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void search_secondCallSameQuery_returnsCached() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("count", 1);
+        response.put("next", null);
+        response.put("previous", null);
+
+        Map<String, Object> book = new LinkedHashMap<>();
+        book.put("id", 1342);
+        book.put("title", "Pride and Prejudice");
+        book.put("authors", List.of(Map.of("name", "Austen, Jane")));
+        book.put("subjects", List.of("Fiction"));
+        book.put("languages", List.of("en"));
+        book.put("download_count", 50000);
+        book.put("formats", Map.of());
+        response.put("results", List.of(book));
+
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.just(response));
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of());
+
+        // First call — hits API
+        GutenbergSearchResultDto first = gutenbergService.search("pride", 20);
+        assertThat(first.results()).hasSize(1);
+
+        // Second call — served from cache
+        GutenbergSearchResultDto second = gutenbergService.search("pride", 20);
+        assertThat(second.results()).hasSize(1);
+
+        // Only one API call
+        verify(webClient, times(1)).get();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getBookMetadata_secondCall_returnsCached() {
+        Map<String, Object> book = new LinkedHashMap<>();
+        book.put("id", 84);
+        book.put("title", "Frankenstein");
+        book.put("authors", List.of(Map.of("name", "Shelley, Mary")));
+        book.put("subjects", List.of("Science fiction"));
+        book.put("languages", List.of("en"));
+        book.put("download_count", 100000);
+        book.put("formats", Map.of("application/epub+zip", "https://gutenberg.org/84.epub"));
+
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri("/books/84")).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.just(book));
+
+        // First call — hits API
+        GutenbergBookDto first = gutenbergService.getBookMetadata(84);
+        assertThat(first.title()).isEqualTo("Frankenstein");
+
+        // Second call — served from cache
+        GutenbergBookDto second = gutenbergService.getBookMetadata(84);
+        assertThat(second.title()).isEqualTo("Frankenstein");
+
+        // Only one API call
+        verify(webClient, times(1)).get();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void search_apiFailsWithCache_returnsStaleCachedResult() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("count", 1);
+        response.put("next", null);
+        response.put("previous", null);
+
+        Map<String, Object> book = new LinkedHashMap<>();
+        book.put("id", 1342);
+        book.put("title", "Pride and Prejudice");
+        book.put("authors", List.of(Map.of("name", "Austen, Jane")));
+        book.put("subjects", List.of("Fiction"));
+        book.put("languages", List.of("en"));
+        book.put("download_count", 50000);
+        book.put("formats", Map.of());
+        response.put("results", List.of(book));
+
+        WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec);
+        when(requestSpec.uri(any(Function.class))).thenReturn(headersSpec);
+        when(headersSpec.retrieve()).thenReturn(responseSpec);
+        when(ebookRepository.findAllGutenbergIds()).thenReturn(List.of());
+
+        // First call succeeds — populates cache
+        when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
+                .thenReturn(Mono.just(response));
+        GutenbergSearchResultDto cached = gutenbergService.search("pride", 20);
+        assertThat(cached.results()).hasSize(1);
+
+        // Cache is fresh — second call returns cache without API
+        GutenbergSearchResultDto fromCache = gutenbergService.search("pride", 20);
+        assertThat(fromCache.results().getFirst().title()).isEqualTo("Pride and Prejudice");
+        verify(webClient, times(1)).get();
     }
 
     @Test

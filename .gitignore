@@ -43,7 +43,7 @@ logs/
 apache-maven-*/
 
 ### Runtime data ###
-library/
+/library/
 
 # Database backups
 backups/

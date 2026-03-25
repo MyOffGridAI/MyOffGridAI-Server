@@ -119,6 +119,42 @@ class KiwixCatalogServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void search_secondCallSameQuery_returnsCached() {
+        stubWebClientGet(Mono.just(ATOM_FEED));
+
+        service.search("wikipedia", null, 20);
+        service.search("wikipedia", null, 20);
+
+        // Only one API call (second served from cache)
+        verify(webClient, times(1)).get();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void search_apiFailsWithCache_returnsStaleCachedResult() {
+        // First call succeeds — populates cache
+        WebClient.RequestHeadersUriSpec requestSpec1 = mock(WebClient.RequestHeadersUriSpec.class);
+        WebClient.RequestHeadersSpec headersSpec1 = mock(WebClient.RequestHeadersSpec.class);
+        WebClient.ResponseSpec responseSpec1 = mock(WebClient.ResponseSpec.class);
+
+        when(webClient.get()).thenReturn(requestSpec1);
+        when(requestSpec1.uri(any(Function.class))).thenReturn(headersSpec1);
+        when(headersSpec1.retrieve()).thenReturn(responseSpec1);
+        when(responseSpec1.bodyToMono(String.class)).thenReturn(Mono.just(ATOM_FEED));
+
+        KiwixCatalogSearchResultDto first = service.search("stale-test", null, 20);
+        assertThat(first.totalCount()).isEqualTo(2);
+
+        // Cache is fresh — second call hits cache, no API call
+        KiwixCatalogSearchResultDto second = service.search("stale-test", null, 20);
+        assertThat(second.totalCount()).isEqualTo(2);
+
+        // Only one API call made
+        verify(webClient, times(1)).get();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void search_throwsOnServerError() {
         stubWebClientGet(Mono.error(new RuntimeException("Connection refused")));
 

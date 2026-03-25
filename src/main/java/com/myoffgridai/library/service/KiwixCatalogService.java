@@ -38,10 +38,12 @@ public class KiwixCatalogService {
     private static final Logger log = LoggerFactory.getLogger(KiwixCatalogService.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration BROWSE_CACHE_TTL = Duration.ofHours(1);
+    private static final Duration SEARCH_CACHE_TTL = Duration.ofMinutes(20);
 
     private final WebClient webClient;
     private final KiwixProperties kiwixProperties;
     private final ConcurrentHashMap<String, CachedBrowseResult> browseCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CachedSearchResult> searchCache = new ConcurrentHashMap<>();
 
     /**
      * Cached browse result with timestamp for TTL expiry.
@@ -49,6 +51,15 @@ public class KiwixCatalogService {
     private record CachedBrowseResult(KiwixCatalogSearchResultDto result, Instant cachedAt) {
         boolean isFresh() {
             return Instant.now().isBefore(cachedAt.plus(BROWSE_CACHE_TTL));
+        }
+    }
+
+    /**
+     * Cached search result with timestamp for TTL expiry.
+     */
+    private record CachedSearchResult(KiwixCatalogSearchResultDto result, Instant cachedAt) {
+        boolean isFresh() {
+            return Instant.now().isBefore(cachedAt.plus(SEARCH_CACHE_TTL));
         }
     }
 
@@ -63,6 +74,7 @@ public class KiwixCatalogService {
         this.webClient = WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(kiwixProperties.getCatalogBaseUrl())
+                .defaultHeader("User-Agent", "MyOffGridAI/1.0")
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(5 * 1024 * 1024))
                 .build();
         this.kiwixProperties = kiwixProperties;
@@ -130,7 +142,10 @@ public class KiwixCatalogService {
     }
 
     /**
-     * Searches the Kiwix catalog by query string. Results are not cached.
+     * Searches the Kiwix catalog by query string.
+     *
+     * <p>Results are cached in memory for 20 minutes. If the cache is expired and
+     * the catalog API is unreachable, stale cached data is returned.</p>
      *
      * @param query the search query
      * @param lang  the language filter, or null for all
@@ -138,6 +153,14 @@ public class KiwixCatalogService {
      * @return the catalog search result DTO
      */
     public KiwixCatalogSearchResultDto search(String query, String lang, int count) {
+        String cacheKey = query + ":" + (lang != null ? lang : "") + ":" + count;
+        CachedSearchResult cached = searchCache.get(cacheKey);
+
+        if (cached != null && cached.isFresh()) {
+            log.debug("Kiwix catalog search cache hit for key '{}'", cacheKey);
+            return cached.result();
+        }
+
         try {
             String xml = webClient.get()
                     .uri(uriBuilder -> {
@@ -153,8 +176,16 @@ public class KiwixCatalogService {
                     .bodyToMono(String.class)
                     .block(REQUEST_TIMEOUT);
 
-            return parseAtomFeed(xml);
+            KiwixCatalogSearchResultDto result = parseAtomFeed(xml);
+            searchCache.put(cacheKey, new CachedSearchResult(result, Instant.now()));
+            log.debug("Kiwix catalog search cache updated for key '{}'", cacheKey);
+            return result;
         } catch (Exception e) {
+            if (cached != null) {
+                log.warn("Kiwix catalog search failed for query '{}', serving stale cache: {}",
+                        query, e.getMessage());
+                return cached.result();
+            }
             log.error("Kiwix catalog search failed for query '{}': {}", query, e.getMessage());
             throw new RuntimeException("Kiwix catalog search unavailable: " + e.getMessage(), e);
         }

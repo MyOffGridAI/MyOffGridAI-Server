@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,6 +39,14 @@ public interface EbookRepository extends JpaRepository<Ebook, UUID> {
             @Param("search") String search,
             @Param("format") EbookFormat format,
             Pageable pageable);
+
+    /**
+     * Returns all non-null Gutenberg IDs from the ebooks table.
+     *
+     * @return list of Gutenberg IDs already imported
+     */
+    @Query("SELECT e.gutenbergId FROM Ebook e WHERE e.gutenbergId IS NOT NULL")
+    List<String> findAllGutenbergIds();
 
     /**
      * Finds an ebook by its Project Gutenberg ID.
