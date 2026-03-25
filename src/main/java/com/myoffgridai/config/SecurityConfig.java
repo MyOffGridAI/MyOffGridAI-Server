@@ -101,7 +101,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/mcp/**"
+                                "/mcp/**",
+                                "/api/library/ebooks/*/cover"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

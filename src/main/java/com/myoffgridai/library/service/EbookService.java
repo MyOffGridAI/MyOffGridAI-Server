@@ -16,6 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -155,6 +160,31 @@ public class EbookService {
     }
 
     /**
+     * Gets the cover image file for an eBook as a {@link Resource}.
+     *
+     * @param id the eBook ID
+     * @return the cover image resource
+     * @throws EntityNotFoundException if the eBook is not found
+     * @throws FileNotFoundException   if the eBook has no cover image or the file is missing
+     */
+    @Transactional(readOnly = true)
+    public Resource getCoverFile(UUID id) throws FileNotFoundException {
+        Ebook ebook = ebookRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("eBook not found: " + id));
+
+        if (ebook.getCoverImagePath() == null || ebook.getCoverImagePath().isBlank()) {
+            throw new FileNotFoundException("No cover image for eBook: " + id);
+        }
+
+        Path coverPath = Paths.get(libraryProperties.getEbookDirectory()).resolve(ebook.getCoverImagePath());
+        if (!Files.exists(coverPath)) {
+            throw new FileNotFoundException("Cover image file missing: " + coverPath);
+        }
+
+        return new InputStreamResource(new FileInputStream(coverPath.toFile()));
+    }
+
+    /**
      * Deletes an eBook from both disk and database.
      *
      * @param id the eBook ID
@@ -171,6 +201,18 @@ public class EbookService {
             log.info("Deleted eBook file from disk: {}", ebook.getFilePath());
         } catch (IOException e) {
             log.warn("Failed to delete eBook file from disk: {}", ebook.getFilePath(), e);
+        }
+
+        // Delete cover image file if present
+        if (ebook.getCoverImagePath() != null && !ebook.getCoverImagePath().isBlank()) {
+            try {
+                Path coverPath = Paths.get(libraryProperties.getEbookDirectory())
+                        .resolve(ebook.getCoverImagePath());
+                Files.deleteIfExists(coverPath);
+                log.info("Deleted cover image from disk: {}", ebook.getCoverImagePath());
+            } catch (IOException e) {
+                log.warn("Failed to delete cover image from disk: {}", ebook.getCoverImagePath(), e);
+            }
         }
 
         ebookRepository.delete(ebook);

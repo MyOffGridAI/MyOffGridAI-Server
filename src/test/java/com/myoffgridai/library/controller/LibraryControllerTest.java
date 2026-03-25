@@ -290,6 +290,65 @@ class LibraryControllerTest {
         java.nio.file.Files.deleteIfExists(tempFile);
     }
 
+    @Test
+    void getEbookCover_exists_returnsImage() throws Exception {
+        UUID id = UUID.randomUUID();
+        byte[] imageBytes = "fake jpeg data".getBytes();
+        org.springframework.core.io.Resource resource =
+                new org.springframework.core.io.InputStreamResource(
+                        new java.io.ByteArrayInputStream(imageBytes));
+        when(ebookService.getCoverFile(id)).thenReturn(resource);
+
+        mockMvc.perform(get("/api/library/ebooks/" + id + "/cover"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/jpeg"));
+    }
+
+    @Test
+    void getEbookCover_notFound_returns404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(ebookService.getCoverFile(id))
+                .thenThrow(new java.io.FileNotFoundException("No cover"));
+
+        mockMvc.perform(get("/api/library/ebooks/" + id + "/cover"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void listEbooks_withSortParams_returnsOk() throws Exception {
+        EbookDto dto = createEbookDto();
+        when(ebookService.list(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(dto)));
+
+        mockMvc.perform(get("/api/library/ebooks")
+                        .param("sort", "title")
+                        .param("direction", "desc")
+                        .with(user(memberUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].title").value("Test Book"));
+    }
+
+    @Test
+    void listEbooks_invalidSort_returns400() throws Exception {
+        mockMvc.perform(get("/api/library/ebooks")
+                        .param("sort", "invalidField")
+                        .with(user(memberUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Invalid sort field")));
+    }
+
+    @Test
+    void listEbooks_invalidDirection_returns400() throws Exception {
+        mockMvc.perform(get("/api/library/ebooks")
+                        .param("direction", "sideways")
+                        .with(user(memberUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Invalid direction")));
+    }
+
     // ── Gutenberg Endpoints ──────────────────────────────────────────────────
 
     @Test

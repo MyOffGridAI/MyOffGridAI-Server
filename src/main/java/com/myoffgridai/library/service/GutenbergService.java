@@ -356,6 +356,10 @@ public class GutenbergService {
             Ebook saved = ebookRepository.save(ebook);
             log.info("Imported Gutenberg book {}: '{}' as {} ({} bytes)",
                     gutenbergId, metadata.title(), format, fileBytes.length);
+
+            // Attempt to download cover image (non-fatal)
+            downloadCoverImage(metadata, saved);
+
             return EbookDto.from(saved);
 
         } catch (IOException e) {
@@ -401,6 +405,52 @@ public class GutenbergService {
                 .toList();
 
         return new GutenbergSearchResultDto(count, next, previous, results);
+    }
+
+    /**
+     * Downloads the cover image for a Gutenberg book and persists the path.
+     *
+     * <p>Looks for the {@code "image/jpeg"} key in the book's formats map.
+     * If found, downloads the image and saves it to {@code covers/{ebookId}.jpg}
+     * under the ebook directory. Cover download failures are logged but do not
+     * fail the import.</p>
+     *
+     * @param metadata the Gutenberg book metadata containing format URLs
+     * @param ebook    the saved ebook entity to update with the cover path
+     */
+    void downloadCoverImage(GutenbergBookDto metadata, Ebook ebook) {
+        if (metadata.formats() == null || !metadata.formats().containsKey("image/jpeg")) {
+            log.debug("No cover image available for Gutenberg book '{}'", metadata.title());
+            return;
+        }
+
+        String coverUrl = metadata.formats().get("image/jpeg");
+        try {
+            HttpClient coverHttpClient = HttpClient.create().followRedirect(true);
+            byte[] coverBytes = WebClient.builder()
+                    .clientConnector(new ReactorClientHttpConnector(coverHttpClient))
+                    .defaultHeader("User-Agent", "MyOffGridAI/1.0")
+                    .build()
+                    .get()
+                    .uri(coverUrl)
+                    .retrieve()
+                    .bodyToMono(byte[].class)
+                    .block(Duration.ofSeconds(30));
+
+            if (coverBytes != null && coverBytes.length > 0) {
+                Path coversDir = Paths.get(libraryProperties.getEbookDirectory(), "covers");
+                Files.createDirectories(coversDir);
+                String coverFilename = ebook.getId() + ".jpg";
+                Path coverPath = coversDir.resolve(coverFilename);
+                Files.write(coverPath, coverBytes);
+
+                ebook.setCoverImagePath("covers/" + coverFilename);
+                ebookRepository.save(ebook);
+                log.info("Downloaded cover image for '{}': {} bytes", metadata.title(), coverBytes.length);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to download cover image for '{}': {}", metadata.title(), e.getMessage());
+        }
     }
 
     /**

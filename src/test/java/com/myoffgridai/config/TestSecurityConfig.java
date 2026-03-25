@@ -49,7 +49,8 @@ public class TestSecurityConfig {
                                 "/api/models",
                                 "/api/models/health",
                                 "/setup/**",
-                                "/mcp/**"
+                                "/mcp/**",
+                                "/api/library/ebooks/*/cover"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

@@ -16,8 +16,10 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -303,12 +305,14 @@ public class LibraryController {
     }
 
     /**
-     * Lists eBooks with optional search and format filter.
+     * Lists eBooks with optional search, format filter, and sorting.
      *
-     * @param search the search term (optional)
-     * @param format the format filter (optional)
-     * @param page   the page number (0-based, default 0)
-     * @param size   the page size (default 20)
+     * @param search    the search term (optional)
+     * @param format    the format filter (optional)
+     * @param page      the page number (0-based, default 0)
+     * @param size      the page size (default 20)
+     * @param sort      the sort field: title, author, or createdAt (default title)
+     * @param direction the sort direction: asc or desc (default asc)
      * @return 200 OK with paginated eBook DTOs
      */
     @GetMapping("/ebooks")
@@ -316,9 +320,24 @@ public class LibraryController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) EbookFormat format,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "title") String sort,
+            @RequestParam(defaultValue = "asc") String direction) {
         size = Math.min(size, AppConstants.MAX_PAGE_SIZE);
-        Page<EbookDto> result = ebookService.list(search, format, PageRequest.of(page, size));
+
+        if (!List.of("title", "author", "createdAt").contains(sort)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Invalid sort field: " + sort + ". Allowed: title, author, createdAt"));
+        }
+        if (!List.of("asc", "desc").contains(direction.toLowerCase())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Invalid direction: " + direction + ". Allowed: asc, desc"));
+        }
+
+        // Map "createdAt" to the entity field "uploadedAt"
+        String sortField = "createdAt".equals(sort) ? "uploadedAt" : sort;
+        Sort sortSpec = Sort.by(Sort.Direction.fromString(direction), sortField);
+        Page<EbookDto> result = ebookService.list(search, format, PageRequest.of(page, size, sortSpec));
         return ResponseEntity.ok(ApiResponse.paginated(
                 result.getContent(), result.getTotalElements(), page, size));
     }
@@ -378,6 +397,24 @@ public class LibraryController {
                     .body(new InputStreamResource(new FileInputStream(filePath.toFile())));
         } catch (FileNotFoundException e) {
             log.error("eBook file not found on disk: {}", ebook.getFilePath());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * Returns the cover image for an eBook.
+     *
+     * @param id the eBook ID
+     * @return the cover image as JPEG, or 404 if no cover exists
+     */
+    @GetMapping(value = "/ebooks/{id}/cover", produces = MediaType.IMAGE_JPEG_VALUE)
+    public ResponseEntity<Resource> getEbookCover(@PathVariable UUID id) {
+        try {
+            Resource cover = ebookService.getCoverFile(id);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.IMAGE_JPEG)
+                    .body(cover);
+        } catch (FileNotFoundException e) {
             return ResponseEntity.notFound().build();
         }
     }

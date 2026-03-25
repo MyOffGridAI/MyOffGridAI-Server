@@ -33,8 +33,7 @@ public interface EbookRepository extends JpaRepository<Ebook, UUID> {
     @Query("SELECT e FROM Ebook e WHERE " +
            "(:search IS NULL OR :search = '' OR LOWER(e.title) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(e.author) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-           "AND (:format IS NULL OR e.format = :format) " +
-           "ORDER BY e.title ASC")
+           "AND (:format IS NULL OR e.format = :format)")
     Page<Ebook> searchByTitleOrAuthor(
             @Param("search") String search,
             @Param("format") EbookFormat format,

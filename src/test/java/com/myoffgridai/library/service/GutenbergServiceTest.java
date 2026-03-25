@@ -588,6 +588,47 @@ class GutenbergServiceTest {
     }
 
     @Test
+    void downloadCoverImage_withJpegFormat_failsGracefully() {
+        UUID ebookId = UUID.randomUUID();
+        Ebook ebook = new Ebook();
+        ebook.setId(ebookId);
+        ebook.setTitle("Test Book");
+        ebook.setFormat(com.myoffgridai.library.model.EbookFormat.EPUB);
+        ebook.setFilePath(tempDir.resolve("test.epub").toString());
+        ebook.setFileSizeBytes(100);
+
+        GutenbergBookDto metadata = new GutenbergBookDto(
+                1342, "Pride and Prejudice", List.of("Austen, Jane"),
+                List.of("Fiction"), List.of("en"), 50000,
+                Map.of("application/epub+zip", "https://gutenberg.org/1342.epub",
+                        "image/jpeg", "https://gutenberg.org/1342/cover.jpg"));
+
+        // downloadCoverImage tries to reach a real URL which will fail in test,
+        // but it should not throw — it logs a warning instead (try-catch path)
+        gutenbergService.downloadCoverImage(metadata, ebook);
+
+        // Cover path should NOT be set since download failed
+        assertThat(ebook.getCoverImagePath()).isNull();
+    }
+
+    @Test
+    void downloadCoverImage_noCoverFormat_skipsDownload() {
+        Ebook ebook = new Ebook();
+        ebook.setId(UUID.randomUUID());
+
+        GutenbergBookDto metadata = new GutenbergBookDto(
+                1342, "Pride and Prejudice", List.of("Austen, Jane"),
+                List.of("Fiction"), List.of("en"), 50000,
+                Map.of("application/epub+zip", "https://gutenberg.org/1342.epub"));
+
+        // Should not throw or attempt download when no image/jpeg format
+        gutenbergService.downloadCoverImage(metadata, ebook);
+
+        // Verify no save was attempted (no cover to set)
+        verify(ebookRepository, never()).save(ebook);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void getBookMetadata_apiError_throwsRuntime() {
         WebClient.RequestHeadersUriSpec requestSpec = mock(WebClient.RequestHeadersUriSpec.class);

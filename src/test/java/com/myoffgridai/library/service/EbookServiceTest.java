@@ -208,6 +208,64 @@ class EbookServiceTest {
     }
 
     @Test
+    void getCoverFile_withCover_returnsResource() throws Exception {
+        UUID id = UUID.randomUUID();
+        Path coversDir = tempDir.resolve("covers");
+        java.nio.file.Files.createDirectories(coversDir);
+        Path coverFile = coversDir.resolve(id + ".jpg");
+        java.nio.file.Files.writeString(coverFile, "fake jpeg data");
+
+        Ebook ebook = createEbook("Book With Cover", EbookFormat.EPUB);
+        ebook.setId(id);
+        ebook.setCoverImagePath("covers/" + id + ".jpg");
+        when(ebookRepository.findById(id)).thenReturn(Optional.of(ebook));
+        when(libraryProperties.getEbookDirectory()).thenReturn(tempDir.toString());
+
+        org.springframework.core.io.Resource resource = ebookService.getCoverFile(id);
+
+        assertThat(resource).isNotNull();
+        assertThat(resource.exists()).isTrue();
+    }
+
+    @Test
+    void getCoverFile_noCover_throwsFileNotFound() {
+        UUID id = UUID.randomUUID();
+        Ebook ebook = createEbook("No Cover", EbookFormat.EPUB);
+        ebook.setId(id);
+        ebook.setCoverImagePath(null);
+        when(ebookRepository.findById(id)).thenReturn(Optional.of(ebook));
+
+        assertThatThrownBy(() -> ebookService.getCoverFile(id))
+                .isInstanceOf(java.io.FileNotFoundException.class)
+                .hasMessageContaining("No cover image");
+    }
+
+    @Test
+    void delete_withCoverImage_deletesCoverFromDisk() throws Exception {
+        UUID id = UUID.randomUUID();
+        Path filePath = tempDir.resolve("test.epub");
+        java.nio.file.Files.createFile(filePath);
+
+        Path coversDir = tempDir.resolve("covers");
+        java.nio.file.Files.createDirectories(coversDir);
+        Path coverFile = coversDir.resolve(id + ".jpg");
+        java.nio.file.Files.writeString(coverFile, "fake jpeg data");
+
+        Ebook ebook = createEbook("Cover Book", EbookFormat.EPUB);
+        ebook.setId(id);
+        ebook.setFilePath(filePath.toString());
+        ebook.setCoverImagePath("covers/" + id + ".jpg");
+        when(ebookRepository.findById(id)).thenReturn(Optional.of(ebook));
+        when(libraryProperties.getEbookDirectory()).thenReturn(tempDir.toString());
+
+        ebookService.delete(id);
+
+        verify(ebookRepository).delete(ebook);
+        assertThat(java.nio.file.Files.exists(filePath)).isFalse();
+        assertThat(java.nio.file.Files.exists(coverFile)).isFalse();
+    }
+
+    @Test
     void detectFormat_allSupportedFormats() {
         assertThat(ebookService.detectFormat("epub")).isEqualTo(EbookFormat.EPUB);
         assertThat(ebookService.detectFormat("pdf")).isEqualTo(EbookFormat.PDF);
