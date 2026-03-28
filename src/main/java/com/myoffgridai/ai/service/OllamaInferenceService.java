@@ -221,7 +221,9 @@ public class OllamaInferenceService implements InferenceService {
     /** {@inheritDoc} */
     @Override
     public InferenceModelInfo getActiveModel() {
-        return new InferenceModelInfo(modelName, modelName, null, null, null);
+        var aiSettings = systemConfigService.getAiSettings();
+        String resolvedModel = aiSettings.modelName() != null ? aiSettings.modelName() : modelName;
+        return new InferenceModelInfo(resolvedModel, resolvedModel, null, null, null);
     }
 
     /**

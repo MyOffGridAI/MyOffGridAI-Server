@@ -66,7 +66,7 @@ public class RagService {
         // Read dynamic AI settings
         AiSettingsDto aiSettings = systemConfigService.getAiSettings();
         int memoryTopK = aiSettings.memoryTopK();
-        int ragTopK = memoryTopK; // use same top-K for knowledge retrieval
+        int ragTopK = AppConstants.RAG_TOP_K;
 
         // Embed once — shared by both memory and knowledge searches
         float[] queryEmbedding;

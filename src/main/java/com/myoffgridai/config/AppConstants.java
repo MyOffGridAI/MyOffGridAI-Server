@@ -255,7 +255,7 @@ public final class AppConstants {
     public static final int EMBEDDING_DIMENSIONS = 768;
 
     /** Number of top-K results for RAG knowledge retrieval */
-    public static final int RAG_TOP_K = 5;
+    public static final int RAG_TOP_K = 15;
 
     /** Number of top-K results for memory retrieval */
     public static final int MEMORY_TOP_K = 5;
@@ -264,7 +264,7 @@ public final class AppConstants {
     public static final float SIMILARITY_THRESHOLD = 0.45f;
 
     /** Maximum tokens for RAG context injected into system prompt */
-    public static final int RAG_MAX_CONTEXT_TOKENS = 2048;
+    public static final int RAG_MAX_CONTEXT_TOKENS = 4096;
 
     /** Maximum number of facts to extract per conversation exchange */
     public static final int MEMORY_EXTRACTION_MAX_FACTS = 50;

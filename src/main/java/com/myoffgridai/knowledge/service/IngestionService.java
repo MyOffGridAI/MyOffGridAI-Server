@@ -65,7 +65,7 @@ public class IngestionService {
             for (int i = 1; i <= totalPages; i++) {
                 stripper.setStartPage(i);
                 stripper.setEndPage(i);
-                String pageText = stripper.getText(document).trim();
+                String pageText = sanitize(stripper.getText(document).trim());
                 if (!pageText.isEmpty()) {
                     pages.add(new PageContent(i, pageText));
                     fullText.append(pageText).append("\n");
@@ -86,7 +86,7 @@ public class IngestionService {
      */
     public ExtractionResult extractText(InputStream inputStream) throws IOException {
         log.debug("Extracting text from plain-text/markdown file");
-        String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim();
+        String content = sanitize(new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim());
         List<PageContent> pages = List.of(new PageContent(null, content));
         return new ExtractionResult(pages, content);
     }
@@ -103,7 +103,7 @@ public class IngestionService {
         StringBuilder fullText = new StringBuilder();
         try (XWPFDocument document = new XWPFDocument(inputStream)) {
             for (XWPFParagraph paragraph : document.getParagraphs()) {
-                String text = paragraph.getText();
+                String text = sanitize(paragraph.getText());
                 if (text != null && !text.isBlank()) {
                     fullText.append(text).append("\n");
                 }
@@ -128,7 +128,7 @@ public class IngestionService {
         String text;
         try (HWPFDocument document = new HWPFDocument(inputStream);
              WordExtractor extractor = new WordExtractor(document)) {
-            text = extractor.getText().trim();
+            text = sanitize(extractor.getText().trim());
         }
         List<PageContent> pages = text.isEmpty()
                 ? List.of() : List.of(new PageContent(null, text));
@@ -152,7 +152,7 @@ public class IngestionService {
         Document doc = rtfKit.createDefaultDocument();
         try {
             rtfKit.read(inputStream, doc, 0);
-            String text = doc.getText(0, doc.getLength()).trim();
+            String text = sanitize(doc.getText(0, doc.getLength()).trim());
             List<PageContent> pages = text.isEmpty()
                     ? List.of() : List.of(new PageContent(null, text));
             log.info("Extracted {} characters from RTF", text.length());
@@ -216,7 +216,7 @@ public class IngestionService {
                 StringBuilder slideText = new StringBuilder();
                 for (XSLFShape shape : slide.getShapes()) {
                     if (shape instanceof XSLFTextShape textShape) {
-                        String text = textShape.getText();
+                        String text = sanitize(textShape.getText());
                         if (text != null && !text.isBlank()) {
                             slideText.append(text).append("\n");
                         }
@@ -251,12 +251,21 @@ public class IngestionService {
         try (HSLFSlideShow ppt = new HSLFSlideShow(inputStream);
              SlideShowExtractor<HSLFShape, HSLFTextParagraph> extractor =
                      new SlideShowExtractor<>(ppt)) {
-            text = extractor.getText().trim();
+            text = sanitize(extractor.getText().trim());
         }
         List<PageContent> pages = text.isEmpty()
                 ? List.of() : List.of(new PageContent(null, text));
         log.info("Extracted {} characters from PPT", text.length());
         return new ExtractionResult(pages, text);
+    }
+
+    /**
+     * Strips null bytes ({@code 0x00}) from text to prevent PostgreSQL
+     * "invalid byte sequence for encoding UTF8" errors.
+     */
+    private String sanitize(String text) {
+        if (text == null) return null;
+        return text.replace("\u0000", "");
     }
 
     private ExtractionResult extractSpreadsheet(Workbook workbook) {
@@ -270,7 +279,7 @@ public class IngestionService {
             for (Row row : sheet) {
                 StringBuilder rowText = new StringBuilder();
                 for (Cell cell : row) {
-                    String value = formatter.formatCellValue(cell);
+                    String value = sanitize(formatter.formatCellValue(cell));
                     if (!value.isBlank()) {
                         if (rowText.length() > 0) {
                             rowText.append("\t");

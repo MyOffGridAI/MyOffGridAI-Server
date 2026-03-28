@@ -374,12 +374,22 @@ class OllamaInferenceServiceTest {
     // ══════════════════════════════════════════════════════════════════════════
 
     @Test
-    void getActiveModel_returnsConfiguredModel() {
+    void getActiveModel_returnsUserSelectedModel() {
         InferenceModelInfo active = service.getActiveModel();
-        assertEquals("default-model", active.id());
-        assertEquals("default-model", active.name());
+        assertEquals("test-model", active.id());
+        assertEquals("test-model", active.name());
         assertNull(active.sizeBytes());
         assertNull(active.format());
         assertNull(active.modifiedAt());
+    }
+
+    @Test
+    void getActiveModel_fallsBackToDefaultModelWhenSettingsNull() {
+        when(systemConfigService.getAiSettings())
+                .thenReturn(new AiSettingsDto(null, 0.7, 0.45, 5, 2048, 4096, 20));
+
+        InferenceModelInfo active = service.getActiveModel();
+        assertEquals("default-model", active.id());
+        assertEquals("default-model", active.name());
     }
 }
